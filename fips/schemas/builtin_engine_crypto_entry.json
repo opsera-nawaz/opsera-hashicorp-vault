@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vault-fips.internal/schemas/crypto_inventory_entry.json",
+  "title": "FIPS Cryptographic Inventory Entry",
+  "description": "One cataloged cryptographic call site (or a documented absence of one) discovered during FIPS 140-3 Phase 1 cryptographic inventory scans. Produced by WO-005/WO-006/WO-007/WO-008/WO-009/WO-010/WO-011 and aggregated by WO-019.",
+  "type": "object",
+  "required": [
+    "file",
+    "line_range",
+    "function",
+    "algorithm",
+    "library",
+    "security_relevant",
+    "fips_approved",
+    "classification_rationale",
+    "engine_or_method"
+  ],
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Repository-relative path to the source file containing the call site. For entries where no source file exists (e.g. an engine that is not vendored in this repository), a descriptive placeholder string is used instead of a real path."
+    },
+    "line_range": {
+      "type": "string",
+      "description": "Line or inclusive line range in `file` covering the call site (e.g. \"120-167\" or \"472\"). Use the literal string \"N/A\" when `status` is not \"found\".",
+      "pattern": "^(N/A|[0-9]+(-[0-9]+)?)$"
+    },
+    "function": {
+      "type": "string",
+      "description": "Enclosing Go function (or method, formatted as Receiver.Name) that contains the call site. Use \"N/A\" when `status` is not \"found\"."
+    },
+    "algorithm": {
+      "type": "string",
+      "description": "Cryptographic algorithm or primitive exercised at this call site (e.g. \"RSA-OAEP-SHA256\", \"HMAC-SHA256\", \"AES-256-GCM\", \"SHA-1\"). Use \"none\" when `status` is not \"found\"."
+    },
+    "library": {
+      "type": "string",
+      "description": "Go import path providing the primitive (e.g. \"crypto/x509\", \"golang.org/x/crypto/bcrypt\", \"github.com/hashicorp/vault/helper/pkcs7\"). For externalized/not-present engines, the pinned module path and version from go.mod."
+    },
+    "security_relevant": {
+      "type": "boolean",
+      "description": "True if this usage protects confidentiality, integrity, or authenticity of data or credentials (a Phase 2 remediation candidate if also fips_approved=false). False for non-security usages such as cache keys, content-addressing, or display fingerprints."
+    },
+    "fips_approved": {
+      "type": "boolean",
+      "description": "True if the algorithm is FIPS 140-3 Approved (per NIST SP 800-140C / current CMVP Approved list) as used here. False for non-Approved algorithms (e.g. MD5, SHA-1 for integrity, Ed25519, ChaCha20-Poly1305) or algorithms outside the scan's scope."
+    },
+    "classification_rationale": {
+      "type": "string",
+      "description": "Human-readable explanation of the security_relevant and fips_approved determination. Required to be specific to the call site, not a bulk statement (per FIPS-CRYPTO-002 anti-pattern rule: no bulk-flagging of MD5/SHA-1).",
+      "minLength": 10
+    },
+    "engine_or_method": {
+      "type": "string",
+      "description": "The builtin secrets engine or auth method subdirectory this entry belongs to (e.g. \"pki\", \"transit\", \"aws\" (credential), \"userpass\")."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "found",
+        "no_direct_imports",
+        "not_present_in_repo",
+        "cross_reference",
+        "test_only"
+      ],
+      "description": "found: a real call site verified at file:line_range. no_direct_imports: the engine/method has zero direct crypto imports in builtin/ (may still delegate to a third-party library — see notes). not_present_in_repo: the named engine has no source under builtin/ in this repository (externalized plugin module). cross_reference: the operation is cataloged in full in another inventory file; this entry only points to it. test_only: the call site exists only in a _test.go file and is excluded from security-relevance classification per WO-007 edge cases. Defaults to \"found\" when omitted."
+    },
+    "test_only": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if the call site is in a _test.go file. Test-only call sites are cataloged for completeness but excluded from security-relevance classification."
+    },
+    "cross_reference": {
+      "type": "string",
+      "description": "Relative path (from fips/inventory/) to the inventory file that fully catalogs this call site, when status is \"cross_reference\"."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional free-text context: e.g. a transitively-included third-party dependency, a version caveat, or a pointer to related RFC/standard."
+    }
+  },
+  "additionalProperties": false
+}
