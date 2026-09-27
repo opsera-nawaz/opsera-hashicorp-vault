@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://forge.opsera.io/schemas/fips/crypto_inventory_entry.json",
+  "title": "FIPS Cryptographic Inventory Entry",
+  "description": "Schema for a single cryptographic call-site entry in the FIPS 140-3 readiness inventory (FIPS-CRYPTO-001). Shared across all Phase 1 cryptographic-discovery work orders (WO-005..WO-011) and consumed by the aggregate inventory produced in WO-019.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "file",
+    "line",
+    "function",
+    "algorithm",
+    "library",
+    "module_boundary",
+    "security_relevant",
+    "fips_approved",
+    "notes"
+  ],
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Repository-relative path to the source file containing the call site.",
+      "pattern": "^[A-Za-z0-9_./-]+\\.go$"
+    },
+    "line": {
+      "type": "integer",
+      "description": "Primary (starting) line number of the call site, declaration, or import in `file`.",
+      "minimum": 1
+    },
+    "line_end": {
+      "type": "integer",
+      "description": "Optional closing line number when the entry spans a range (e.g. a function body or multi-line const block). Omitted for single-line entries.",
+      "minimum": 1
+    },
+    "function": {
+      "type": "string",
+      "description": "Enclosing function/method name (Go receiver.Method or Function), or a descriptive context such as 'package imports', 'package-level const', or 'Core struct field' when the call site is not inside a function body.",
+      "minLength": 1
+    },
+    "algorithm": {
+      "type": "string",
+      "description": "Cryptographic algorithm/primitive/parameter involved (e.g. 'AES-256-GCM', 'ECDSA P-256', 'constant-time comparison', 'Shamir Secret Sharing (GF(256))'). Use 'N/A' for entries that are purely structural (e.g. an import line with no direct algorithm binding).",
+      "minLength": 1
+    },
+    "library": {
+      "type": "string",
+      "description": "Go import path(s) or package(s) providing the primitive (e.g. 'crypto/aes + crypto/cipher', 'github.com/hashicorp/go-kms-wrapping/v2', 'github.com/hashicorp/vault/shamir').",
+      "minLength": 1
+    },
+    "module_boundary": {
+      "type": "string",
+      "description": "Classification of which side of the cryptographic module boundary this call site occupies, per FIPS-CRYPTO-001.",
+      "enum": [
+        "barrier-internal",
+        "seal-external-kms",
+        "seal-shamir",
+        "core-orchestration"
+      ]
+    },
+    "security_relevant": {
+      "type": "boolean",
+      "description": "True if the call site affects confidentiality, integrity, authentication, or key/secret management."
+    },
+    "fips_approved": {
+      "type": "boolean",
+      "description": "True if the algorithm/primitive itself is FIPS 140-3 approved per SP 800-140C (e.g. AES-GCM, ECDSA on an approved curve, SHA-2 based TLS cipher suites). False for non-approved algorithms (e.g. Shamir Secret Sharing). This reflects algorithm-level approval status only; it does NOT assert that the specific Go binary/build in this repository has completed CMVP module validation - that is addressed by later FIPS phases (validated module boundary)."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free-text context: what the call site does, cross-references to related call sites/files, and any caveats (e.g. provider-dependent FIPS status, known gaps).",
+      "minLength": 1
+    },
+    "context": {
+      "type": "string",
+      "description": "Optional classification of the call-site kind.",
+      "enum": [
+        "import",
+        "call-site",
+        "definition",
+        "field-declaration",
+        "constant"
+      ]
+    }
+  }
+}

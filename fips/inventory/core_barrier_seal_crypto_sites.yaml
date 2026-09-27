@@ -1,0 +1,1215 @@
+# FIPS 140-3 Cryptographic Inventory - Core / Barrier / Seal modules
+# Work order: WO-006 "Catalog crypto in core barrier seal modules"
+# Requirement: FIPS-CRYPTO-001 (Cryptographic Module Boundary mapping)
+# Schema: fips/schemas/crypto_inventory_entry.json
+#
+# Scope: vault/core.go, vault/barrier_aes_gcm.go, vault/seal_autoseal.go,
+# vault/seal/seal.go, vault/rekey.go.
+#
+# Every entry was verified by reading the exact file:line in this repository
+# checkout (branch feature/WO-006, hashicorp/vault fork). module_boundary
+# values:
+#   barrier-internal    - inside AESGCMBarrier; the barrier's own AES-256-GCM
+#                          encryption-at-rest implementation.
+#   seal-external-kms    - delegates to an external KMS/HSM via the
+#                          go-kms-wrapping Access/Wrapper interfaces (AWS KMS,
+#                          Azure Key Vault, GCP Cloud KMS, PKCS#11, etc).
+#   seal-shamir          - Shamir's Secret Sharing manual-unseal path, either
+#                          the split/combine math (vault/rekey.go, top-level
+#                          shamir/ package) or the go-kms-wrapping
+#                          aead.ShamirWrapper that AES-GCM-encrypts the root
+#                          key under the reconstructed Shamir secret.
+#   core-orchestration   - vault/core.go wiring: TLS, x509/ecdsa cluster
+#                          identity, constant-time comparisons, and
+#                          construction/handoff of barrier and seal objects.
+#
+# fips_approved reflects algorithm-level FIPS 140-3 approval status (per
+# SP 800-140C), not CMVP validation of this specific Go binary/build - that
+# is out of scope for this Phase 1 inventory story and is addressed by later
+# FIPS phases (validated module boundary, Phase 3).
+
+schema_version: 1
+work_order: WO-006
+requirement: FIPS-CRYPTO-001
+generated: "2026-09-27"
+source_repo: opsera-nawaz/opsera-hashicorp-vault
+source_branch: feature/WO-006
+source_files:
+  - vault/core.go
+  - vault/barrier_aes_gcm.go
+  - vault/seal_autoseal.go
+  - vault/seal/seal.go
+  - vault/rekey.go
+
+# --- Explicit scope clarifications required by the acceptance criteria ---
+scope_notes:
+  - id: shamir-directory-does-not-exist
+    finding: >
+      vault/shamir/ does NOT exist as a directory anywhere in this repository
+      checkout. Verified via `ls vault/shamir` (no such file or directory) and
+      `find . -iname '*shamir*'`. Shamir's Secret Sharing logic instead lives
+      in two places: (1) the top-level package github.com/hashicorp/vault/shamir
+      (files shamir/shamir.go, shamir/shamir_test.go), which implements the
+      GF(256) polynomial split/combine math and is called from
+      vault/rekey.go (shamir.Split / shamir.Combine / shamir.ShareOverhead);
+      and (2) vault/seal/seal.go, which type-asserts a wrapping.Wrapper to
+      *aead.ShamirWrapper (github.com/hashicorp/go-kms-wrapping/v2/aead) to
+      set/read the AES-GCM key derived from the combined Shamir secret
+      (SetShamirSealKey / GetShamirKeyBytes, seal.go:817-845).
+  - id: seal-wrapper-go-path-gap
+    finding: >
+      The literal path vault/seal_wrapper.go named in the work-order edge
+      case does NOT exist (confirmed: `wc -l vault/seal_wrapper.go` ->
+      "No such file or directory"). A similarly-named but distinct file,
+      vault/seal/seal_wrapper.go (145 lines), does exist in the vault/seal
+      sub-package and defines the SealWrapper struct used throughout
+      vault/seal/seal.go (GetAllSealWrappersByPriority, etc). It performs a
+      round-trip health-check Encrypt/Decrypt call against the underlying
+      KMS wrapper at seal_wrapper.go:116 and seal_wrapper.go:124
+      (`sw.Wrapper.Encrypt(...)` / `sw.Wrapper.Decrypt(...)`). This file is
+      OUTSIDE the five files in this story's direct scope, so no per-line
+      entries were added for it below, but it is flagged here per the
+      work order's instruction to document the gap rather than silently
+      omit it.
+  - id: awskms-import-version-skew-not-reproduced
+    finding: >
+      The work order's technical_details/edge_cases asserted a tech-debt
+      finding of "awskms v4 in core.go vs v2 in configutil/kms.go". This was
+      checked against the actual current source and does NOT reproduce:
+      vault/core.go:35 imports
+      "github.com/hashicorp/go-kms-wrapping/wrappers/awskms/v4", and
+      internalshared/configutil/kms.go:23 also imports the same
+      awskms/v4 path. go.mod (line 114) and go.sum both pin a single
+      resolved version, v4.0.4, with no v2 reference anywhere in the module
+      graph for awskms (verified via `grep -rn 'awskms/v2\|awskms/v3\|awskms/v4'`
+      across all non-test .go files and `grep 'awskms' go.sum`). Recorded here
+      as a corrected/superseded finding for the WO-019 aggregate inventory
+      rather than silently dropped, since the original hypothesis does not
+      hold for this codebase snapshot.
+
+entries:
+  # ===========================================================================
+  # vault/barrier_aes_gcm.go - AESGCMBarrier (module_boundary: barrier-internal)
+  # ===========================================================================
+
+  - file: vault/barrier_aes_gcm.go
+    line: 42
+    function: package-level const
+    algorithm: "N/A (rotation-check timing parameter, not a crypto primitive)"
+    library: time
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    context: constant
+    notes: >
+      autoRotateCheckInterval = 5 * time.Minute. Governs how often the
+      barrier's automatic key-rotation policy is evaluated. Consumed
+      cross-file by vault/core.go:4200 (Core.autoRotateBarrierLoop), which
+      ticks on this interval and calls Core.checkBarrierAutoRotate (core.go:4212)
+      -> AESGCMBarrier.CheckBarrierAutoRotate (barrier_aes_gcm.go:1222).
+
+  - file: vault/barrier_aes_gcm.go
+    line: 51
+    line_end: 52
+    function: package-level const
+    algorithm: "AES-GCM on-disk format version tag"
+    library: "N/A"
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    context: constant
+    notes: >
+      AESGCMVersion1 = 0x1 (legacy, no AAD) and AESGCMVersion2 = 0x2
+      (current default, AAD = storage path) tag the first byte of every
+      barrier ciphertext. Selected in encrypt() (lines 1056-1067) and
+      mirrored in decrypt() (lines 1092-1103).
+
+  - file: vault/barrier_aes_gcm.go
+    line: 73
+    line_end: 101
+    function: "type AESGCMBarrier struct"
+    algorithm: "AES-256-GCM barrier state"
+    library: crypto/cipher
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    context: field-declaration
+    notes: >
+      cache map[uint32]cipher.AEAD (line 85) memoizes constructed AEAD
+      instances per key term to avoid re-deriving AES-GCM on every op.
+      currentAESGCMVersionByte (line 91) selects the AAD scheme used by
+      encrypt/decrypt.
+
+  - file: vault/barrier_aes_gcm.go
+    line: 124
+    line_end: 150
+    function: NewAESGCMBarrier
+    algorithm: AES-256-GCM
+    library: crypto/cipher
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Constructs the barrier. Sets currentAESGCMVersionByte to
+      AESGCMVersion2 (0x2) by default (line 140) and initializes the AEAD
+      cache as an empty map[uint32]cipher.AEAD (line 139).
+
+  - file: vault/barrier_aes_gcm.go
+    line: 335
+    line_end: 341
+    function: GenerateKey
+    algorithm: "AES-256 key material generation"
+    library: "crypto/aes (sizing only); randomness supplied by caller's io.Reader"
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Reads 2*aes.BlockSize = 32 bytes (256-bit key) from the supplied
+      io.Reader. GenerateKey itself performs no CSPRNG call directly -
+      callers pass crypto/rand.Reader (e.g. the default set at
+      vault/core.go:1129, conf.SecureRandomReader = rand.Reader). Called
+      from Initialize (line 202) and Rotate (line 617).
+
+  - file: vault/barrier_aes_gcm.go
+    line: 343
+    line_end: 346
+    function: KeyLength
+    algorithm: "AES key-size bound enforcement"
+    library: crypto/aes
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Returns min=aes.BlockSize (16 bytes -> AES-128) max=2*aes.BlockSize
+      (32 bytes -> AES-256). Enforced in Initialize (line 190) and
+      updateRootKeyCommon (line 838).
+
+  - file: vault/barrier_aes_gcm.go
+    line: 364
+    function: VerifyRoot
+    algorithm: "Constant-time comparison"
+    library: crypto/subtle
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      subtle.ConstantTimeCompare(key, b.keyring.RootKey()) guards against
+      timing side-channels when verifying a caller-supplied root key.
+
+  - file: vault/barrier_aes_gcm.go
+    line: 470
+    function: ReloadRootKey
+    algorithm: "Constant-time comparison"
+    library: crypto/subtle
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Second ConstantTimeCompare call site; detects whether the root key
+      changed during an HA standby keyring reload.
+
+  - file: vault/barrier_aes_gcm.go
+    line: 974
+    line_end: 1007
+    function: aeadForTerm
+    algorithm: AES-256-GCM
+    library: crypto/cipher
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Per-key-term AEAD cache lookup (b.cache[term]); calls aeadFromKey
+      (line 997) on cache miss and populates the cache (line 1004).
+
+  - file: vault/barrier_aes_gcm.go
+    line: 1009
+    line_end: 1023
+    function: aeadFromKey
+    algorithm: AES-256-GCM
+    library: "crypto/aes + crypto/cipher"
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      The single construction site for the barrier's AEAD: aes.NewCipher(key)
+      (line 1012) builds the AES block cipher, cipher.NewGCM(aesCipher)
+      (line 1018) wraps it in Galois/Counter Mode using Go's default 12-byte
+      nonce and 16-byte authentication tag.
+
+  - file: vault/barrier_aes_gcm.go
+    line: 1025
+    line_end: 1070
+    function: encrypt
+    algorithm: AES-256-GCM
+    library: "crypto/cipher + crypto/rand"
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      rand.Read(nonce) (line 1047) fills a 12-byte (gcm.NonceSize()) random
+      nonce. gcm.Seal is called with AAD=nil for AESGCMVersion1 (line 1058)
+      or AAD=the storage path bytes for AESGCMVersion2 (line 1064). This is
+      the sole encryption entry point for barrier-protected storage.
+
+  - file: vault/barrier_aes_gcm.go
+    line: 1081
+    line_end: 1104
+    function: decrypt
+    algorithm: AES-256-GCM
+    library: crypto/cipher
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      gcm.Open (lines 1094 and 1100) mirrors the version-dependent AAD
+      selection used by encrypt(); returns an explicit error on an unknown
+      version byte (line 1102) rather than falling back insecurely.
+
+  - file: vault/barrier_aes_gcm.go
+    line: 1106
+    line_end: 1127
+    function: Encrypt
+    algorithm: AES-256-GCM
+    library: "delegates to aeadForTerm + encryptTracked"
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Public BarrierEncryptor.Encrypt implementation. Resolves the active
+      term's AEAD via aeadForTerm (line 1115), then calls encryptTracked
+      (line 1121) -> encrypt.
+
+  - file: vault/barrier_aes_gcm.go
+    line: 1129
+    line_end: 1168
+    function: Decrypt
+    algorithm: AES-256-GCM
+    library: "delegates to aeadForTerm + decrypt"
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Public BarrierEncryptor.Decrypt implementation. Resolves the AEAD for
+      the ciphertext's key term via aeadForTerm (line 1152), then calls
+      decrypt (line 1162).
+
+  - file: vault/barrier_aes_gcm.go
+    line: 1204
+    line_end: 1215
+    function: encryptTracked
+    algorithm: AES-256-GCM
+    library: "delegates to encrypt"
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Wraps encrypt() (line 1205) with encryption-count bookkeeping
+      (UnaccountedEncryptions/totalLocalEncryptions) and the
+      barrierEncryptsMetric metrics counter. Used by both direct-storage
+      Put and Encrypt/Decrypt-interface callers.
+
+  - file: vault/barrier_aes_gcm.go
+    line: 845
+    line_end: 875
+    function: Put / putInternal
+    algorithm: AES-256-GCM
+    library: "delegates to encryptTracked"
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Every physical storage write encrypts the entry value via
+      encryptTracked (line 865) before handing it to the physical backend
+      - this is the encryption-at-rest boundary for all of Vault's storage.
+
+  - file: vault/barrier_aes_gcm.go
+    line: 877
+    line_end: 945
+    function: Get / lockSwitchedGet
+    algorithm: AES-256-GCM
+    library: "delegates to decrypt"
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Every physical storage read decrypts the retrieved ciphertext via
+      decrypt (line 933) before returning a logical.StorageEntry to the
+      caller.
+
+  - file: vault/barrier_aes_gcm.go
+    line: 1222
+    line_end: 1268
+    function: CheckBarrierAutoRotate
+    algorithm: "Key-rotation policy (elapsed time / operation count)"
+    library: "N/A (policy logic; triggers AES-256-GCM re-keying via Rotate)"
+    module_boundary: barrier-internal
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Invoked on the autoRotateCheckInterval cadence (vault/core.go:4200).
+      Decides whether to rotate the AES-256-GCM root key based on key age
+      (> 1 year with zero recorded encryptions), max operation count, or a
+      configured rotation interval (RotationConfig, line 1231).
+
+  # ===========================================================================
+  # vault/core.go - crypto-relevant imports, TLS/x509/ecdsa, subtle, and
+  # barrier/seal orchestration (module_boundary: core-orchestration)
+  # ===========================================================================
+
+  - file: vault/core.go
+    line: 8
+    function: package imports
+    algorithm: "ECDSA (P-256/P-384 depending on key)"
+    library: crypto/ecdsa
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    context: import
+    notes: >
+      Used for the cluster identity key (wrappingJWTKey / localClusterPrivateKey
+      fields, see line 532 and line 1278 entries below) that signs
+      inter-node replication/response-wrapping traffic.
+
+  - file: vault/core.go
+    line: 9
+    function: package imports
+    algorithm: "CSPRNG (DRBG entropy source)"
+    library: crypto/rand
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    context: import
+    notes: >
+      Used as the default SecureRandomReader (line 1129), which is threaded
+      through to barrier key generation (AESGCMBarrier.GenerateKey) and
+      other consumers that need cryptographic randomness.
+
+  - file: vault/core.go
+    line: 10
+    function: package imports
+    algorithm: "Constant-time comparison"
+    library: crypto/subtle
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    context: import
+    notes: >
+      Used in recordUnsealPart (line 2067) to compare unseal-key fragments
+      without leaking timing information.
+
+  - file: vault/core.go
+    line: 11
+    function: package imports
+    algorithm: "TLS 1.2/1.3 cipher suites"
+    library: crypto/tls
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    context: import
+    notes: >
+      Used to build the default cluster-replication cipher-suite allowlist
+      (lines 1292-1315), all of which are AEAD (GCM/ChaCha20-Poly1305) TLS
+      1.2/1.3 suites.
+
+  - file: vault/core.go
+    line: 12
+    function: package imports
+    algorithm: "X.509 certificate parsing"
+    library: crypto/x509
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    context: import
+    notes: >
+      Used for the localClusterParsedCert field (line 1277) holding the
+      parsed cluster identity certificate.
+
+  - file: vault/core.go
+    line: 33
+    function: package imports
+    algorithm: "N/A (seal-wrapper delegation interface)"
+    library: "github.com/hashicorp/go-kms-wrapping/v2 (aliased wrapping)"
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    context: import
+    notes: >
+      Root go-kms-wrapping types used when constructing seal Access objects
+      (see NewAccessFromWrapper call sites at lines 1331, 3583, 3786).
+
+  - file: vault/core.go
+    line: 34
+    function: package imports
+    algorithm: "AES-GCM keyed by a Shamir-combined secret"
+    library: "github.com/hashicorp/go-kms-wrapping/wrappers/aead/v2 (aliased aeadwrapper)"
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    context: import
+    notes: >
+      Imported specifically to call aeadwrapper.NewShamirWrapper() (lines
+      1328, 3583, 3786) when constructing the default/migration Shamir
+      seal. Classified seal-shamir (not core-orchestration) because every
+      concrete use of this import constructs a Shamir wrapper; see
+      module_boundary note on the acceptance-criteria mapping in the header
+      comment of this file.
+
+  - file: vault/core.go
+    line: 35
+    function: package imports
+    algorithm: "AWS KMS delegation"
+    library: "github.com/hashicorp/go-kms-wrapping/wrappers/awskms/v4"
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: true
+    context: import
+    notes: >
+      Despite the package name, the only use of this import in core.go is
+      awskms.WithLogger(...) (line 1329) as a functional option passed into
+      the *Shamir* wrapper's SetConfig call - it does not configure an
+      actual AWS KMS backend here. See go-version-skew scope note above:
+      this import resolves to the same v4.0.4 module used by
+      internalshared/configutil/kms.go, so no version skew was found in
+      this checkout.
+
+  - file: vault/core.go
+    line: 532
+    function: "Core struct field: wrappingJWTKey"
+    algorithm: ECDSA
+    library: crypto/ecdsa
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    context: field-declaration
+    notes: >
+      wrappingJWTKey *ecdsa.PrivateKey - key used to sign JWTs carrying
+      response-wrapping information.
+
+  - file: vault/core.go
+    line: 320
+    function: "Core struct field: seal"
+    algorithm: "N/A (interface reference)"
+    library: "vault (Seal interface)"
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    context: field-declaration
+    notes: >
+      seal Seal - Core's active seal implementation; concretely either
+      *autoSeal (seal-external-kms, vault/seal_autoseal.go) or the Shamir
+      default seal built via vaultseal.NewAccessFromWrapper +
+      aeadwrapper.NewShamirWrapper (seal-shamir).
+
+  - file: vault/core.go
+    line: 348
+    function: "Core struct field: barrier"
+    algorithm: "N/A (interface reference)"
+    library: "vault (SecurityBarrier interface)"
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    context: field-declaration
+    notes: >
+      barrier SecurityBarrier - concretely an *AESGCMBarrier
+      (barrier-internal, vault/barrier_aes_gcm.go) in all production
+      configurations.
+
+  - file: vault/core.go
+    line: 542
+    function: "Core struct field: clusterCipherSuites"
+    algorithm: "TLS 1.2/1.3 cipher suite list"
+    library: crypto/tls
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    context: field-declaration
+    notes: >
+      clusterCipherSuites []uint16 - populated in CreateCore (lines
+      1292-1315); governs the TLS cipher suites permitted for
+      cluster/replication connections.
+
+  - file: vault/core.go
+    line: 547
+    line_end: 551
+    function: "Core struct fields: localClusterPrivateKey / localClusterCert / localClusterParsedCert"
+    algorithm: "ECDSA private key + X.509 certificate storage"
+    library: "crypto/ecdsa + crypto/x509"
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    context: field-declaration
+    notes: >
+      All three are *atomic.Value holders for the cluster's ECDSA identity
+      key, its raw certificate bytes, and its parsed *x509.Certificate,
+      initialized in CreateCore (lines 1197-1199, 1276-1278).
+
+  - file: vault/core.go
+    line: 251
+    line_end: 254
+    function: "type migrationInformation struct"
+    algorithm: "N/A (interface reference)"
+    library: "vault (Seal interface)"
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    context: field-declaration
+    notes: >
+      seal Seal (line 254) holds the seal being migrated *from* during a
+      seal-migration operation; may be the Shamir seal or an external-KMS
+      autoSeal depending on the migration direction.
+
+  - file: vault/core.go
+    line: 1128
+    line_end: 1129
+    function: CreateCore
+    algorithm: "CSPRNG default"
+    library: crypto/rand
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      "if conf.SecureRandomReader == nil { conf.SecureRandomReader =
+      rand.Reader }" - establishes the default randomness source threaded
+      through to AESGCMBarrier.GenerateKey and other consumers when the
+      caller does not supply one explicitly.
+
+  - file: vault/core.go
+    line: 1277
+    function: CreateCore
+    algorithm: "X.509 certificate storage (nil init)"
+    library: crypto/x509
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      c.localClusterParsedCert.Store((*x509.Certificate)(nil)) - resets the
+      cluster cert holder at Core construction time.
+
+  - file: vault/core.go
+    line: 1278
+    function: CreateCore
+    algorithm: "ECDSA private key storage (nil init)"
+    library: crypto/ecdsa
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      c.localClusterPrivateKey.Store((*ecdsa.PrivateKey)(nil)) - resets the
+      cluster identity key holder at Core construction time; the real key
+      is generated/loaded later during cluster setup (outside this file's
+      scope).
+
+  - file: vault/core.go
+    line: 1292
+    line_end: 1315
+    function: CreateCore
+    algorithm: "TLS 1.2/1.3 AEAD cipher suites"
+    library: crypto/tls
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Default cluster cipher-suite allowlist when conf.ClusterCipherSuites
+      is unset: TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384,
+      TLS_CHACHA20_POLY1305_SHA256 (TLS 1.3) plus
+      TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+      TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+      TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305 (TLS 1.2). All are AEAD
+      suites; ChaCha20-Poly1305 is not itself on the FIPS 140-3 approved
+      list, so a FIPS-constrained deployment must rely on the AES-GCM
+      suites and/or tlsutil.ParseCiphers (line 3310) to restrict further.
+      This is flagged for the later "approved algorithms" phase (Phase 2).
+
+  - file: vault/core.go
+    line: 2063
+    line_end: 2069
+    function: recordUnsealPart
+    algorithm: "Constant-time comparison"
+    library: crypto/subtle
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      subtle.ConstantTimeCompare(existing, key) == 1 (line 2067) checks
+      whether an unseal-key fragment has already been recorded, without a
+      timing side-channel.
+
+  - file: vault/core.go
+    line: 1326
+    line_end: 1337
+    function: CreateCore
+    algorithm: "AES-GCM keyed by a Shamir-combined secret"
+    library: "aeadwrapper.NewShamirWrapper (go-kms-wrapping/v2/aead) + vaultseal.NewAccessFromWrapper"
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      Default-seal bootstrap: when no seal is configured (c.seal == nil),
+      core.go constructs aeadwrapper.NewShamirWrapper() (line 1328), calls
+      wrapper.SetConfig with awskms.WithLogger (line 1329 - a logging
+      option only, not an AWS KMS backend), wraps it via
+      vaultseal.NewAccessFromWrapper (line 1331), and installs it with
+      NewDefaultSeal (line 1335, defined in vault/seal.go, outside this
+      story's scope). Shamir's Secret Sharing is not FIPS-approved; see
+      the seal/seal.go SetShamirSealKey entry for where the actual AES-GCM
+      keying happens.
+
+  - file: vault/core.go
+    line: 3577
+    line_end: 3587
+    function: adjustForSealMigration
+    algorithm: "AES-GCM keyed by a Shamir-combined secret"
+    library: "aeadwrapper.NewShamirWrapper + vaultseal.NewAccessFromWrapper"
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      When migrating away from Shamir, constructs a fresh Shamir
+      unwrapSeal via aeadwrapper.NewShamirWrapper() +
+      vaultseal.NewAccessFromWrapper (line 3583) so the old Shamir-sealed
+      keys can be read during migration.
+
+  - file: vault/core.go
+    line: 3782
+    line_end: 3800
+    function: unsealKeyToRootKey
+    algorithm: "AES-GCM keyed by a Shamir-combined secret"
+    library: "aeadwrapper.NewShamirWrapper + vaultseal.NewAccessFromWrapper"
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      Test-only path (useTestSeal): builds a throwaway Shamir Access via
+      aeadwrapper.NewShamirWrapper() + vaultseal.NewAccessFromWrapper (line
+      3786), then calls seal.GetAccess().SetShamirSealKey(combinedKey)
+      (line 3800) - the actual Shamir-key-to-AES-key handoff, implemented
+      in vault/seal/seal.go (see SetShamirSealKey entry below).
+
+  - file: vault/core.go
+    line: 4198
+    line_end: 4210
+    function: autoRotateBarrierLoop
+    algorithm: "N/A (scheduling; triggers barrier AES-256-GCM rotation)"
+    library: time
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Ticks on barrier_aes_gcm.go's autoRotateCheckInterval (5 minutes,
+      line 4200) and calls checkBarrierAutoRotate (line 4204), which
+      delegates into the barrier-internal boundary
+      (AESGCMBarrier.CheckBarrierAutoRotate).
+
+  - file: vault/core.go
+    line: 4212
+    line_end: 4225
+    function: checkBarrierAutoRotate
+    algorithm: "N/A (delegates to AES-256-GCM key rotation)"
+    library: "N/A"
+    module_boundary: core-orchestration
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Guards the rotation check to the primary node (c.isPrimary(), line
+      4215) before calling c.barrier.CheckBarrierAutoRotate(ctx) (line
+      4216) - the cross-file hand-off from core-orchestration into the
+      barrier-internal boundary.
+
+  # ===========================================================================
+  # vault/seal_autoseal.go - autoSeal (module_boundary: seal-external-kms)
+  # ===========================================================================
+
+  - file: vault/seal_autoseal.go
+    line: 27
+    line_end: 43
+    function: "type autoSeal struct"
+    algorithm: "N/A (KMS-wrapper delegation via embedded seal.Access)"
+    library: "vault/seal (Access interface)"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    context: field-declaration
+    notes: >
+      autoSeal embeds seal.Access (line 31) and delegates all actual
+      cryptographic work to it. No go-kms-wrapping types are imported
+      directly in this file (confirmed via import block, lines 6-18) -
+      autoSeal is purely an orchestration/caching layer over the Access
+      interface defined in vault/seal/seal.go. fips_approved is
+      provider-dependent: true here assumes an approved external KMS/HSM
+      (e.g. AWS KMS is FIPS 140-2 Level 3 validated); Vault itself performs
+      no cryptographic primitive in this file, so it sits outside Vault's
+      own module boundary.
+
+  - file: vault/seal_autoseal.go
+    line: 48
+    line_end: 64
+    function: NewAutoSeal
+    algorithm: "N/A (constructor)"
+    library: "vault/seal (Access interface)"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Wraps a seal.Access (the "lowLevel" KMS delegation object) and
+      derives barrierSealConfigType from
+      lowLevel.GetAllSealWrappersByPriority() (line 57).
+
+  - file: vault/seal_autoseal.go
+    line: 95
+    line_end: 101
+    function: "Init / Finalize"
+    algorithm: "N/A (lifecycle delegation)"
+    library: "go-kms-wrapping/v2 InitFinalizer (via seal.Access)"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      d.Access.Init(ctx) (line 96) / d.Access.Finalize(ctx) (line 100)
+      delegate wrapper lifecycle management to the external KMS client.
+
+  - file: vault/seal_autoseal.go
+    line: 117
+    line_end: 137
+    function: "SetStoredKeys / GetStoredKeys"
+    algorithm: "External KMS Encrypt/Decrypt (AEAD, provider-specific)"
+    library: "vault/seal (Access interface)"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Per the comment at line 115 ("uses the autoSeal.Access.Encrypts
+      method to wrap the keys"), SetStoredKeys/GetStoredKeys
+      (writeStoredKeys/readStoredKeys, lines 118 and 136, both outside this
+      file) ultimately call d.Access.Encrypt/Decrypt to protect the
+      barrier root key shares under the external KMS key.
+
+  - file: vault/seal_autoseal.go
+    line: 152
+    function: upgradeStoredKeys
+    algorithm: "Key-ID freshness check"
+    library: "vault/seal (Access interface)"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      d.Access.IsUpToDate(ctx, wrappedEntryValue.getValue(), true) detects
+      whether stored keys need re-wrapping under a newer external KMS key
+      ID (e.g. after a customer-managed key rotation).
+
+  - file: vault/seal_autoseal.go
+    line: 338
+    line_end: 353
+    function: VerifyRecoveryKey
+    algorithm: "Constant-time comparison"
+    library: crypto/subtle
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      subtle.ConstantTimeCompare(key, pt) != 1 (line 348) verifies a
+      submitted recovery key against the stored plaintext without a timing
+      side-channel.
+
+  - file: vault/seal_autoseal.go
+    line: 355
+    line_end: 376
+    function: SetRecoveryKey
+    algorithm: "External KMS Encrypt (AEAD, provider-specific)"
+    library: "vault/seal (Access interface, via SealWrapRecoveryKey)"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      SealWrapRecoveryKey(ctx, d.Access, key) (line 365, function defined
+      outside this file) encrypts the recovery key using the autoSeal's
+      Access before persisting it to physical storage (line 370).
+
+  - file: vault/seal_autoseal.go
+    line: 382
+    line_end: 399
+    function: getRecoveryKeyInternal
+    algorithm: "External KMS Decrypt (AEAD, provider-specific)"
+    library: "vault/seal (Access interface, via UnsealWrapRecoveryKey)"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      UnsealWrapRecoveryKey(ctx, d.Access, pe) (line 393) decrypts the
+      stored recovery key using the autoSeal's Access.
+
+  - file: vault/seal_autoseal.go
+    line: 401
+    line_end: 431
+    function: upgradeRecoveryKey
+    algorithm: "External KMS Decrypt + key-ID freshness check"
+    library: "vault/seal (Access interface)"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      d.Access.IsUpToDate (line 414) then UnsealWrapRecoveryKey (line 421)
+      to re-encrypt the recovery key under the current KMS key if stale.
+
+  - file: vault/seal_autoseal.go
+    line: 472
+    line_end: 564
+    function: StartHealthCheck
+    algorithm: "External KMS round-trip Encrypt/Decrypt (health probe)"
+    library: "vault/seal (SealWrapper.CheckHealth, via Access.GetConfiguredSealWrappersByPriority)"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Every seal.HealthTestIntervalNominal (ticker at line 477), calls
+      sealWrapper.CheckHealth(ctx, now) (line 505) for each configured seal
+      wrapper (d.Access.GetConfiguredSealWrappersByPriority, line 500).
+      CheckHealth is defined in vault/seal/seal_wrapper.go (outside this
+      story's file scope; see seal-wrapper-go-path-gap scope note) and
+      performs a literal Encrypt+Decrypt round trip against the external
+      KMS to detect outages.
+
+  # ===========================================================================
+  # vault/seal/seal.go - Access interface (module_boundary: seal-external-kms
+  # for the generic KMS-delegation path, seal-shamir for the ShamirWrapper-
+  # specific methods)
+  # ===========================================================================
+
+  - file: vault/seal/seal.go
+    line: 18
+    line_end: 19
+    function: package imports
+    algorithm: "N/A (KMS wrapper SDK)"
+    library: "github.com/hashicorp/go-kms-wrapping/v2 + github.com/hashicorp/go-kms-wrapping/v2/aead"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    context: import
+    notes: >
+      wrapping (v2) provides the core Wrapper/Option/BlobInfo types; aead
+      provides aead.ShamirWrapper specifically, used only in
+      SetShamirSealKey/GetShamirKeyBytes (seal-shamir path, lines 817-845).
+
+  - file: vault/seal/seal.go
+    line: 114
+    line_end: 162
+    function: "type Access interface"
+    algorithm: "N/A (interface definition)"
+    library: "github.com/hashicorp/go-kms-wrapping/v2"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    context: definition
+    notes: >
+      Defines the Encrypt/Decrypt/Init/Finalize/IsUpToDate contract that
+      both autoSeal (external KMS) and the default Shamir seal implement
+      against; this interface IS the cryptographic module boundary
+      abstraction referenced by FIPS-CRYPTO-001.
+
+  - file: vault/seal/seal.go
+    line: 173
+    line_end: 233
+    function: "NewAccess / NewAccessFromSealWrappers / NewAccessFromWrapper"
+    algorithm: "N/A (constructors)"
+    library: "github.com/hashicorp/go-kms-wrapping/v2"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      NewAccessFromWrapper (line 229) is generic over any wrapping.Wrapper.
+      When called with a real KMS wrapper the resulting Access is
+      seal-external-kms; when called with aeadwrapper.NewShamirWrapper()
+      (as done at vault/core.go:1331, 3583, 3786) the resulting Access is
+      functionally seal-shamir even though this constructor's own
+      module_boundary is generic seal-external-kms.
+
+  - file: vault/seal/seal.go
+    line: 308
+    line_end: 328
+    function: Init
+    algorithm: "External KMS Init + KeyId retrieval"
+    library: "github.com/hashicorp/go-kms-wrapping/v2"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      initWrapper.Init(ctx, options...) (line 312) and
+      sealWrapper.Wrapper.KeyId(ctx) (line 315) initialize each configured
+      wrapper and record its key ID for later up-to-date checks.
+
+  - file: vault/seal/seal.go
+    line: 330
+    line_end: 357
+    function: IsUpToDate
+    algorithm: "Key-ID freshness check (forces a probe Encrypt)"
+    library: "github.com/hashicorp/go-kms-wrapping/v2"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      When forceKeyIdRefresh is set, calls a.Encrypt(ctx, []byte{0}) (line
+      337) as a 1-byte probe to refresh key IDs from all wrappers.
+
+  - file: vault/seal/seal.go
+    line: 377
+    line_end: 553
+    function: "Encrypt / tryEncrypt"
+    algorithm: "External KMS Encrypt (AEAD, provider-specific: AWS KMS / Azure Key Vault / GCP Cloud KMS / PKCS#11 / Shamir, depending on configured wrapper)"
+    library: "github.com/hashicorp/go-kms-wrapping/v2"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Fans out to every enabled, healthy SealWrapper concurrently
+      (goroutine per wrapper, line 418); the actual primitive call is
+      sealWrapper.Wrapper.Encrypt(ctx, plaintext, options...) inside
+      tryEncrypt (line 541). Aggregates results into a MultiWrapValue
+      (multi-seal support). fips_approved assumes an approved provider is
+      configured; see the seal-shamir-specific entries below for the
+      non-approved Shamir case.
+
+  - file: vault/seal/seal.go
+    line: 560
+    line_end: 789
+    function: "Decrypt / tryDecrypt"
+    algorithm: "External KMS Decrypt (AEAD, provider-specific)"
+    library: "github.com/hashicorp/go-kms-wrapping/v2"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      Tries the highest-priority wrapper with a matching key ID first
+      (lines 616-638), then falls back to other configured wrappers. The
+      primitive call is sealWrapper.Wrapper.Decrypt(ctx, ciphertext,
+      options...) inside tryDecrypt (lines 737 and 752);
+      sealWrapper.Wrapper.KeyId(ctx) is also called repeatedly (lines 625,
+      733, 755) to match ciphertext slots to wrappers.
+
+  - file: vault/seal/seal.go
+    line: 799
+    line_end: 815
+    function: Finalize
+    algorithm: "External KMS Finalize"
+    library: "github.com/hashicorp/go-kms-wrapping/v2"
+    module_boundary: seal-external-kms
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      finalizeWrapper.Finalize(ctx, options...) (line 804) releases any
+      resources held by each configured wrapper's client (e.g. closing KMS
+      SDK connections).
+
+  - file: vault/seal/seal.go
+    line: 817
+    line_end: 830
+    function: SetShamirSealKey
+    algorithm: "AES-GCM keyed by a Shamir-combined secret"
+    library: "github.com/hashicorp/go-kms-wrapping/v2/aead (aead.ShamirWrapper)"
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      Type-asserts the priority-1 wrapper to *aead.ShamirWrapper (line
+      824) and calls shamirWrapper.SetAesGcmKeyBytes(key) (line 829). This
+      is the exact point where the reconstructed Shamir secret (from
+      shamir.Combine in vault/rekey.go) becomes the AES-GCM key used to
+      unwrap the barrier root key. Shamir's Secret Sharing itself is NOT a
+      FIPS-approved algorithm (it is not on the NIST SP 800-140C approved
+      list); FIPS-path deployments should use KMS auto-unseal
+      (seal-external-kms) instead of the Shamir manual-unseal path.
+
+  - file: vault/seal/seal.go
+    line: 832
+    line_end: 845
+    function: GetShamirKeyBytes
+    algorithm: "AES-GCM keyed by a Shamir-combined secret"
+    library: "github.com/hashicorp/go-kms-wrapping/v2/aead (aead.ShamirWrapper)"
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      Mirrors SetShamirSealKey: type-asserts to *aead.ShamirWrapper (line
+      839) and calls shamirWrapper.KeyBytes(ctx) (line 844) to read back
+      the raw AES-GCM key bytes derived from the Shamir secret. Same
+      fips_approved: false rationale as SetShamirSealKey.
+
+  # ===========================================================================
+  # vault/rekey.go - Shamir split/combine call sites (module_boundary: seal-shamir)
+  # ===========================================================================
+
+  - file: vault/rekey.go
+    line: 9
+    function: package imports
+    algorithm: "Constant-time comparison"
+    library: crypto/subtle
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: true
+    context: import
+    notes: >
+      Used to compare rekey/verification key fragments without a timing
+      side-channel (lines 381, 663, 861, 905).
+
+  - file: vault/rekey.go
+    line: 23
+    function: package imports
+    algorithm: "Shamir Secret Sharing (GF(256) polynomial interpolation)"
+    library: github.com/hashicorp/vault/shamir
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    context: import
+    notes: >
+      Top-level shamir/ package (NOT vault/shamir/, which does not exist -
+      see shamir-directory-does-not-exist scope note). Provides
+      Split/Combine/ShareOverhead used throughout this file.
+
+  - file: vault/rekey.go
+    line: 337
+    function: BarrierRekeyUpdate
+    algorithm: "Shamir Secret Sharing (share-size accounting)"
+    library: github.com/hashicorp/vault/shamir
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      "max += shamir.ShareOverhead" accounts for the per-share overhead
+      byte when validating the nonce/key buffer size for a barrier rekey
+      operation.
+
+  - file: vault/rekey.go
+    line: 381
+    function: BarrierRekeyUpdate
+    algorithm: "Constant-time comparison"
+    library: crypto/subtle
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      subtle.ConstantTimeCompare(existing, key) == 1 deduplicates
+      already-submitted barrier rekey key fragments.
+
+  - file: vault/rekey.go
+    line: 403
+    function: BarrierRekeyUpdate
+    algorithm: "Shamir Secret Sharing (combine)"
+    library: github.com/hashicorp/vault/shamir
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      recoveredKey, err = shamir.Combine(c.barrierRekeyConfig.RekeyProgress)
+      reconstructs the barrier root key from the submitted key shares once
+      the configured threshold is met.
+
+  - file: vault/rekey.go
+    line: 466
+    function: BarrierRekeyUpdate
+    algorithm: "Shamir Secret Sharing (split)"
+    library: github.com/hashicorp/vault/shamir
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      shares, err := shamir.Split(newKey, c.barrierRekeyConfig.SecretShares,
+      c.barrierRekeyConfig.SecretThreshold) splits the new barrier root key
+      into N shares with an M-of-N reconstruction threshold.
+
+  - file: vault/rekey.go
+    line: 627
+    function: RecoveryRekeyUpdate
+    algorithm: "Shamir Secret Sharing (share-size accounting)"
+    library: github.com/hashicorp/vault/shamir
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      "max += shamir.ShareOverhead" - recovery-key analogue of the
+      barrier-rekey accounting at line 337.
+
+  - file: vault/rekey.go
+    line: 663
+    function: RecoveryRekeyUpdate
+    algorithm: "Constant-time comparison"
+    library: crypto/subtle
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      subtle.ConstantTimeCompare(existing, key) == 1 deduplicates
+      already-submitted recovery-key fragments.
+
+  - file: vault/rekey.go
+    line: 685
+    function: RecoveryRekeyUpdate
+    algorithm: "Shamir Secret Sharing (combine)"
+    library: github.com/hashicorp/vault/shamir
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      recoveryKey, err = shamir.Combine(c.recoveryRekeyConfig.RekeyProgress)
+      reconstructs the recovery key from submitted shares.
+
+  - file: vault/rekey.go
+    line: 714
+    function: RecoveryRekeyUpdate
+    algorithm: "Shamir Secret Sharing (split)"
+    library: github.com/hashicorp/vault/shamir
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      shares, err := shamir.Split(newRecoveryKey,
+      c.recoveryRekeyConfig.SecretShares,
+      c.recoveryRekeyConfig.SecretThreshold) splits the new recovery key
+      into shares.
+
+  - file: vault/rekey.go
+    line: 830
+    function: RekeyVerify
+    algorithm: "Shamir Secret Sharing (share-size accounting)"
+    library: github.com/hashicorp/vault/shamir
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      "max += shamir.ShareOverhead" - verification-phase analogue of the
+      same accounting pattern.
+
+  - file: vault/rekey.go
+    line: 861
+    function: RekeyVerify
+    algorithm: "Constant-time comparison"
+    library: crypto/subtle
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      subtle.ConstantTimeCompare(existing, key) == 1 deduplicates
+      already-submitted verification key fragments.
+
+  - file: vault/rekey.go
+    line: 899
+    function: RekeyVerify
+    algorithm: "Shamir Secret Sharing (combine)"
+    library: github.com/hashicorp/vault/shamir
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: false
+    notes: >
+      recoveredKey, err = shamir.Combine(config.VerificationProgress)
+      reconstructs the key being verified from the submitted verification
+      shares.
+
+  - file: vault/rekey.go
+    line: 905
+    function: RekeyVerify
+    algorithm: "Constant-time comparison"
+    library: crypto/subtle
+    module_boundary: seal-shamir
+    security_relevant: true
+    fips_approved: true
+    notes: >
+      subtle.ConstantTimeCompare(recoveredKey, config.VerificationKey) != 1
+      is the final check that the reconstructed key matches the expected
+      verification key, without a timing side-channel.
