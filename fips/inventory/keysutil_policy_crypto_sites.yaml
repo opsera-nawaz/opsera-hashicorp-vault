@@ -1,0 +1,1169 @@
+# FIPS 140-3 Cryptographic Inventory — sdk/helper/keysutil/policy.go
+#
+# WO-005: Catalog crypto call sites in keysutil policy.go
+# Epic: FIPS Phase 1 — Cryptographic Inventory and Discovery (FIPS-CRYPTO-001)
+#
+# This file enumerates every cryptographic call site, KeyType classification,
+# and cross-referenced dependency found by a full read of:
+#   - sdk/helper/keysutil/policy.go   (3,129 lines — verified against this checkout;
+#                                       the original WO-005 description cites 1,708
+#                                       lines from an earlier snapshot of the file)
+#   - sdk/helper/keysutil/consts.go   (HashType / HashFuncMap / CryptoHashMap)
+#   - sdk/helper/keysutil/policy_ce.go (CE build-tag stubs for enterprise-only paths)
+#   - sdk/helper/keysutil/policy_test.go (SHA-3/boringcrypto exclusion evidence)
+#   - sdk/helper/certutil/helpers.go (SignatureAlgorithmNames, rsaMinimumSecureKeySize)
+#   - sdk/helper/kdf/kdf.go           (backing implementation of Kdf_hmac_sha256_counter)
+#   - sdk/go.mod                      (pinned library versions)
+#
+# Schema: fips/schemas/crypto_inventory_entry.json
+# Validate with: fips/scripts/validate_inventory_schema.sh
+#
+# This is a read-only inventory/classification artifact. No production code in
+# policy.go, certutil/helpers.go, or go.mod was modified to produce it.
+
+# ---------------------------------------------------------------------------
+# Section 1: KeyType constant classification (20 constants — policy.go:64-83)
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/keysutil/policy.go
+  line: 64
+  function: "const block (KeyType enum)"
+  algorithm: AES-256-GCM
+  key_type: KeyType_AES256_GCM96
+  library: crypto/aes, crypto/cipher
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "AES-GCM (SP 800-38D) is an Approved AEAD mode. Concrete cipher construction at policy.go:2198/2278."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 65
+  function: "const block (KeyType enum)"
+  algorithm: ECDSA-P256
+  key_type: KeyType_ECDSA_P256
+  library: crypto/ecdsa, crypto/elliptic
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "ECDSA on NIST curve P-256 (FIPS 186-5). Sign/verify/genkey at policy.go:1483/1679/3075."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 66
+  function: "const block (KeyType enum)"
+  algorithm: Ed25519
+  key_type: KeyType_ED25519
+  library: golang.org/x/crypto/ed25519, crypto/ed25519
+  library_version: "v0.57.0 (x/crypto); stdlib (go1.26.0) for crypto/ed25519"
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_ecdsa_nist_curves
+  notes: "EdDSA/Ed25519 does not use a NIST-approved curve and is not on the FIPS 186-5 Approved list. Migrating to ECDSA P-256/P-384/P-521 is a wire-format-breaking change: Ed25519 produces a fixed 64-byte signature, while ECDSA (ASN.1 DER for MarshalingTypeASN1, or fixed-width R||S for MarshalingTypeJWS at policy.go:1500-1518) produces a different, variable-length encoding. Existing signed data/tokens created with Ed25519 keys cannot be verified by an ECDSA-only client and vice versa; dual-read support is required during migration (see risk R4 in architecture artifact)."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 67
+  function: "const block (KeyType enum)"
+  algorithm: RSA-2048
+  key_type: KeyType_RSA2048
+  library: crypto/rsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "RSA >= 2048 bits is Approved (FIPS 186-5 / SP 800-56B). Matches certutil rsaMinimumSecureKeySize=2048 enforcement."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 68
+  function: "const block (KeyType enum)"
+  algorithm: RSA-4096
+  key_type: KeyType_RSA4096
+  library: crypto/rsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+
+- file: sdk/helper/keysutil/policy.go
+  line: 69
+  function: "const block (KeyType enum)"
+  algorithm: ChaCha20-Poly1305
+  key_type: KeyType_ChaCha20_Poly1305
+  library: golang.org/x/crypto/chacha20poly1305
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_aes_gcm
+  notes: "ChaCha20-Poly1305 is not an Approved AEAD algorithm under SP 800-38D. AEAD construction at policy.go:2212 (encrypt) and policy.go:2292 (decrypt). Migrating to AES-GCM changes the ciphertext envelope; existing ciphertext must remain decryptable (dual-read) or be re-encrypted."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 70
+  function: "const block (KeyType enum)"
+  algorithm: ECDSA-P384
+  key_type: KeyType_ECDSA_P384
+  library: crypto/ecdsa, crypto/elliptic
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+
+- file: sdk/helper/keysutil/policy.go
+  line: 71
+  function: "const block (KeyType enum)"
+  algorithm: ECDSA-P521
+  key_type: KeyType_ECDSA_P521
+  library: crypto/ecdsa, crypto/elliptic
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+
+- file: sdk/helper/keysutil/policy.go
+  line: 72
+  function: "const block (KeyType enum)"
+  algorithm: AES-128-GCM
+  key_type: KeyType_AES128_GCM96
+  library: crypto/aes, crypto/cipher
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+
+- file: sdk/helper/keysutil/policy.go
+  line: 73
+  function: "const block (KeyType enum)"
+  algorithm: RSA-3072
+  key_type: KeyType_RSA3072
+  library: crypto/rsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+
+- file: sdk/helper/keysutil/policy.go
+  line: 74
+  function: "const block (KeyType enum)"
+  algorithm: "Managed Key (external KMS/HSM envelope)"
+  key_type: KeyType_MANAGED_KEY
+  library: github.com/hashicorp/go-kms-wrapping/v2
+  library_version: v2.0.26
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: true
+  phase2_action: verify_kms_backend_fips_mode
+  notes: "Delegates the actual cryptographic operation to an external KMS/HSM via AEADFactory/ManagedKeyFactory (policy.go:1237-1264 decrypt, 2422-2454 encrypt). FIPS status is inherited entirely from the configured backend (AWS KMS/Azure Key Vault/GCP Cloud KMS per architecture artifact Phase 3), not from in-process code — flagged per WO-005 edge_cases."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 75
+  function: "const block (KeyType enum)"
+  algorithm: HMAC-SHA256
+  key_type: KeyType_HMAC
+  library: crypto/hmac, crypto/sha256
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "HMAC is Approved under FIPS 198-1. policy.go stores/returns raw HMAC key material via HMACKey() (policy.go:1276); the hmac.New(sha256.New, ...) construction itself occurs at policy.go:2242 (convergent nonce derivation) and in Transit-engine callers outside this file."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 76
+  function: "const block (KeyType enum)"
+  algorithm: AES-128-CMAC
+  key_type: KeyType_AES128_CMAC
+  library: "enterprise-only (not present in this OSS checkout)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: true
+  phase2_action: document_enterprise_boundary
+  notes: "AES-CMAC (SP 800-38B) is an Approved MAC mode. IsEnterpriseOnly()=true (policy.go:301-308); concrete implementation is gated behind entRotateInMemory (policy_ce.go:30 stub in this CE checkout) and is out of scope for CE remediation per WO-005 constraints."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 77
+  function: "const block (KeyType enum)"
+  algorithm: AES-256-CMAC
+  key_type: KeyType_AES256_CMAC
+  library: "enterprise-only (not present in this OSS checkout)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: true
+  phase2_action: document_enterprise_boundary
+
+- file: sdk/helper/keysutil/policy.go
+  line: 78
+  function: "const block (KeyType enum)"
+  algorithm: ML-DSA
+  key_type: KeyType_ML_DSA
+  library: "enterprise-only (not present in this OSS checkout)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: true
+  phase2_action: document_enterprise_boundary
+  notes: "ML-DSA (module-lattice digital signature) was finalized as FIPS 204 in August 2024, making the algorithm itself Approved. Concrete implementation and its CMVP-validated-module status are enterprise-only and not present in this OSS checkout (gated behind entSignWithOptions/entRotateInMemory stubs in policy_ce.go); module validation status must be separately confirmed in Phase 3."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 79
+  function: "const block (KeyType enum)"
+  algorithm: "Hybrid (classical + post-quantum composite signature)"
+  key_type: KeyType_HYBRID
+  library: "enterprise-only (not present in this OSS checkout)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: true
+  phase2_action: assess_hybrid_combiner_compliance
+  notes: "Composite/hybrid construction (e.g. ECDSA+ML-DSA) is not itself a single NIST-Approved algorithm; FIPS-Approved status depends on the combiner method and component algorithms and has not been independently assessed. Treated conservatively as not Approved until reviewed against NIST guidance (e.g. SP 800-156A-track hybrid guidance)."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 80
+  function: "const block (KeyType enum)"
+  algorithm: AES-192-CMAC
+  key_type: KeyType_AES192_CMAC
+  library: "enterprise-only (not present in this OSS checkout)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: true
+  phase2_action: document_enterprise_boundary
+  notes: "AES-192 is an Approved AES key size (FIPS 197); CMAC construction is Approved under SP 800-38B. Implementation is enterprise-only."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 81
+  function: "const block (KeyType enum)"
+  algorithm: SLH-DSA
+  key_type: KeyType_SLH_DSA
+  library: "enterprise-only (not present in this OSS checkout)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: true
+  phase2_action: document_enterprise_boundary
+  notes: "SLH-DSA (stateless hash-based signature) was finalized as FIPS 205 in August 2024, making the algorithm itself Approved. Implementation is enterprise-only in this checkout; module validation status must be separately confirmed in Phase 3."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 82
+  function: "const block (KeyType enum)"
+  algorithm: AES-128-CBC
+  key_type: KeyType_AES128_CBC
+  library: "enterprise-only (not present in this OSS checkout)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: true
+  phase2_action: document_enterprise_boundary
+  notes: "AES-CBC is an Approved confidentiality mode (SP 800-38A). Not handled by the OSS SymmetricEncryptRaw/SymmetricDecryptRaw switches (policy.go:2195-2229, 2275-2303); falls through to entEncryptWithOptions/entDecryptWithOptions stubs (policy_ce.go:34,38), confirming the concrete cipher.NewCBC-based implementation lives in enterprise-only code not present in this repo."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 83
+  function: "const block (KeyType enum)"
+  algorithm: AES-256-CBC
+  key_type: KeyType_AES256_CBC
+  library: "enterprise-only (not present in this OSS checkout)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: true
+  phase2_action: document_enterprise_boundary
+
+# ---------------------------------------------------------------------------
+# Section 2: KDF mode classification (policy.go:55-56) + call sites
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/keysutil/policy.go
+  line: 55
+  function: "const block (KDF mode enum)"
+  algorithm: "HMAC-SHA256 Counter-Mode KDF (SP 800-108)"
+  key_type: "multiple (Derived=true policies of type AES128/256_GCM96, ChaCha20_Poly1305, ED25519)"
+  library: "github.com/hashicorp/vault/sdk/helper/kdf (backed by crypto/hmac + crypto/sha256)"
+  library_version: "internal (same module); stdlib (go1.26.0) for hmac/sha256"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "Kdf_hmac_sha256_counter = 0 (default/legacy KDF mode). Dispatched at policy.go:1018-1021 to kdf.CounterMode -> kdf.HMACSHA256PRF, whose backing hmac.New(sha256.New, key) call is at sdk/helper/kdf/kdf.go:82. Counter-mode KDF using HMAC-SHA256 is Approved under SP 800-108."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 56
+  function: "const block (KDF mode enum)"
+  algorithm: "HKDF-SHA256 (RFC 5869 / SP 800-56C)"
+  key_type: "multiple (Derived=true policies of type AES128/256_GCM96, ChaCha20_Poly1305, ED25519)"
+  library: golang.org/x/crypto/hkdf
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "Kdf_hkdf_sha256 = 1. Constructed at policy.go:1024 via hkdf.New(sha256.New, keyEntry.Key, salt, context). HKDF-SHA256 is Approved under SP 800-56C rev2; the x/crypto implementation itself is not separately CMVP-validated — track module validation in Phase 3."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1021
+  function: DeriveKey
+  algorithm: "HMAC-SHA256 Counter-Mode KDF"
+  key_type: "multiple (see Kdf_hmac_sha256_counter entry above)"
+  library: "github.com/hashicorp/vault/sdk/helper/kdf"
+  library_version: "internal (same module)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "return kdf.CounterMode(prf, prfLen, keyEntry.Key, append(context, salt...), 256) — the actual invocation of the counter-mode KDF."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1024
+  function: DeriveKey
+  algorithm: HKDF-SHA256
+  key_type: "multiple"
+  library: golang.org/x/crypto/hkdf
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "reader := hkdf.New(sha256.New, keyEntry.Key, salt, context)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1046
+  function: DeriveKey
+  algorithm: "Ed25519 key generation from derived bytes"
+  key_type: KeyType_ED25519
+  library: golang.org/x/crypto/ed25519
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_ecdsa_nist_curves
+  notes: "_, pri, err := ed25519.GenerateKey(limReader) — uses the HKDF output stream as the 'random' input for deterministic derivation."
+
+# ---------------------------------------------------------------------------
+# Section 3: Mutable crypto configuration point
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/keysutil/policy.go
+  line: 121
+  function: "genEd25519Options (package-level var)"
+  algorithm: "Ed25519 signing-options factory"
+  key_type: KeyType_ED25519
+  library: crypto/ed25519
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_ecdsa_nist_curves
+  notes: "var genEd25519Options = func(...) is a package-level function variable, not a constant — it can be reassigned at runtime (e.g. by tests or enterprise build hooks) to change Ed25519 signing behavior (hash algorithm rejection, signature-context support). Flagged as a mutable crypto configuration point per WO-005 edge_cases; any Phase-2 gating of Ed25519 must account for this indirection, not just the static call sites."
+
+# ---------------------------------------------------------------------------
+# Section 4: Asymmetric sign/verify call sites
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1375
+  function: SignWithOptions
+  algorithm: "ECDSA sign (dispatch)"
+  key_type: "KeyType_ECDSA_P256 / KeyType_ECDSA_P384 / KeyType_ECDSA_P521"
+  library: crypto/ecdsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "sig, err = signWithECDSA(p.KeyVersionType(ver), keyParams, input, marshaling) — dispatches to the call site at policy.go:1483."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1377
+  function: SignWithOptions
+  algorithm: "Ed25519 sign (dispatch)"
+  key_type: KeyType_ED25519
+  library: golang.org/x/crypto/ed25519
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_ecdsa_nist_curves
+  notes: "sig, pubKey, err = p.signWithEd25519(ver, input, context, options, keyParams) — dispatches to policy.go:1450. Wire-format compatibility impact: see KeyType_ED25519 entry at line 66."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1398
+  function: SignWithOptions
+  algorithm: "RSA-PSS sign"
+  key_type: "KeyType_RSA2048 / KeyType_RSA3072 / KeyType_RSA4096"
+  library: crypto/rsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "sig, err = rsa.SignPSS(rand.Reader, key, algo, input, &rsa.PSSOptions{SaltLength: saltLength}). Hash algorithm resolved via CryptoHashMap (consts.go:67-77) at line 1384 — if the caller selects a sha3-* HashType this becomes non-Approved under boringcrypto builds; see the SHA-3 entries below."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1403
+  function: SignWithOptions
+  algorithm: "RSA PKCS#1 v1.5 sign"
+  key_type: "KeyType_RSA2048 / KeyType_RSA3072 / KeyType_RSA4096"
+  library: crypto/rsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "sig, err = rsa.SignPKCS1v15(rand.Reader, key, algo, input)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1450
+  function: signWithEd25519
+  algorithm: "Ed25519 sign"
+  key_type: KeyType_ED25519
+  library: golang.org/x/crypto/ed25519
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_ecdsa_nist_curves
+  notes: "sig, err := key.Sign(rand.Reader, input, opts) where opts comes from the mutable genEd25519Options (policy.go:121)."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1483
+  function: signWithECDSA
+  algorithm: "ECDSA sign"
+  key_type: "KeyType_ECDSA_P256 / KeyType_ECDSA_P384 / KeyType_ECDSA_P521"
+  library: crypto/ecdsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "r, s, err := ecdsa.Sign(rand.Reader, key, input)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1593
+  function: VerifySignatureWithOptions
+  algorithm: "ECDSA verify (dispatch)"
+  key_type: "KeyType_ECDSA_P256 / KeyType_ECDSA_P384 / KeyType_ECDSA_P521"
+  library: crypto/ecdsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "return verifyWithECDSA(p.KeyVersionType(ver), key, input, sigBytes, marshaling) — dispatches to policy.go:1679."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1595
+  function: VerifySignatureWithOptions
+  algorithm: "Ed25519 verify (dispatch)"
+  key_type: KeyType_ED25519
+  library: golang.org/x/crypto/ed25519
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_ecdsa_nist_curves
+  notes: "return p.verifyEd25519WithOptions(ver, input, context, options, sigBytes) — dispatches to policy.go:1716."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1620
+  function: VerifySignatureWithOptions
+  algorithm: "RSA-PSS verify"
+  key_type: "KeyType_RSA2048 / KeyType_RSA3072 / KeyType_RSA4096"
+  library: crypto/rsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "err = rsa.VerifyPSS(publicKey, algo, input, sigBytes, &rsa.PSSOptions{SaltLength: saltLength})"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1626
+  function: VerifySignatureWithOptions
+  algorithm: "RSA PKCS#1 v1.5 verify"
+  key_type: "KeyType_RSA2048 / KeyType_RSA3072 / KeyType_RSA4096"
+  library: crypto/rsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "err = rsa.VerifyPKCS1v15(publicKey, algo, input, sigBytes)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1679
+  function: verifyWithECDSA
+  algorithm: "ECDSA verify"
+  key_type: "KeyType_ECDSA_P256 / KeyType_ECDSA_P384 / KeyType_ECDSA_P521"
+  library: crypto/ecdsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "return ecdsa.Verify(key, input, ecdsaSig.R, ecdsaSig.S), nil"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1716
+  function: verifyEd25519WithPublicKey
+  algorithm: "Ed25519 verify"
+  key_type: KeyType_ED25519
+  library: crypto/ed25519
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_ecdsa_nist_curves
+  notes: "if err := stdlibEd25519.VerifyWithOptions(pub, input, sigBytes, opts); err != nil { ... } — uses the stdlib crypto/ed25519 (aliased stdlibEd25519), distinct from the x/crypto/ed25519 import used for signing/keygen elsewhere in this file."
+
+# ---------------------------------------------------------------------------
+# Section 5: Key generation call sites
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1995
+  function: RotateInMemoryWithAlgorithm
+  algorithm: "ECDSA key generation (dispatch)"
+  key_type: "KeyType_ECDSA_P256 / KeyType_ECDSA_P384 / KeyType_ECDSA_P521"
+  library: crypto/ecdsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "if err = generateECDSAKey(keyType, &entry); err != nil { ... } — dispatches to policy.go:3075."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2000
+  function: RotateInMemoryWithAlgorithm
+  algorithm: "Ed25519 key generation (dispatch)"
+  key_type: KeyType_ED25519
+  library: golang.org/x/crypto/ed25519
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_ecdsa_nist_curves
+  notes: "err := generateEd25519Key(randReader, &entry.Key, &entry.FormattedPublicKey) — dispatches to policy.go:2062."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2013
+  function: RotateInMemoryWithAlgorithm
+  algorithm: "RSA key generation"
+  key_type: "KeyType_RSA2048 / KeyType_RSA3072 / KeyType_RSA4096"
+  library: "github.com/hashicorp/vault/sdk/helper/cryptoutil (wraps crypto/rsa.GenerateKey)"
+  library_version: "internal (same module); stdlib (go1.26.0) for crypto/rsa"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "entry.RSAKey, err = cryptoutil.GenerateRSAKey(randReader, bitSize)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2062
+  function: generateEd25519Key
+  algorithm: "Ed25519 key generation"
+  key_type: KeyType_ED25519
+  library: golang.org/x/crypto/ed25519
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_ecdsa_nist_curves
+  notes: "pub, pri, err := ed25519.GenerateKey(randReader)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 3075
+  function: generateECDSAKey
+  algorithm: "ECDSA key generation"
+  key_type: "KeyType_ECDSA_P256 / KeyType_ECDSA_P384 / KeyType_ECDSA_P521"
+  library: crypto/ecdsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "privKey, err := ecdsa.GenerateKey(curve, rand.Reader)"
+
+# ---------------------------------------------------------------------------
+# Section 6: Symmetric AEAD call sites (encrypt/decrypt)
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2198
+  function: SymmetricEncryptRaw
+  algorithm: "AES cipher block initialization"
+  key_type: "KeyType_AES128_GCM96 / KeyType_AES256_GCM96"
+  library: crypto/aes
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "aesCipher, err := aes.NewCipher(encKey)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2204
+  function: SymmetricEncryptRaw
+  algorithm: "AES-GCM AEAD construction"
+  key_type: "KeyType_AES128_GCM96 / KeyType_AES256_GCM96"
+  library: crypto/cipher
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "gcm, err := cipher.NewGCM(aesCipher)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2212
+  function: SymmetricEncryptRaw
+  algorithm: ChaCha20-Poly1305
+  key_type: KeyType_ChaCha20_Poly1305
+  library: golang.org/x/crypto/chacha20poly1305
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_aes_gcm
+  notes: "cha, err := chacha20poly1305.New(encKey)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2242
+  function: SymmetricEncryptRaw
+  algorithm: "HMAC-SHA256 (convergent-encryption nonce derivation)"
+  key_type: "multiple (convergent-encryption-enabled AEAD types, convergent version 2/3)"
+  library: crypto/hmac, crypto/sha256
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "nonceHmac := hmac.New(sha256.New, opts.HMACKey); nonceHmac.Write(plaintext); nonceSum := nonceHmac.Sum(nil) — deterministic nonce derivation for convergent encryption, critical for AEAD nonce-uniqueness safety."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2260
+  function: SymmetricEncryptRaw
+  algorithm: "AEAD Seal (encrypt + authenticate)"
+  key_type: "KeyType_AES128_GCM96 / KeyType_AES256_GCM96 / KeyType_ChaCha20_Poly1305 / KeyType_MANAGED_KEY"
+  library: crypto/cipher (cipher.AEAD interface; concrete type set at 2198-2225)
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "ciphertext := aead.Seal(nil, nonce, plaintext, opts.AdditionalData) — generic AEAD call whose FIPS status is inherited from whichever cipher.AEAD was constructed above; fips_approved here reflects the AES-GCM/managed-key paths, not the ChaCha20-Poly1305 path (see line 2212 for that classification)."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2278
+  function: SymmetricDecryptRaw
+  algorithm: "AES cipher block initialization"
+  key_type: "KeyType_AES128_GCM96 / KeyType_AES256_GCM96"
+  library: crypto/aes
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "aesCipher, err := aes.NewCipher(encKey)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2284
+  function: SymmetricDecryptRaw
+  algorithm: "AES-GCM AEAD construction"
+  key_type: "KeyType_AES128_GCM96 / KeyType_AES256_GCM96"
+  library: crypto/cipher
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "gcm, err := cipher.NewGCM(aesCipher)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2292
+  function: SymmetricDecryptRaw
+  algorithm: ChaCha20-Poly1305
+  key_type: KeyType_ChaCha20_Poly1305
+  library: golang.org/x/crypto/chacha20poly1305
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_aes_gcm
+  notes: "cha, err := chacha20poly1305.New(encKey)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2319
+  function: SymmetricDecryptRaw
+  algorithm: "AEAD Open (decrypt + verify)"
+  key_type: "KeyType_AES128_GCM96 / KeyType_AES256_GCM96 / KeyType_ChaCha20_Poly1305 / KeyType_MANAGED_KEY"
+  library: crypto/cipher (cipher.AEAD interface; concrete type set at 2276-2303)
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "plain, err := aead.Open(nil, nonce, trueCT, opts.AdditionalData) — generic AEAD call; see line 2292 for the ChaCha20-Poly1305-specific non-Approved classification."
+
+# ---------------------------------------------------------------------------
+# Section 7: RSA encrypt/decrypt call sites
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1228
+  function: DecryptWithOptions
+  algorithm: "RSA PKCS#1 v1.5 decryption"
+  key_type: "KeyType_RSA2048 / KeyType_RSA3072 / KeyType_RSA4096"
+  library: crypto/rsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "plain, err = rsa.DecryptPKCS1v15(rand.Reader, key, decoded)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1230
+  function: DecryptWithOptions
+  algorithm: "RSA-OAEP decryption"
+  key_type: "KeyType_RSA2048 / KeyType_RSA3072 / KeyType_RSA4096"
+  library: crypto/rsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "plain, err = rsa.DecryptOAEP(hashFn(), rand.Reader, key, decoded, nil). hashFn resolved via HashFuncMap (consts.go:54-65, policy.go:1225) — if caller selects a sha3-* HashType, hashFn() returns a SHA-3 hasher and this call site's classification degrades to non-Approved under boringcrypto builds; see the SHA-3 entries below."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2412
+  function: EncryptWithOptions
+  algorithm: "RSA PKCS#1 v1.5 encryption"
+  key_type: "KeyType_RSA2048 / KeyType_RSA3072 / KeyType_RSA4096"
+  library: crypto/rsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "ciphertext, err = rsa.EncryptPKCS1v15(rand.Reader, publicKey, plaintext)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2414
+  function: EncryptWithOptions
+  algorithm: "RSA-OAEP encryption"
+  key_type: "KeyType_RSA2048 / KeyType_RSA3072 / KeyType_RSA4096"
+  library: crypto/rsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "ciphertext, err = rsa.EncryptOAEP(hashFn(), rand.Reader, publicKey, plaintext, nil). Same HashFuncMap/SHA-3 caveat as line 1230."
+
+# ---------------------------------------------------------------------------
+# Section 8: Key import / certificate / marshaling call sites
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2702
+  function: parseFromKey
+  algorithm: "X.509 PKIX public-key marshaling (ECDSA)"
+  key_type: "KeyType_ECDSA_P256 / KeyType_ECDSA_P384 / KeyType_ECDSA_P521"
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "derBytes, err = x509.MarshalPKIXPublicKey(ecdsaKey.Public()) — encodes the public half of an imported ECDSA key pair for storage in KeyEntry.FormattedPublicKey."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2716
+  function: parseFromKey
+  algorithm: "X.509 PKIX public-key marshaling (ECDSA, public-key-only import)"
+  key_type: "KeyType_ECDSA_P256 / KeyType_ECDSA_P384 / KeyType_ECDSA_P521"
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "derBytes, err = x509.MarshalPKIXPublicKey(ecdsaKey)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2909
+  function: CreateCsrWithKeyVersion
+  algorithm: "X.509 CSR signing (crypto.Signer dispatch)"
+  key_type: "KeyType_ECDSA_P256/P384/P521 / KeyType_ED25519 / KeyType_RSA2048/3072/4096"
+  library: "crypto/x509 (+ crypto/ecdsa, crypto/ed25519, crypto/rsa per key.(crypto.Signer) dynamic dispatch)"
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_ecdsa_nist_curves
+  notes: "csrBytes, err := x509.CreateCertificateRequest(rand.Reader, csrTemplate, key) — the signing algorithm is selected dynamically by p.Type (lines 2875-2907); fips_approved is marked false here because an Ed25519-typed Transit key produces a non-Approved CSR signature through this same call site. ECDSA- and RSA-typed keys are Approved through this path."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 3082
+  function: generateECDSAKey
+  algorithm: "X.509 PKIX public-key marshaling (ECDSA)"
+  key_type: "KeyType_ECDSA_P256 / KeyType_ECDSA_P384 / KeyType_ECDSA_P521"
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "derBytes, err := x509.MarshalPKIXPublicKey(privKey.Public())"
+
+# ---------------------------------------------------------------------------
+# Section 9: Managed-key / external KMS delegation call sites
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1261
+  function: DecryptWithOptions
+  algorithm: "Managed-key AEAD decrypt (delegated to external KMS/HSM)"
+  key_type: KeyType_MANAGED_KEY
+  library: github.com/hashicorp/go-kms-wrapping/v2
+  library_version: v2.0.26
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: true
+  phase2_action: verify_kms_backend_fips_mode
+  notes: "plain, err = p.decryptWithManagedKey(managedKeyFactory.GetManagedKeyParameters(), keyEntry, decoded, wrappingOpts...). FIPS status depends entirely on the configured KMS/HSM backend, not on this in-process code — WO-005 edge_case."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2451
+  function: EncryptWithOptions
+  algorithm: "Managed-key AEAD encrypt (delegated to external KMS/HSM)"
+  key_type: KeyType_MANAGED_KEY
+  library: github.com/hashicorp/go-kms-wrapping/v2
+  library_version: v2.0.26
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: true
+  phase2_action: verify_kms_backend_fips_mode
+  notes: "ciphertext, err = p.encryptWithManagedKey(managedKeyFactory.GetManagedKeyParameters(), keyEntry, plaintext, wrappingOpts...)"
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2505
+  function: buildManagedKeyOpts
+  algorithm: "Managed-key RSA encryption-padding negotiation"
+  key_type: KeyType_MANAGED_KEY
+  library: github.com/hashicorp/go-kms-wrapping/v2
+  library_version: v2.0.26
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: true
+  phase2_action: verify_kms_backend_fips_mode
+  notes: "wrappingOpts = append(wrappingOpts, wrapping.WithRsaEncryptionPadding(getRsaEncryptionPadding(factories))) — negotiates OAEP/PKCS1v15 padding with the external KMS wrapper; the actual RSA operation happens inside the KMS/HSM."
+
+# ---------------------------------------------------------------------------
+# Section 10: Tink key-wrap (kwp/subtle) call sites — BYOK/import wrapping
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2841
+  function: wrapTargetPKCS8ForImport
+  algorithm: "RSA-OAEP encryption (ephemeral AES wrapping-key protection)"
+  key_type: "KeyType_RSA2048 / KeyType_RSA3072 / KeyType_RSA4096 (wrapping key)"
+  library: crypto/rsa
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "ephKeyWrapped, err := rsa.EncryptOAEP(hash, rand.Reader, wrappingKey, ephKey, []byte{}) — part of the CKM_RSA_AES_KEY_WRAP-compatible import scheme used for BYOK."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2847
+  function: wrapTargetPKCS8ForImport
+  algorithm: "AES Key Wrap with Padding (KWP, SP 800-38F) instance construction"
+  key_type: "N/A (applies to any importable key type: symmetric keys and RSA/ECDSA/Ed25519 PKCS#8 private keys)"
+  library: github.com/tink-crypto/tink-go/v2/kwp/subtle
+  library_version: v2.7.0
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "kwp, err := subtle.NewKWP(ephKey). AES-KWP is an Approved key-wrapping mode under SP 800-38F; the Tink Go module providing it is not itself separately CMVP-validated as used here — track as a residual boundary item in Phase 3 (Validated Module Boundary)."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 2853
+  function: wrapTargetPKCS8ForImport
+  algorithm: "AES-KWP wrap operation"
+  key_type: "N/A (import target key)"
+  library: github.com/tink-crypto/tink-go/v2/kwp/subtle
+  library_version: v2.7.0
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "targetKeyWrapped, err := kwp.Wrap(preppedTargetKey)"
+
+# ---------------------------------------------------------------------------
+# Section 11: SHA-3 hash usage — flagged boringcrypto/FIPS boundary exclusion
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/keysutil/consts.go
+  line: 61
+  function: "HashFuncMap / CryptoHashMap (package-level var block)"
+  algorithm: "SHA3-224 / SHA3-256 / SHA3-384 / SHA3-512"
+  key_type: "N/A (hash function, selectable for RSA-PSS/PKCS1v15 signing and RSA-OAEP encryption via HashType)"
+  library: golang.org/x/crypto/sha3
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: exclude_from_fips_builds
+  notes: "Excluded from FIPS-validated boundary under boringcrypto builds per sdk/helper/keysutil/policy_test.go documentation. See sdk/helper/keysutil/policy_test.go:1335-1349 (isUnsupportedGoHashType): normal Go builds support all RSA-PSS hash functions, but the boringcrypto FIPS build does not support SHA-3 (\"FIPS 140_2 does not accept them\"; not available in FIPS 140-2, status for FIPS 140-3 tracked as an open question in that comment). HashFuncMap entries at consts.go:61-64, CryptoHashMap entries at consts.go:74-77."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1384
+  function: SignWithOptions
+  algorithm: "SHA-3 hash-algorithm selection for RSA signing (Transit engine signing path)"
+  key_type: "KeyType_RSA2048 / KeyType_RSA3072 / KeyType_RSA4096"
+  library: golang.org/x/crypto/sha3 (via CryptoHashMap in consts.go)
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: exclude_from_fips_builds
+  notes: "algo, ok := CryptoHashMap[hashAlgorithm] — when hashAlgorithm is sha3-224/256/384/512, this signing path uses SHA-3. Excluded from FIPS-validated boundary under boringcrypto builds per sdk/helper/keysutil/policy_test.go documentation."
+
+- file: sdk/helper/keysutil/policy.go
+  line: 1602
+  function: VerifySignatureWithOptions
+  algorithm: "SHA-3 hash-algorithm selection for RSA verification (Transit engine signing path)"
+  key_type: "KeyType_RSA2048 / KeyType_RSA3072 / KeyType_RSA4096"
+  library: golang.org/x/crypto/sha3 (via CryptoHashMap in consts.go)
+  library_version: v0.57.0
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: exclude_from_fips_builds
+  notes: "algo, ok := CryptoHashMap[hashAlgorithm]. Excluded from FIPS-validated boundary under boringcrypto builds per sdk/helper/keysutil/policy_test.go documentation."
+
+# ---------------------------------------------------------------------------
+# Section 12: Enterprise-only crypto delegation (build-tag stubs)
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/keysutil/policy_ce.go
+  line: 22
+  function: entSignWithOptions
+  algorithm: "N/A — CE (!enterprise) build stub; returns an error"
+  key_type: "KeyType_ML_DSA / KeyType_HYBRID / KeyType_SLH_DSA (default-case signing dispatch from policy.go:1411)"
+  library: "n/a (enterprise-only implementation not present in this OSS checkout)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: true
+  phase2_action: document_enterprise_boundary
+  notes: "func entSignWithOptions(...) { return nil, fmt.Errorf(\"unsupported key type %v\", p.Type) }. Confirms the concrete ML-DSA/SLH-DSA/HYBRID signing crypto is implemented only in enterprise-only source not present in this repository and therefore cannot be inventoried from this OSS checkout — documented as a boundary, not a gap requiring CE remediation."
+
+- file: sdk/helper/keysutil/policy_ce.go
+  line: 30
+  function: entRotateInMemory
+  algorithm: "N/A — CE (!enterprise) build stub; returns an error"
+  key_type: "KeyType_MANAGED_KEY / CMAC variants / AES_CBC variants / KeyType_ML_DSA / KeyType_SLH_DSA / KeyType_HYBRID (default-case key generation dispatch from policy.go:2021)"
+  library: "n/a (enterprise-only implementation not present in this OSS checkout)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: true
+  phase2_action: document_enterprise_boundary
+
+- file: sdk/helper/keysutil/policy_ce.go
+  line: 34
+  function: entEncryptWithOptions
+  algorithm: "N/A — CE (!enterprise) build stub; returns an error"
+  key_type: "KeyType_AES128_CBC / KeyType_AES256_CBC (default-case encryption dispatch from policy.go:2457)"
+  library: "n/a (enterprise-only implementation not present in this OSS checkout)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: true
+  phase2_action: document_enterprise_boundary
+
+- file: sdk/helper/keysutil/policy_ce.go
+  line: 38
+  function: entDecryptWithOptions
+  algorithm: "N/A — CE (!enterprise) build stub; returns an error"
+  key_type: "KeyType_AES128_CBC / KeyType_AES256_CBC (default-case decryption dispatch from policy.go:1267)"
+  library: "n/a (enterprise-only implementation not present in this OSS checkout)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: true
+  phase2_action: document_enterprise_boundary
+
+# ---------------------------------------------------------------------------
+# Section 13: Cross-reference — sdk/helper/certutil/helpers.go
+# ---------------------------------------------------------------------------
+
+- file: sdk/helper/certutil/helpers.go
+  line: 41
+  function: "package-level const"
+  algorithm: "RSA minimum key-size enforcement"
+  key_type: "RSA (all Transit/PKI RSA key types)"
+  library: "n/a (policy constant, enforced against crypto/rsa key material)"
+  library_version: "n/a"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "const rsaMinimumSecureKeySize = 2048. Enforced at helpers.go:840-841 (\"if keyBits < rsaMinimumSecureKeySize { return fmt.Errorf(...) }\"), matching the FIPS 186-5 minimum Approved RSA modulus size and the KeyType_RSA2048 floor in policy.go."
+
+- file: sdk/helper/certutil/helpers.go
+  line: 59
+  function: "SignatureAlgorithmNames (package-level var, map literal)"
+  algorithm: SHA256WithRSA
+  key_type: "RSA (PKCS#1 v1.5 signature algorithm identifier)"
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "map key \"sha256withrsa\" -> x509.SHA256WithRSA"
+
+- file: sdk/helper/certutil/helpers.go
+  line: 60
+  function: "SignatureAlgorithmNames (package-level var, map literal)"
+  algorithm: SHA384WithRSA
+  key_type: RSA
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "map key \"sha384withrsa\" -> x509.SHA384WithRSA"
+
+- file: sdk/helper/certutil/helpers.go
+  line: 61
+  function: "SignatureAlgorithmNames (package-level var, map literal)"
+  algorithm: SHA512WithRSA
+  key_type: RSA
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "map key \"sha512withrsa\" -> x509.SHA512WithRSA"
+
+- file: sdk/helper/certutil/helpers.go
+  line: 62
+  function: "SignatureAlgorithmNames (package-level var, map literal)"
+  algorithm: ECDSAWithSHA256
+  key_type: "ECDSA (NIST curves)"
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "map key \"ecdsawithsha256\" -> x509.ECDSAWithSHA256"
+
+- file: sdk/helper/certutil/helpers.go
+  line: 63
+  function: "SignatureAlgorithmNames (package-level var, map literal)"
+  algorithm: ECDSAWithSHA384
+  key_type: ECDSA
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "map key \"ecdsawithsha384\" -> x509.ECDSAWithSHA384"
+
+- file: sdk/helper/certutil/helpers.go
+  line: 64
+  function: "SignatureAlgorithmNames (package-level var, map literal)"
+  algorithm: ECDSAWithSHA512
+  key_type: ECDSA
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "map key \"ecdsawithsha512\" -> x509.ECDSAWithSHA512"
+
+- file: sdk/helper/certutil/helpers.go
+  line: 65
+  function: "SignatureAlgorithmNames (package-level var, map literal)"
+  algorithm: SHA256WithRSAPSS
+  key_type: RSA
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "map key \"sha256withrsapss\" -> x509.SHA256WithRSAPSS"
+
+- file: sdk/helper/certutil/helpers.go
+  line: 66
+  function: "SignatureAlgorithmNames (package-level var, map literal)"
+  algorithm: SHA384WithRSAPSS
+  key_type: RSA
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "map key \"sha384withrsapss\" -> x509.SHA384WithRSAPSS"
+
+- file: sdk/helper/certutil/helpers.go
+  line: 67
+  function: "SignatureAlgorithmNames (package-level var, map literal)"
+  algorithm: SHA512WithRSAPSS
+  key_type: RSA
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: true
+  enterprise_only: false
+  phase2_action: verify_runtime_provider
+  notes: "map key \"sha512withrsapss\" -> x509.SHA512WithRSAPSS"
+
+- file: sdk/helper/certutil/helpers.go
+  line: 68
+  function: "SignatureAlgorithmNames (package-level var, map literal)"
+  algorithm: PureEd25519
+  key_type: KeyType_ED25519
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_ecdsa_nist_curves
+  notes: "map key \"pureed25519\" -> x509.PureEd25519. Same non-Approved classification as KeyType_ED25519 (policy.go:66)."
+
+- file: sdk/helper/certutil/helpers.go
+  line: 69
+  function: "SignatureAlgorithmNames (package-level var, map literal)"
+  algorithm: PureEd25519
+  key_type: KeyType_ED25519
+  library: crypto/x509
+  library_version: "stdlib (go1.26.0)"
+  security_relevant: true
+  fips_approved: false
+  enterprise_only: false
+  phase2_action: migrate_to_ecdsa_nist_curves
+  notes: "map key \"ed25519\" -> x509.PureEd25519 (duplicate alias of \"pureed25519\" for callers who don't expect the \"Pure\" prefix, per the inline comment at helpers.go:69)."

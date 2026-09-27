@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/opsera-nawaz/opsera-hashicorp-vault/fips/schemas/crypto_inventory_entry.json",
+  "title": "FIPS 140-3 Cryptographic Call-Site Inventory Entry",
+  "description": "Schema for a single cataloged cryptographic call site or classification row produced by WO-005 (Catalog crypto call sites in keysutil policy.go). The inventory file is a JSON/YAML array of objects conforming to this schema. Consumed by the aggregation story (WO-019) that builds the composite FIPS evidence inventory.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "title": "CryptoInventoryEntry",
+    "required": [
+      "file",
+      "line",
+      "function",
+      "algorithm",
+      "key_type",
+      "library",
+      "library_version",
+      "security_relevant",
+      "fips_approved",
+      "enterprise_only",
+      "phase2_action"
+    ],
+    "properties": {
+      "file": {
+        "type": "string",
+        "description": "Repository-relative path to the source file containing the call site, e.g. sdk/helper/keysutil/policy.go"
+      },
+      "line": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "1-based line number in `file` where the call site, constant, or map entry is defined"
+      },
+      "function": {
+        "type": "string",
+        "description": "Enclosing Go function, method, or package-level declaration (const block, var block, map literal) containing the call site"
+      },
+      "algorithm": {
+        "type": "string",
+        "description": "Cryptographic algorithm or primitive exercised at this call site (e.g. AES-256-GCM, Ed25519, RSA-PSS, HKDF-SHA256)"
+      },
+      "key_type": {
+        "type": "string",
+        "description": "Vault keysutil.KeyType constant name this entry corresponds to, or 'N/A' / 'multiple' for entries not tied to exactly one KeyType (hash helpers, KDF modes, cross-reference rows)"
+      },
+      "library": {
+        "type": "string",
+        "description": "Go import path or module providing the implementation (e.g. crypto/aes, golang.org/x/crypto/chacha20poly1305, github.com/tink-crypto/tink-go/v2/kwp/subtle)"
+      },
+      "library_version": {
+        "type": "string",
+        "description": "Pinned version of the library as declared in the relevant go.mod (or 'stdlib (go X.Y.Z)' for Go standard library packages, or 'internal (same module)' for in-repo helper packages)"
+      },
+      "security_relevant": {
+        "type": "boolean",
+        "description": "True if the operation protects data confidentiality, integrity, or authenticity (encrypt, decrypt, sign, verify, MAC, KDF, key generation/wrap). False for non-cryptographic helpers (test-only code, content-addressing)."
+      },
+      "fips_approved": {
+        "type": "boolean",
+        "description": "True if the algorithm, as used, is Approved per NIST SP 800-140C / FIPS 186-5 / SP 800-38D / FIPS 198-1 / FIPS 204 / FIPS 205, subject to the notes field for conditional cases (e.g. delegated-to-KMS, build-tag dependent)."
+      },
+      "enterprise_only": {
+        "type": "boolean",
+        "description": "True if this KeyType or code path is gated by keysutil.KeyType.IsEnterpriseOnly() and unavailable in the Community Edition build; such entries are out of scope for CE remediation per the WO-005 constraints."
+      },
+      "phase2_action": {
+        "type": "string",
+        "description": "The remediation action Phase 2 (Approved-Algorithm Configuration) should take for this call site.",
+        "enum": [
+          "verify_runtime_provider",
+          "migrate_to_aes_gcm",
+          "migrate_to_ecdsa_nist_curves",
+          "exclude_from_fips_builds",
+          "verify_kms_backend_fips_mode",
+          "document_enterprise_boundary",
+          "assess_hybrid_combiner_compliance"
+        ]
+      },
+      "notes": {
+        "type": "string",
+        "description": "Optional free-text context: wire-format impact, boundary exclusions, conditional FIPS status, or references to related call sites."
+      }
+    },
+    "additionalProperties": false
+  }
+}
