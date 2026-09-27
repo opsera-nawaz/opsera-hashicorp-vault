@@ -1,0 +1,350 @@
+# Copyright IBM Corp. 2016, 2026
+# SPDX-License-Identifier: BUSL-1.1
+#
+# FIPS 140-3 Phase 1 — Cryptographic Inventory and Discovery
+# WO-010: Document container images and KMS seal CMVP status
+# Quality gate: FIPS-CONTAINER-001
+#
+# Scope: deployment-path container images and seal/auto-unseal integrations
+# defined in the Community Edition (CE) repository. CI/tooling images are
+# explicitly OUT OF SCOPE per the FIPS-CONTAINER-001 quality gate.
+#
+# IMPORTANT DISCLAIMER:
+# This inventory documents the FIPS-readiness POSTURE of base OS/crypto
+# libraries and third-party KMS/HSM modules used by Vault. It does NOT
+# constitute a FIPS 140-3 validation claim for Vault itself, and no
+# cryptographic module in this file should be described as "Vault is FIPS
+# certified." Vault's own module boundary and CMVP submission status are
+# tracked separately (see later phases of the FIPS 140-3 Alignment epic).
+# Every "cmvp_certificate" or "cmvp_status" value below reflects only what
+# could be verified against csrc.nist.gov and vendor documentation on the
+# lookup_date; certificates expire, get superseded, or move to Historical
+# status and MUST be re-verified before being cited in any compliance
+# evidence package.
+
+metadata:
+  work_order: WO-010
+  epic: "FIPS Phase 1 — Cryptographic Inventory and Discovery"
+  quality_gate: FIPS-CONTAINER-001
+  generated_date: "2026-09-27"
+  repo: hashicorp/vault
+  ce_dockerfile_path: Dockerfile
+  out_of_scope: "CI/tooling images (e.g. golang build images used only by GitHub Actions runners) are excluded per FIPS-CONTAINER-001."
+
+# ---------------------------------------------------------------------------
+# Container base images defined in the CE Dockerfile at the repository root
+# ---------------------------------------------------------------------------
+container_images:
+
+  - id: ce-builder-ubuntu-focal
+    dockerfile_stage: builder
+    dockerfile_reference: "Dockerfile:24 (FROM ubuntu:focal AS builder)"
+    base_image: "ubuntu:focal"
+    os_family: "Ubuntu 20.04 LTS (focal)"
+    libc: glibc
+    role: "cgo_cross_compilation_toolchain"
+    is_runtime_image: false
+    crypto_library: "not_applicable — build-only container, no Vault server process ever runs from this stage"
+    cmvp_status: not_applicable
+    fips_gap: null
+    notes: >
+      Used exclusively to cross-compile the Vault binary for CGO-enabled
+      targets (Dockerfile:6-9). Chosen for its old-enough glibc baseline to
+      remain compatible with all supported downstream distros. This image
+      is never published or run as a Vault server; it has no bearing on the
+      FIPS posture of a running Vault deployment.
+
+  - id: ce-default-alpine
+    dockerfile_stage: default
+    dockerfile_reference: "Dockerfile:58 (FROM alpine:3 AS default)"
+    base_image: "alpine:3"
+    os_family: "Alpine Linux 3.x"
+    libc: musl
+    role: "default_ce_runtime_image"
+    is_runtime_image: true
+    published_as: "docker.io/hashicorp/vault:<version>, public.ecr.aws/hashicorp/vault:<version> (.github/actions/containerize/action.yml:52-53, docker_container_target=default)"
+    crypto_library: "musl libc + Go stdlib crypto/* packages; no OpenSSL FIPS provider present"
+    cmvp_status: not_cmvp_validated
+    fips_gap: "musl libc does not support OpenSSL FIPS provider self-test mechanism — not suitable for FIPS-path deployments"
+    notes: >
+      This is the default image most CE users pull. It MUST NOT be used
+      for FIPS-path deployments because musl libc has no equivalent to
+      glibc's dynamic-linked OpenSSL FIPS provider self-test hooks, and no
+      FIPS-validated crypto library ships in this image.
+
+  - id: ce-ubi10-minimal
+    dockerfile_stage: ubi
+    dockerfile_reference: "Dockerfile:142 (FROM registry.access.redhat.com/ubi10/ubi-minimal AS ubi)"
+    base_image: "registry.access.redhat.com/ubi10/ubi-minimal"
+    os_family: "Red Hat Universal Base Image 10 (RHEL 10 userland)"
+    libc: glibc
+    role: "fips_path_candidate"
+    is_runtime_image: true
+    published_as: "quay.io/redhat-isv-containers/... (.github/actions/containerize/action.yml:54-55, redhat_container_target=ubi, CE edition only)"
+    crypto_library: "glibc + Red Hat OpenSSL/system crypto libraries; Red Hat's own FIPS-validated OpenSSL packages are available on UBI but are NOT activated by this Dockerfile stage"
+    cmvp_status: fips_path_candidate_requires_runtime_verification
+    fips_gap: null
+    notes: >
+      Documented as the FIPS-path candidate base image because it is
+      glibc-based (a prerequisite for FIPS mode; musl is not). Red Hat
+      maintains independently CMVP-validated OpenSSL/crypto packages for
+      RHEL/UBI (tracked by Red Hat at access.redhat.com/articles/2918071),
+      but that certificate covers Red Hat's OpenSSL package, not Vault
+      itself, and its applicability to this specific ubi10-minimal tag was
+      NOT independently re-verified in this WO — flagged for confirmation
+      in a later FIPS phase.
+
+      This CE Dockerfile stage (Dockerfile:142-232) builds a plain
+      ubi-minimal image and does NOT invoke any FIPS-mode activation
+      (no `fips-mode-setup --enable` or `update-crypto-policies --set FIPS`
+      call is present). It is therefore a FIPS-path CANDIDATE, not a
+      FIPS-enabled image as shipped today. It is also distinct from the
+      Enterprise-only `ubi-fips` / `ubi-hsm-fips` targets documented below,
+      which do not exist in this file.
+
+      Evidence of existing UBI build-pipeline support: .release/security-scan.hcl:97-100
+      already suppresses OSV scanner findings for UBI RPM package paths
+      (usr/lib/sysimage/rpm/*, var/lib/rpm/*), confirming that UBI images
+      are already built, scanned, and shipped through the existing release
+      pipeline (i.e., adding a hardened FIPS variant is an incremental
+      change, not new infrastructure).
+
+# ---------------------------------------------------------------------------
+# Enterprise-only FIPS-labeled container images — NOT present in this CE
+# Dockerfile. Documented here explicitly to close the CE/Enterprise
+# boundary gap called out in the work order.
+# ---------------------------------------------------------------------------
+enterprise_only_fips_images:
+  present_in_ce_dockerfile: false
+  evidence_source: ".github/actions/containerize/action.yml:41-114 (shared composite action, branches by inputs.vault-edition)"
+  boundary_statement: >
+    The three stages defined in this CE Dockerfile (builder, default, ubi)
+    do not include a `ubi-fips` or `ubi-hsm-fips` build target. Those
+    Docker build targets are referenced only inside
+    .github/actions/containerize/action.yml, a composite GitHub Action
+    shared by CE and Enterprise CI workflows. The action only resolves
+    `docker_container_target` to `ubi-fips` or `ubi-hsm-fips` when its
+    `vault-edition` input is `ent.fips1403` or `ent.hsm.fips1403`
+    (action.yml:77-99) — editions that are never produced by CE build
+    workflows. A CE build/release therefore cannot produce a `ubi-fips` or
+    `ubi-hsm-fips` image from the files in this repository.
+  entries:
+    - image_target: ubi-fips
+      edition: ent.fips1403
+      action_reference: ".github/actions/containerize/action.yml:86-98"
+      registry_tags: "docker.io/hashicorp/vault-enterprise-fips:<version>-<edition>, public.ecr.aws/hashicorp/vault-enterprise-fips:<version>-<edition>"
+      availability: enterprise_only
+      notes: "Enterprise FIPS 140-3 build target. Requires the Enterprise build/license pipeline; the `ubi-fips` Dockerfile target it depends on does not exist in this CE repository."
+    - image_target: ubi-hsm-fips
+      edition: ent.hsm.fips1403
+      action_reference: ".github/actions/containerize/action.yml:77-85"
+      registry_tags: "docker.io/hashicorp/vault-enterprise:<version>-<edition>, public.ecr.aws/hashicorp/vault-enterprise:<version>-<edition>"
+      availability: enterprise_only
+      notes: >
+        Enterprise HSM+FIPS 140-3 build target (PKCS#11 HSM support).
+        Requires the Enterprise HSM binary; corroborated by
+        internalshared/configutil/kms.go:315-316, where the CE seal-wrapper
+        factory explicitly rejects the `pkcs11` KMS type with the error
+        "KMS type 'pkcs11' requires the Vault Enterprise HSM binary". The
+        `ubi-hsm-fips` Dockerfile target does not exist in this CE
+        repository.
+
+# ---------------------------------------------------------------------------
+# go-kms-wrapping KMS/HSM auto-unseal provider integrations
+# ---------------------------------------------------------------------------
+# Field semantics:
+#   cmvp_certificate      : a specific NIST CMVP certificate number, OR the
+#                            literal string "requires_external_lookup" when a
+#                            candidate certificate was searched for but could
+#                            not be conclusively bound to this exact product,
+#                            OR "CMVP status unknown — requires vendor
+#                            confirmation" when no public CMVP mapping could
+#                            be found at all. No certificate number below was
+#                            invented; every value is backed by the
+#                            lookup_notes/lookup_date on that entry.
+#   fips_endpoint_available: true only when the provider exposes a distinct,
+#                            separately-addressable FIPS-mode API
+#                            endpoint/hostname (AWS's kms-fips.* pattern).
+#                            Providers that achieve FIPS assurance via a
+#                            key-protection-level/HSM-tier selection on the
+#                            SAME hostname are marked false, with the
+#                            mechanism explained in fips_endpoint_evidence.
+kms_hsm_seal_integrations:
+
+  - provider: "AWS KMS"
+    go_wrapper_module: "github.com/hashicorp/go-kms-wrapping/wrappers/awskms/v4"
+    go_wrapper_version: "v4.0.4"
+    go_mod_reference: "go.mod:114"
+    wired_in: "internalshared/configutil/kms.go:298-299 (wrapping.WrapperTypeAwsKms case), kms.go:373-392 (GetAWSKMSFunc); vault/core.go imports go-kms-wrapping/wrappers/awskms/v4"
+    seal_wrapper_type_string: "awskms"
+    cmvp_certificate: "requires_external_lookup"
+    fips_endpoint_available: true
+    fips_endpoint_evidence: "AWS KMS FIPS endpoints: kms-fips.<region>.amazonaws.com (e.g. kms-fips.us-east-1.amazonaws.com); FIPS 140-2 enabled interface VPC endpoint service com.amazonaws.<region>.kms-fips, available in all AWS Regions including GovCloud (US) since March 2023."
+    lookup_date: "2026-09-27"
+    cmvp_lookup_notes: >
+      AWS publicly claims FIPS 140-3 Level 3 for AWS CloudHSM's hsm2m.medium
+      instance type (GA August 2024, built on Marvell LiquidSecurity
+      hardware) at aws.amazon.com/compliance/fips. During this WO, NIST
+      CMVP certificate #5146 was checked and found to be the "AWS-LC
+      Cryptographic Module (dynamic)" — AWS's software crypto library
+      (BoringSSL/OpenSSL-derived, Overall Level 1), NOT the CloudHSM
+      hardware module; it must not be cited as a CloudHSM certificate. No
+      single CMVP certificate number could be conclusively bound to the
+      exact CloudHSM hardware revision within this session's lookup. This
+      is recorded as requires_external_lookup rather than a guessed number,
+      per the constraint against inventing certificate numbers. Re-check
+      against the live CMVP Validated Modules Search before citing a
+      certificate number in any compliance evidence package.
+
+  - provider: "Azure Key Vault"
+    go_wrapper_module: "github.com/hashicorp/go-kms-wrapping/wrappers/azurekeyvault/v2"
+    go_wrapper_version: "v2.0.16"
+    go_mod_reference: "go.mod:429"
+    wired_in: "internalshared/configutil/kms.go:301-302 (wrapping.WrapperTypeAzureKeyVault case), kms.go:393-410 (GetAzureKeyVaultKMSFunc)"
+    seal_wrapper_type_string: "azurekeyvault"
+    cmvp_certificate: "requires_external_lookup"
+    fips_endpoint_available: false
+    fips_endpoint_evidence: "No distinct '-fips' hostname is published for Azure Key Vault / Managed HSM. FIPS 140-3 Level 3 assurance is obtained by selecting Managed HSM or Key Vault Premium (HSM-backed keys) as the key protection tier; both are reached via the same vault.azure.net / managedhsm.azure.net hostnames as non-HSM-backed keys."
+    lookup_date: "2026-09-27"
+    cmvp_lookup_notes: >
+      Microsoft announced (June/August 2024) that Azure Managed HSM and
+      Key Vault Premium are powered by Marvell LiquidSecurity 1/2 HSMs
+      certified FIPS 140-3 Level 3. During this WO, NIST CMVP certificate
+      #3718 was checked and found to be "NITROXIII CNN35XX-NFBE HSM
+      Family" (Marvell Semiconductor Inc.), Overall Level 3, but its
+      status is Historical (superseded by certificate #4399) and the
+      certificate text contains no reference to Microsoft or Azure — it
+      must not be cited as "the Azure Managed HSM certificate." No
+      certificate number could be conclusively bound to the specific
+      Azure Managed HSM/Key Vault Premium hardware revision within this
+      session. Recorded as requires_external_lookup; vendor confirmation
+      (Microsoft Azure compliance documentation) needed before citing a
+      number.
+
+  - provider: "GCP Cloud KMS"
+    go_wrapper_module: "github.com/hashicorp/go-kms-wrapping/wrappers/gcpckms/v2"
+    go_wrapper_version: "v2.0.14"
+    go_mod_reference: "go.mod:430"
+    wired_in: "internalshared/configutil/kms.go:304-305 (wrapping.WrapperTypeGcpCkms case), kms.go:411-429 (GetGCPCKMSKMSFunc)"
+    seal_wrapper_type_string: "gcpckms"
+    cmvp_certificate: "requires_external_lookup"
+    fips_endpoint_available: false
+    fips_endpoint_evidence: "Cloud KMS has no separate FIPS hostname; FIPS posture is selected per CryptoKey via protection_level (SOFTWARE = BoringCrypto Module, FIPS 140-3 Level 1-validated primitives; HSM = FIPS 140-3 Level 3 hardware), on the same API endpoint (docs.cloud.google.com/kms/docs/protection-levels)."
+    lookup_date: "2026-09-27"
+    cmvp_lookup_notes: >
+      Google documents Cloud KMS software keys as using the BoringCrypto
+      Module (BCM) with FIPS 140-3 Level 1-validated cryptographic
+      primitives, and Cloud HSM keys as FIPS 140-2/140-3 Level 3
+      hardware-backed. During this WO, NIST CMVP certificate #5272 was
+      checked and found to be "Google HSM" (Google, LLC), Active, Overall
+      Level 3, sunset 2031-05-18 — a plausible candidate for the module
+      underlying Cloud HSM, but the certificate page itself does not
+      explicitly bind the module to the "Cloud KMS / Cloud HSM" product
+      name, so it is not cited as confirmed here. Recorded as
+      requires_external_lookup pending Google vendor confirmation that
+      certificate #5272 is the module backing Cloud HSM protection-level
+      keys.
+
+  - provider: "AliCloud KMS"
+    go_wrapper_module: "github.com/hashicorp/go-kms-wrapping/wrappers/alicloudkms/v2"
+    go_wrapper_version: "v2.0.5"
+    go_mod_reference: "go.mod:428"
+    wired_in: "internalshared/configutil/kms.go:295-296 (wrapping.WrapperTypeAliCloudKms case), kms.go:353-373 (GetAliCloudKMSFunc)"
+    seal_wrapper_type_string: "alicloudkms"
+    cmvp_certificate: "CMVP status unknown — requires vendor confirmation"
+    fips_endpoint_available: false
+    fips_endpoint_evidence: "No distinct FIPS hostname documented; Alibaba Cloud markets HSM-backed KMS keys as meeting FIPS 140-3 Level 3 hardware requirements on the standard KMS API endpoint."
+    lookup_date: "2026-09-27"
+    cmvp_lookup_notes: >
+      Alibaba Cloud's own KMS security whitepaper states its HSM clusters
+      meet FIPS 140-3 Level 3 and that certificate documentation is
+      "available upon request," but no NIST CMVP certificate number is
+      published against the "Alibaba Cloud KMS" product name on
+      csrc.nist.gov, and none was found during this WO's lookup. This
+      matches the edge case anticipated by the work order for AliCloud/OCI.
+
+  - provider: "OCI KMS"
+    go_wrapper_module: "github.com/hashicorp/go-kms-wrapping/wrappers/ocikms/v2"
+    go_wrapper_version: "v2.0.11"
+    go_mod_reference: "go.mod:431"
+    wired_in: "internalshared/configutil/kms.go:307-311 (wrapping.WrapperTypeOciKms case), kms.go:430-440 (GetOCIKMSKMSFunc)"
+    seal_wrapper_type_string: "ocikms"
+    cmvp_certificate: "CMVP status unknown — requires vendor confirmation"
+    fips_endpoint_available: false
+    fips_endpoint_evidence: "No distinct FIPS hostname documented; Oracle markets standard OCI Vault KMS and Dedicated KMS HSM partitions as meeting FIPS 140-2 Level 3 hardware requirements on the standard OCI Vault API endpoint."
+    lookup_date: "2026-09-27"
+    cmvp_lookup_notes: >
+      Oracle documentation states OCI KMS HSMs meet FIPS 140-2 Security
+      Level 3, and that OCI Dedicated KMS HSM partitions are FIPS 140-2
+      Level 3 certified, directing customers to the NIST CMVP site for
+      certificate details. No specific NIST CMVP certificate number tied
+      to "OCI KMS" / "OCI Dedicated KMS" was found during this WO's
+      lookup. This matches the edge case anticipated by the work order for
+      AliCloud/OCI.
+
+  # Supplementary entry — not one of the five required KMS providers, but
+  # explicitly called out in implementation_steps step 4 ("... and transit
+  # wrappers"). Included for completeness; does not carry its own CMVP
+  # status because it is not a third-party validated module.
+  - provider: "HashiCorp Transit (auto-unseal via a separate Vault cluster)"
+    go_wrapper_module: "github.com/hashicorp/go-kms-wrapping/wrappers/transit/v2"
+    go_wrapper_version: "v2.0.13"
+    go_mod_reference: "go.mod:432"
+    wired_in: "internalshared/configutil/kms.go:312-313 (wrapping.WrapperTypeTransit case), kms.go GetTransitKMSFunc"
+    seal_wrapper_type_string: "transit"
+    cmvp_certificate: not_applicable
+    fips_endpoint_available: not_applicable
+    supplementary: true
+    notes: >
+      Transit auto-unseal delegates key-wrapping to the Transit secrets
+      engine of a separate, already-running Vault cluster. It is not a
+      third-party CMVP-bearing KMS/HSM module — its effective FIPS posture
+      is inherited entirely from however that upstream Vault cluster's own
+      seal and crypto boundary are configured, so it cannot be assigned an
+      independent CMVP certificate here.
+
+# ---------------------------------------------------------------------------
+# Non-KMS seal: Shamir secret sharing (default when no auto-unseal is set)
+# ---------------------------------------------------------------------------
+non_kms_seals:
+  - name: Shamir
+    seal_wrapper_type_string: "shamir (wrapping.WrapperTypeShamir)"
+    source_references:
+      - "shamir/shamir.go (Shamir's Secret Sharing split/combine implementation, uses crypto/rand for share generation and math/rand for polynomial coefficients)"
+      - "internalshared/configutil/kms.go:288-290 (configureWrapper's switch returns a nil wrapper for wrapping.WrapperTypeShamir — no external KMS call is made)"
+      - "vault/seal/seal.go:817-844 (SetShamirSealKey / GetShamirKeyBytes, backed by go-kms-wrapping's aead.ShamirWrapper)"
+    fips_approved: false
+    rationale: >
+      Shamir's Secret Sharing is not a FIPS-Approved algorithm or
+      mechanism under FIPS 140-3 (it does not appear in SP 800-140C/D
+      Approved lists), and unseal-key shares are combined in-process via
+      Go's crypto/rand and math/rand rather than through a validated
+      cryptographic module boundary. It is Vault's default/manual unseal
+      mechanism when no auto-unseal KMS/HSM is configured.
+    recommendation: >
+      Use a KMS/HSM auto-unseal provider (AWS KMS, Azure Key Vault, GCP
+      Cloud KMS, AliCloud KMS, or OCI KMS — see kms_hsm_seal_integrations
+      above) for FIPS-path deployments instead of Shamir manual unseal.
+
+# ---------------------------------------------------------------------------
+# Schema validation
+# ---------------------------------------------------------------------------
+validation:
+  target_validator: "fips/scripts/validate_inventory_schema.sh"
+  validator_present_in_repo: false
+  status: "cannot_verify"
+  notes: >
+    Neither fips/scripts/validate_inventory_schema.sh nor a shared JSON
+    Schema for this inventory exist anywhere in this repository/worktree
+    as of the generated_date above (confirmed via repo-wide search for
+    *inventory*schema*, *validate_inventory*, and *.schema.json — no
+    matches outside this new file). This is expected: this WO is executed
+    in an isolated per-work-order git worktree in parallel with ~10 other
+    unmerged work orders, and the shared schema/validator is most likely
+    delivered by a related Phase 1 work order (e.g. the WO-019 capstone
+    inventory artifact) that has not yet been merged into this branch's
+    base. As a substitute, this file was validated for well-formed YAML
+    syntax (parsed successfully with Python's yaml.safe_load) and manually
+    cross-checked field-by-field against every acceptance criterion in
+    WO-010. Formal JSON Schema validation should be re-run once
+    fips/scripts/validate_inventory_schema.sh lands on this branch.
