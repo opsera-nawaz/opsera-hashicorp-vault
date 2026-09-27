@@ -1,0 +1,1417 @@
+# FIPS 140-3 Phase 1 Cryptographic Inventory — builtin/logical/ (secrets engines)
+#
+# WO-007: Scan builtin engines and auth for crypto imports.
+# Produced by a systematic scan of every file under builtin/logical/ in this
+# repository (opsera-nawaz/opsera-hashicorp-vault, branch feature/WO-007,
+# based on hashicorp/vault) for crypto/*, golang.org/x/crypto/*, and adjacent
+# security-relevant imports (encoding/asn1, github.com/hashicorp/vault/helper/pkcs7).
+#
+# Scope note: the 16 engine names required by this work order's acceptance
+# criteria (transit, pki, kv, database, aws, gcp, azure, ssh, totp, consul,
+# nomad, rabbitmq, ldap, terraform, ad, alicloud) reflect Vault's full secrets
+# engine catalog across its history. In THIS repository snapshot, only 9 of
+# those 16 are vendored as builtin/logical/<name> Go packages; the remaining
+# 7 were externalized into separate go modules and are pinned in go.mod but
+# have no source tree under builtin/ to scan. Both cases are recorded below
+# so the 16-engine catalog is complete; see each entry's `status` field.
+#
+# Validate with: fips/scripts/validate_inventory_schema.sh
+#   fips/inventory/builtin_logical_crypto_sites.yaml
+#
+# Cross-references:
+#   - Transit's core encrypt/decrypt/sign/verify/HMAC key operations are
+#     implemented in sdk/helper/keysutil/policy.go and are cataloged in
+#     keysutil_policy_crypto_sites.yaml (WO-005), not duplicated here.
+#   - crypto-relevant third-party dependency versions (golang.org/x/crypto,
+#     tink-go, layeh.com/radius, etc.) are cross-checked in full by WO-009
+#     (go list -m all dependency audit).
+
+schema_version: 1
+work_order: WO-007
+scan_scope: builtin/logical/
+file_count_scanned: 317 # find builtin/logical -name '*.go' | wc -l
+
+engines:
+
+  # --------------------------------------------------------------------------
+  transit:
+    directory: builtin/logical/transit
+    file_count: 56
+    note: >-
+      Transit engine crypto operations are cataloged in
+      keysutil_policy_crypto_sites.yaml. The entries below cover code that is
+      physically in builtin/logical/transit/ and imports crypto packages
+      directly (BYOK export/import, RSA wrapping-key management, the
+      hash-as-a-service and hmac-as-a-service endpoints, and CSR/cert-chain
+      handling for externally-signed transit keys). Core Encrypt/Decrypt/
+      Sign/Verify/HMAC key-material operations delegate to
+      sdk/helper/keysutil/policy.go and are NOT duplicated here.
+    entries:
+      - file: builtin/logical/transit/path_hash.go
+        line_range: "20-147"
+        function: pathHash, pathHashWrite
+        algorithm: SHA-2 (224/256/384/512)
+        library: crypto/sha256, crypto/sha512
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          General-purpose hash-as-a-service endpoint (POST
+          transit/hash/:urlalgorithm). Vault computes a digest of
+          caller-supplied input and returns it; Vault itself makes no
+          authorization or integrity decision based on the digest, so this is
+          non-security from Vault's perspective. All four selectable
+          algorithms (SHA-2 family) are FIPS-approved; no MD5 or SHA-1 option
+          is offered on this path.
+        engine_or_method: transit
+
+      - file: builtin/logical/transit/path_hmac.go
+        line_range: "115-440"
+        function: pathHMACWrite, pathHMACVerify
+        algorithm: HMAC (SHA-2 family, algorithm selectable)
+        library: crypto/hmac
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          HMAC-as-a-service endpoint. Unlike Encrypt/Decrypt/Sign, the
+          hmac.New(hashAlg, key) call at path_hmac.go:219 and :399 is made
+          directly in this file rather than via a keysutil.Policy method,
+          using key material read from the transit key's Policy (`key`
+          variable sourced from p.Keys[ver]). Security-relevant because the
+          resulting MAC is used by callers to authenticate data integrity.
+          HMAC-SHA2 is FIPS-approved.
+        engine_or_method: transit
+
+      - file: builtin/logical/transit/path_byok.go
+        line_range: "158-214"
+        function: getBYOKExportKey
+        algorithm: RSA-OAEP / ECDH-wrap / Ed25519 key wrapping (delegates to keysutil.Policy.WrapKey)
+        library: "crypto/ecdsa, crypto/ed25519, crypto/elliptic"
+        security_relevant: true
+        fips_approved: false
+        classification_rationale: >-
+          Builds the target key (RSA/ECDSA/Ed25519/symmetric) to hand to
+          dstP.WrapKey for Bring-Your-Own-Key export to another transit
+          instance/HSM. Security-relevant: this is direct handling of raw
+          private key material. Marked fips_approved false only insofar as
+          KeyType_ED25519 keys are eligible for export via this path
+          (Ed25519 is not a FIPS 140-3 Approved signature algorithm); RSA and
+          ECDSA (NIST curves) exported via the same function are Approved.
+        engine_or_method: transit
+
+      - file: builtin/logical/transit/path_import.go
+        line_range: "390-433"
+        function: decryptImportedKey
+        algorithm: RSA-OAEP unwrap (ephemeral key) + AES-KWP unwrap (SP 800-38F)
+        library: "crypto/rsa, github.com/tink-crypto/tink-go/v2/kwp/subtle"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Implements the two-stage BYOK unwrap for importing external key
+          material into Transit: rsa.DecryptOAEP (line ~407) unwraps a
+          256-bit ephemeral AES key with the instance's RSA-4096 wrapping
+          private key, then tink-go's AES-KWP (NIST SP 800-38F Key Wrap with
+          Padding, line ~424) unwraps the actual key material. Both steps
+          protect confidentiality of imported key material — security
+          relevant. AES-KWP and RSA-OAEP-SHA256 are FIPS-approved; see the
+          separate SHA-1 entry below for the OAEP hash function choice.
+        engine_or_method: transit
+
+      - file: builtin/logical/transit/path_import.go
+        line_range: "469-481"
+        function: parseHashFn
+        algorithm: SHA-1 (also offers SHA-224/256/384/512)
+        library: crypto/sha1
+        security_relevant: true
+        fips_approved: false
+        classification_rationale: >-
+          SHA-1 usage classified individually per FIPS-CRYPTO-002 (no
+          bulk-flagging). sha1.New() at line 472 is one of five selectable
+          OAEP mask/hash functions for the RSA-OAEP unwrap in
+          decryptImportedKey (used when a caller sets hash_function=SHA1 on
+          `transit/keys/:name/import`). This is security-relevant: it is part
+          of the algorithm that protects imported private-key material in
+          transit. SHA-1 is not FIPS 140-3 Approved for this purpose — flag
+          for Phase 2 remediation: restrict hash_function to SHA-256+ (ideally
+          reject SHA1) when running in FIPS mode.
+        engine_or_method: transit
+
+      - file: builtin/logical/transit/path_wrapping_key.go
+        line_range: "37-96"
+        function: pathWrappingKeyRead, getWrappingKey
+        algorithm: RSA-4096 (key retrieval/generation delegates to keysutil.Policy)
+        library: "crypto/rsa, crypto/x509"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Retrieves (creating on first use, via keysutil.PolicyRequest with
+          KeyType_RSA4096) the RSA wrapping key pair whose public half
+          callers use to encrypt key material before import/BYOK-export.
+          x509.MarshalPKIXPublicKey encodes the public key for the HTTP
+          response. Security-relevant: this key is the root of trust for the
+          BYOK import protocol. RSA-4096 is FIPS-approved. Key generation
+          itself happens inside keysutil (cross-reference
+          keysutil_policy_crypto_sites.yaml); this entry covers the
+          transit-local read/encode path only.
+        engine_or_method: transit
+
+      - file: builtin/logical/transit/path_export.go
+        line_range: "301-419"
+        function: encodeRSAPrivateKey, encodeRSAPublicKey, keyEntryToECPrivateKey, keyEntryToECPublicKey
+        algorithm: RSA / ECDSA (NIST P-256/P-384/P-521) key PEM encoding
+        library: "crypto/ecdsa, crypto/elliptic, crypto/x509"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Encodes exported transit key material (private and public) into
+          PEM using x509.MarshalPKCS8PrivateKey / MarshalPKIXPublicKey ahead
+          of return to an authorized `transit/export/*` caller.
+          Security-relevant: handles raw private key bytes. RSA and NIST
+          curve ECDSA are FIPS-approved; see path_byok.go entry above for the
+          Ed25519 export case handled by the shared WrapKey path.
+        engine_or_method: transit
+
+      - file: builtin/logical/transit/path_datakey.go
+        line_range: "91-214"
+        function: pathDatakeyWrite, generateDataKey
+        algorithm: envelope encryption data key generation (delegates ciphertext wrapping to keysutil.Policy.Encrypt)
+        library: crypto/rand
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Generates a random plaintext data key for envelope encryption and
+          calls into the transit key Policy to wrap it. Security-relevant:
+          this is the entry point for the `transit/datakey` envelope
+          encryption pattern used by callers to protect their own data.
+          crypto/rand is a CSPRNG; the actual AEAD wrap is cataloged in
+          keysutil_policy_crypto_sites.yaml.
+        engine_or_method: transit
+
+      - file: builtin/logical/transit/path_sign_verify.go
+        line_range: "354-380"
+        function: getSaltLength
+        algorithm: RSA-PSS salt length parameter parsing (rsa.PSSSaltLengthAuto / PSSSaltLengthEqualsHash)
+        library: crypto/rsa
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Parses the caller-supplied `salt_length` request parameter into the
+          crypto/rsa PSS salt-length constants consumed by
+          keysutil.Policy.Sign for RSA-PSS signatures. Security-relevant:
+          salt length is a signature-scheme parameter. The actual PSS
+          signing call is cataloged in keysutil_policy_crypto_sites.yaml
+          (cross-reference); this entry covers only the parameter-parsing
+          code that lives in builtin/logical/transit/.
+        engine_or_method: transit
+
+      - file: builtin/logical/transit/path_keys.go
+        line_range: "304-344"
+        function: keyPolicyObservationMetadata
+        algorithm: NIST curve name lookup for telemetry (elliptic.P256/P384/P521)
+        library: crypto/elliptic
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          Uses elliptic.P256()/P384()/P521().Params().Name only to produce a
+          human-readable curve name string for observation/metadata
+          reporting (line ~490-494). No cryptographic operation is performed
+          with the curve — non-security, display/telemetry only.
+        engine_or_method: transit
+
+      - file: builtin/logical/transit/path_certificates.go
+        line_range: "96-312"
+        function: pathCreateCsrWrite, pathImportCertChainWrite, parseCsr, parseCertificateChain
+        algorithm: X.509 CSR generation and certificate chain parsing for externally-signed transit keys
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Supports `transit/keys/:name/csr` and
+          `transit/keys/:name/set-certificate`, letting a transit signing key
+          be re-parented under an external CA. Parses/validates X.509
+          CSRs and certificate chains that establish trust for the key's
+          public material — security-relevant input validation.
+        engine_or_method: transit
+
+      - file: sdk/helper/keysutil/policy.go
+        line_range: "N/A"
+        function: "Policy.Encrypt, Policy.Decrypt, Policy.Sign, Policy.VerifySignature, Policy.HMACWithManagedKey"
+        algorithm: "AES-GCM, ChaCha20-Poly1305, ECDSA, Ed25519, RSA, HMAC (see keysutil inventory for full detail)"
+        library: "crypto/aes, crypto/cipher, crypto/ecdsa, crypto/ed25519, crypto/rsa, crypto/hmac, golang.org/x/crypto/chacha20poly1305"
+        security_relevant: true
+        fips_approved: false
+        classification_rationale: >-
+          Cross-reference only, per WO-007 acceptance criterion: "Transit
+          engine crypto operations are cataloged in
+          keysutil_policy_crypto_sites.yaml." Every builtin/logical/transit
+          path handler that performs core key-material Encrypt/Decrypt/
+          Sign/Verify (path_encrypt.go, path_decrypt.go, path_sign_verify.go
+          pathSignWrite/pathVerifyWrite, path_hmac.go's managed-key branch)
+          calls through to this Policy on sdk/helper/keysutil, which is
+          cataloged in full (per algorithm, per KeyType) by WO-005. This row
+          intentionally does not restate those entries; fips_approved is a
+          placeholder reflecting that the aggregate keysutil inventory
+          contains both Approved (AES-GCM, RSA, ECDSA) and non-Approved
+          (ChaCha20-Poly1305, Ed25519) key types — see that file for the
+          per-KeyType breakdown.
+        engine_or_method: transit
+        status: cross_reference
+        cross_reference: keysutil_policy_crypto_sites.yaml
+
+  # --------------------------------------------------------------------------
+  pki:
+    directory: builtin/logical/pki
+    file_count: 138
+    note: >-
+      Highest crypto-import density of any builtin engine. Entries below
+      cover every non-test .go file (including the issuing/, parsing/, and
+      revocation/ subpackages) that imports crypto/x509, crypto/ecdsa,
+      crypto/rsa, crypto/ed25519, or an adjacent security-relevant package.
+      Per acceptance criterion 8, all crypto/x509 / ecdsa / rsa / ed25519
+      usages here are security_relevant: true.
+    entries:
+      - file: builtin/logical/pki/cert_util.go
+        line_range: "552-650"
+        function: generateCreationBundle
+        algorithm: X.509 certificate signing input assembly (RSA/ECDSA/Ed25519 key-type dispatch)
+        library: "crypto/x509, crypto/x509/pkix"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Central function that turns a role + CSR into the CreationBundle
+          later signed by x509.CreateCertificate. Parses/validates the CSR
+          (x509.ParseCertificateRequest, x509.ParsePKCS1PrivateKey/
+          ParseECPrivateKey at lines 422, 609, 611) and resolves the target
+          key type. Security-relevant: this is the core certificate-issuance
+          code path. RSA and ECDSA are FIPS-approved; Ed25519 issuance
+          (also handled by this dispatch) is not — see path_root.go entry.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/issuing/issue_common.go
+        line_range: "103-435"
+        function: GenerateCreationBundle
+        algorithm: X.509 certificate creation-bundle assembly (shared package-level implementation)
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Package-level counterpart to cert_util.go's generateCreationBundle,
+          shared across role/CA code paths; also parses custom OIDs via
+          x509.ParseOID (line 435) for extra-names extensions.
+          Security-relevant: feeds the certificate signing operation.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_root.go
+        line_range: "773-828"
+        function: (generateCert helper), publicKeyType
+        algorithm: X.509 self-signed CA certificate creation and signature-algorithm selection (RSA-SHA256, ECDSA-SHA256/384/512, Ed25519)
+        library: "crypto/x509, crypto/rand, crypto/rsa, crypto/ecdsa, crypto/ed25519, crypto/elliptic"
+        security_relevant: true
+        fips_approved: false
+        classification_rationale: >-
+          x509.CreateCertificate(rand.Reader, ...) at line 773 signs new root
+          CA certificates; publicKeyType (line 809) maps the CA key's type to
+          a signature algorithm, including x509.PureEd25519 for
+          ed25519.PublicKey (line 827-828). Security-relevant: this issues
+          the trust anchor for the whole PKI mount. RSA-SHA256 and
+          ECDSA-SHA256/384/512 are FIPS-approved; Ed25519/PureEd25519 root
+          CAs are not — flag for Phase 2 remediation (restrict root/
+          intermediate key_type=ed25519 under FIPS builds).
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/ca_util.go
+        line_range: "122-289"
+        function: generateCABundle, generateCSRBundle, getKeyTypeAndBitsFromPublicKeyForRole
+        algorithm: CA/CSR key-material bundling and RSA/ECDSA/Ed25519 public-key type detection
+        library: "crypto/ecdsa, crypto/rsa, crypto/ed25519, crypto (crypto.PublicKey)"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Builds the ParsedCertBundle/ParsedCSRBundle used to generate new
+          CA certs or CSRs, and type-switches an existing public key
+          (line 268-280) across *rsa.PublicKey / *ecdsa.PublicKey /
+          ed25519.PublicKey to determine role parameters. Security-relevant:
+          drives CA key generation and existing-key onboarding.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/issuing/signing_utils.go
+        line_range: "82-155"
+        function: SigningParamsForKey, IsRSAPSS, HashFunc
+        algorithm: Signature-algorithm selection for RSA/ECDSA/Ed25519 signers
+        library: "crypto/rsa, crypto/ecdsa, crypto/ed25519, crypto/elliptic, crypto/x509, crypto/x509/pkix"
+        security_relevant: true
+        fips_approved: false
+        classification_rationale: >-
+          SigningParamsForKey (line 82) type-switches a crypto.Signer's
+          public key to choose the X.509 SignatureAlgorithm (SHA256WithRSA,
+          ECDSAWithSHA256/384/521, or PureEd25519 for ed25519.PublicKey at
+          line 105). Security-relevant: determines the signature scheme used
+          to sign every certificate/CRL issued by this mount. Ed25519 branch
+          is not FIPS-approved; RSA/ECDSA branches are.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/issuing/roles.go
+        line_range: "104-343"
+        function: RoleEntry methods, WithSignatureBits, WithKeyUsage
+        algorithm: Role configuration for key type/usage/signature-bits (consumed by signing_utils.go)
+        library: encoding/asn1
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Stores/validates the role-level key_type, key_bits, signature_bits,
+          and custom-OID (asn1.ObjectIdentifier) settings that flow into
+          certificate signing. Security-relevant as policy input to
+          issuance, though this file performs no cryptographic operation
+          itself.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/issuing/issuers.go
+        line_range: "133-155"
+        function: IssuerEntry.GetCertificate
+        algorithm: X.509 issuer certificate parsing/storage
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          IssuerEntry.RevocationSigAlg (x509.SignatureAlgorithm field) and
+          GetCertificate parse the stored issuer's PEM into an
+          *x509.Certificate. Security-relevant: this is the CA identity used
+          to sign every leaf certificate/CRL/OCSP response for the issuer.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/issuing/audit_utils.go
+        line_range: "14-40"
+        function: AddCertificateFieldsToAuditData
+        algorithm: X.509 certificate field extraction for audit logging
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Reads fields off an *x509.Certificate to enrich Vault's audit log
+          entries. Security-relevant because it supports audit/forensic
+          traceability of issuance, though it performs no signing/encryption.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/parsing/csrs.go
+        line_range: "11-27"
+        function: ParseCertificateRequestFromString, ParseCertificateRequestFromBytes
+        algorithm: PKCS#10 CSR parsing
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          x509.ParseCertificateRequest is the trust-boundary input validation
+          for every externally-supplied CSR accepted by the PKI engine
+          (sign/*, sign-verbatim, ACME). Security-relevant input parsing.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/parsing/certificate.go
+        line_range: "35-58"
+        function: ParseCertificateFromString, ParseCertificateFromBytes, ParseCertificatesFromString
+        algorithm: X.509 certificate PEM/DER parsing
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Shared certificate-parsing helpers used throughout revocation,
+          chain-building, and metadata code. Security-relevant: parsed
+          certificates feed trust decisions (chain validation, revocation
+          matching).
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/parsing/asn1.go
+        line_range: "N/A"
+        function: (ASN.1 helpers)
+        algorithm: ASN.1 DER encoding helpers supporting X.509 extension parsing
+        library: encoding/asn1
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Low-level ASN.1 support for certificate/CSR extension parsing
+          (e.g. custom OIDs, SANs). Security-relevant as part of the
+          certificate trust-decision parsing path.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/revocation/revoke.go
+        line_range: "33-77"
+        function: RevokeCert (interface), AssociateRevokedCertWithIsssuer, FetchIssuerMapForRevocationChecking
+        algorithm: X.509 revocation bookkeeping (issuer/serial association)
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Associates revoked *x509.Certificate values with their issuing CA
+          for CRL/OCSP generation. Security-relevant: incorrect
+          issuer association would corrupt revocation status.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/crl_util.go
+        line_range: "2218-2227"
+        function: (CRL build helper inside Rebuild/_doRebuild)
+        algorithm: X.509 CRL signing (x509.CreateRevocationList)
+        library: "crypto/x509, crypto/rand"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          x509.CreateRevocationList(rand.Reader, ...) at line 2227 signs the
+          CRL with the issuer's private key. Security-relevant: an attacker
+          who could forge this would hide revoked certificates. Signature
+          scheme inherits from the issuer's key type (RSA/ECDSA Approved,
+          Ed25519 not — see path_root.go).
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/crl_util.go
+        line_range: "951-2127"
+        function: revokeCert, getLocalRevokedCertEntries, getUnifiedRevokedCertEntries, augmentWithRevokedIssuers
+        algorithm: X.509 certificate parsing for revocation-list assembly
+        library: "crypto/x509, crypto/x509/pkix"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Parses stored certificate bytes (x509.ParseCertificate, lines 951,
+          1919) and builds the pkix.RevokedCertificate entries included in
+          issued CRLs. Security-relevant: determines what appears in the
+          revocation list trusted by relying parties.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_resign_crls.go
+        line_range: "247-351"
+        function: (CRL/delta-CRL resign helpers)
+        algorithm: X.509 CRL re-signing (x509.CreateRevocationList)
+        library: "crypto/x509, crypto/rand, crypto/x509/pkix"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          `pki/resign-crls` endpoint: builds an x509.RevocationList template
+          and signs it with rand.Reader at lines 263 and 351.
+          Security-relevant for the same reason as the standard CRL builder.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_resign_crls.go
+        line_range: "595-619"
+        function: verifyCrlsAreFromIssuersKey, getAllRevokedCertsFromPem
+        algorithm: X.509 CRL/issuer key-match verification
+        library: "crypto/x509, crypto/x509/pkix"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Verifies a caller-supplied CRL was actually issued by the claimed
+          issuer's key before re-signing it — an authenticity check.
+          Security-relevant: prevents CRL substitution.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_revoke.go
+        line_range: "320-430"
+        function: pathRevokeWriteHandleCertificate, pathRevokeWriteHandleKey
+        algorithm: X.509 certificate parsing for revoke-by-cert / revoke-by-key
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Parses caller-supplied PEM (x509.ParseCertificate, lines 345, 375)
+          for the `pki/revoke` and `pki/revoke-with-key` endpoints.
+          Security-relevant: this is the trust input for a self-service
+          revocation request.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_revoke.go
+        line_range: "458-509"
+        function: validatePrivateKeyMatchesCert, validatePublicKeyMatchesCert
+        algorithm: RSA/ECDSA/Ed25519 key-pair match verification, constant-time Ed25519 comparison
+        library: "crypto/rsa, crypto/ecdsa, crypto/ed25519, crypto/subtle"
+        security_relevant: true
+        fips_approved: false
+        classification_rationale: >-
+          Proves the caller possesses the private key matching the
+          certificate being revoked before honoring `revoke-with-key`
+          (anti-DoS control on an unauthenticated endpoint).
+          subtle.ConstantTimeCompare at line 507 compares Ed25519 public
+          keys in constant time — correct practice for an authorization
+          check. Security-relevant. Marked fips_approved false because the
+          Ed25519 branch (case ed25519.PublicKey, line 502) is exercised;
+          the RSA/ECDSA branches of the same function are Approved.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_ocsp.go
+        line_range: "163-234"
+        function: ocspHandler
+        algorithm: RFC 6960 OCSP request/response handling
+        library: "golang.org/x/crypto/ocsp, crypto/x509"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Implements the PKI engine's OCSP responder endpoint
+          (pki/ocsp, pki/unified-ocsp). Security-relevant: relying parties
+          use this response to make revocation-based trust decisions.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_ocsp.go
+        line_range: "592-629"
+        function: genResponse
+        algorithm: OCSP response signing (SHA256/384/512WithRSAPSS normalized to SHA256/384/512WithRSA, or issuer's native algorithm)
+        library: "crypto/x509, crypto/x509/pkix, golang.org/x/crypto/ocsp"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Signs the OCSP response with the issuer's key. Lines 609-614
+          explicitly downgrade RSA-PSS signature algorithms to PKCS#1v1.5
+          (x509.SHA256WithRSA etc.) because golang.org/x/crypto/ocsp does not
+          support PSS — a deliberate, Approved-algorithm choice worth noting
+          as a positive FIPS-alignment signal, not a gap.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_fetch_issuers.go
+        line_range: "503-685"
+        function: (issuer CRL-signature-algorithm validation, key-usage checks)
+        algorithm: X.509 signature-algorithm validation for issuer revocation signing config
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Validates/normalizes the `revocation_signature_algorithm` field an
+          operator can set per issuer (rejects
+          x509.UnknownSignatureAlgorithm, special-cases the RSA-PSS variants
+          at lines 545, 630) and checks x509.KeyUsageCRLSign is set (lines
+          685, 956) before allowing an issuer to sign CRLs. Security-relevant
+          configuration-time guardrail.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_manage_issuers.go
+        line_range: "668-668"
+        function: (issuer import handler)
+        algorithm: X.509 certificate parsing on issuer import
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          x509.ParseCertificate validates a caller-supplied issuer
+          certificate/bundle before it is trusted as a signing CA for the
+          mount. Security-relevant trust-boundary input validation.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/storage.go
+        line_range: "381-514"
+        function: (issuer bundle validation), areCertificatesEqual
+        algorithm: X.509 public-key-algorithm and key-usage validation, certificate equality check
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Rejects issuer bundles with x509.UnknownPublicKeyAlgorithm (line
+          381) and checks x509.KeyUsageCRLSign (line 447) before persisting
+          an issuer. areCertificatesEqual (line 514) is used in
+          deduplication logic during issuer storage writes.
+          Security-relevant: gatekeeps what becomes a trusted CA in storage.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/chain_util.go
+        line_range: "117-1032"
+        function: (issuer/cert-map chain-building helpers)
+        algorithm: X.509 certificate-chain construction for `ca_chain` responses and cross-signing
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Builds and walks maps of issuing.IssuerID -> *x509.Certificate to
+          assemble certificate chains returned to callers and used in
+          cross-signing validation. Security-relevant: an incorrect chain
+          would mislead relying parties about the trust path.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/metadata_oss.go
+        line_range: "20-20"
+        function: storeCertMetadata
+        algorithm: X.509 certificate metadata extraction for storage
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Takes a parsed *x509.Certificate to persist non-secret metadata
+          (role, issuer, tags). Security-relevant only in that it operates on
+          the certificate object post-issuance; performs no cryptographic
+          operation itself.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/cieps_util_oss.go
+        line_range: "19-19"
+        function: issueAcmeCertUsingCieps (OSS stub)
+        algorithm: N/A — CE stub, returns not-implemented
+        library: crypto/x509 (CSR type reference only)
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          This is the community-edition stub for the enterprise CIEPS
+          (Certificate Issuance External Policy Service) integration; the
+          *x509.CertificateRequest parameter is part of the interface
+          signature only — no cryptographic operation is performed in the
+          OSS build today. Classified security_relevant: true per WO-007
+          AC-8 (every crypto/x509 usage in the PKI engine is cataloged as
+          security-relevant), since the enterprise implementation behind
+          this same signature does perform certificate issuance; this
+          entry exists so the interface boundary is not silently dropped
+          from the inventory if/when an EE build is scanned.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/storage_migrations.go
+        line_range: "159-172"
+        function: computeHashOfLegacyBundle
+        algorithm: SHA-256 content fingerprint
+        library: crypto/sha256
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          SHA-256 used purely as a content-change fingerprint to detect
+          whether a legacy CA bundle has already been migrated to the
+          current issuer storage format — non-security, informational
+          bookkeeping (analogous to the MD5-for-cache-key non-security
+          pattern called out in this WO), not an integrity or authenticity
+          control. FIPS-approved algorithm regardless.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/periodic.go
+        line_range: "311-321"
+        function: readRevocationEntryAndTransfer
+        algorithm: X.509 certificate parsing during cross-cluster unified-revocation transfer
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Parses revoked-certificate bytes (x509.ParseCertificate, line 321)
+          while replicating revocation entries to unified storage.
+          Security-relevant: feeds the same revocation-list trust surface as
+          crl_util.go.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/backend.go
+        line_range: "898-907"
+        function: revoker.RevokeCert, revoker.RevokeCertBySerial
+        algorithm: X.509 certificate revocation dispatch, OCSP status constant
+        library: "crypto/x509, golang.org/x/crypto/ocsp"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Top-level revocation entry points invoked by the sdk/framework
+          revocation callback. Security-relevant: this is how leases/secrets
+          issued by this engine get revoked at the X.509 level.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/secret_certs.go
+        line_range: "74-95"
+        function: (secret lease revoke handler)
+        algorithm: X.509 certificate parsing + OCSP status constant on lease revocation
+        library: "crypto/x509, golang.org/x/crypto/ocsp"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Parses the certificate tied to a Vault lease (x509.ParseCertificate,
+          line 74) and calls revokeCert with ocsp.Unspecified when the lease
+          expires/is revoked. Security-relevant: automatic revocation on
+          lease end.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/util.go
+        line_range: "48-48"
+        function: serialFromCert
+        algorithm: X.509 serial-number extraction/formatting
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Formats an *x509.Certificate's serial number as a colon-delimited
+          hex string for display/lookup keys. In isolation this is a
+          formatting utility with no trust decision of its own; classified
+          security_relevant: true per WO-007 AC-8's blanket rule for every
+          crypto/x509 usage in the PKI engine, since serialFromCert output
+          is used as the storage/lookup key for revocation and audit
+          records elsewhere in this package.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/acme_state.go
+        line_range: "731-731"
+        function: (ACME nonce/token generator)
+        algorithm: CSPRNG token generation
+        library: crypto/rand
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          io.ReadFull(rand.Reader, data) generates unguessable ACME
+          nonces/tokens (RFC 8555). Security-relevant: predictable nonces
+          would allow replay of ACME requests.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/acme_challenges.go
+        line_range: "52-85"
+        function: (ACME http-01/dns-01 key-authorization validators)
+        algorithm: SHA-256 key-authorization digest + constant-time comparison
+        library: "crypto/sha256, crypto/subtle"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          sha256.Sum256 (lines 66, 83) computes the RFC 8555 key
+          authorization digest for ACME challenges; subtle.ConstantTimeCompare
+          (lines 52, 85) compares the caller-presented token/thumbprint
+          against the expected value without leaking timing information.
+          Security-relevant: this IS the proof-of-control check for domain
+          validation — a timing leak or hash confusion here would let an
+          attacker forge domain control. SHA-256 is FIPS-approved.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/acme_challenges.go
+        line_range: "540-554"
+        function: (ACME TLS-ALPN-01 self-test client TLS config)
+        algorithm: TLS 1.2+ client with an explicit cipher-suite allowlist that includes ChaCha20-Poly1305
+        library: crypto/tls
+        security_relevant: true
+        fips_approved: false
+        classification_rationale: >-
+          Builds the tls.Config Vault uses to connect out and validate a
+          TLS-ALPN-01 challenge response. MinVersion is TLS 1.2 (Approved),
+          but the CipherSuites allowlist at lines 553-554 includes
+          TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305 and
+          TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305, which are not FIPS 140-3
+          Approved cipher suites. Security-relevant (protects the ACME
+          challenge-validation channel) — flag for Phase 2 remediation:
+          drop the two ChaCha20-Poly1305 suites from this allowlist on FIPS
+          builds, consistent with the Phase 2 plan already scoped for
+          vault/core.go TLS listeners.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/acme_challenges.go
+        line_range: "238-369"
+        function: (ACME HTTP-01 / TLS-ALPN-01 validation transport helpers)
+        algorithm: TLS client configuration for out-of-band challenge validation (includes InsecureSkipVerify for HTTP-01's first hop)
+        library: crypto/tls
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Line 238's InsecureSkipVerify:true is intentional and correct for
+          RFC 8555 HTTP-01: Vault is fetching a challenge file over
+          plain-HTTP-then-redirect and does not rely on this TLS config for
+          trust; the actual proof is the key-authorization digest (see
+          entry above). Not a FIPS/security downgrade in itself, but
+          flagged here as security_relevant so a reviewer confirms
+          InsecureSkipVerify is not reused elsewhere.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/export_crypto.go
+        line_range: "202-353"
+        function: wrapCAPrivateKey, wrapWithRSA, wrapWithEC, wrapWithMLKEM, aesGCMSeal
+        algorithm: RSA-OAEP-SHA256 / ECDH+HKDF-SHA256 / ML-KEM-768/1024 (FIPS 203) key encapsulation, wrapping a fresh AES-256-GCM key
+        library: "crypto/rsa, crypto/ecdh, crypto/ecdsa, crypto/mlkem, crypto/hmac, crypto/aes, crypto/cipher, crypto/sha256, golang.org/x/crypto/hkdf"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Implements secure CA private-key export: wraps a fresh AES-256-GCM
+          key using the caller's RSA/EC/ML-KEM public wrapping key, then
+          seals the CA private key with that AES-GCM key. Security-relevant:
+          direct handling of CA private key material during export.
+          RSA-OAEP-SHA256, AES-256-GCM, and ECDH+HKDF-SHA256 are
+          FIPS-approved primitives. ML-KEM (FIPS 203, "Module-Lattice-Based
+          Key-Encapsulation Mechanism") is itself a NIST FIPS-approved
+          algorithm as of August 2024 — note this is algorithm approval
+          only; whether Go's crypto/mlkem implementation runs inside a
+          CMVP-validated module boundary is a separate Phase 3 concern, not
+          a Phase 1/2 gap.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/export_crypto.go
+        line_range: "392-505"
+        function: unwrapCAPrivateKey, aesGCMOpen
+        algorithm: Reverse of the above (AES-GCM open after RSA-OAEP/ECDH/ML-KEM decapsulation)
+        library: "crypto/aes, crypto/cipher, crypto/rsa, crypto/ecdh, crypto/mlkem"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Recipient-side unwrap counterpart to wrapCAPrivateKey.
+          Security-relevant for the same reason as the wrap path.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/export_crypto.go
+        line_range: "134-145"
+        function: computeExportKeyHMAC, computeExportKeyHMACFromPEM
+        algorithm: HMAC-SHA256 with a fixed, hardcoded key
+        library: "crypto/hmac, crypto/sha256"
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          The function's own comment states "The fixed HMAC key is
+          intentional — this is a lookup correlator." Because the HMAC key
+          (`vault-pki-export-key-hmac-v1`) is a constant embedded in source,
+          this provides no secrecy/authentication guarantee; it is
+          functionally a keyed fingerprint used only to correlate export
+          records, equivalent in purpose to a plain content hash used for a
+          cache/lookup key. Non-security, informational — same pattern as
+          the MD5-for-cache-key example in this WO's acceptance criteria,
+          just implemented with HMAC-SHA256 instead of MD5.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_ca_key_export_record.go
+        line_range: "50-97"
+        function: caPublicKeyFingerprint
+        algorithm: SHA-256 SPKI fingerprint, ML-KEM decapsulation-key parsing
+        library: "crypto/mlkem, crypto/sha256, crypto/x509"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          sha256.Sum256 over the DER-encoded SubjectPublicKeyInfo (lines 75,
+          90, produced via x509.MarshalPKIXPublicKey at line 85) produces a
+          display/lookup fingerprint for CA-key-export audit records. The
+          fingerprint computation itself is non-security identification
+          only (same content-addressing pattern as the computeExportKeyHMAC
+          entry above); classified security_relevant: true here per WO-007
+          AC-8's blanket rule for every crypto/x509 usage in the PKI
+          engine, since this entry's library list includes crypto/x509.
+          The mlkem key parsing (NewDecapsulationKey768/1024, lines 61/67)
+          is structural decoding, not itself a security operation; the
+          actual unwrap using that key
+          is cataloged under export_crypto.go above.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_acme_eab.go
+        line_range: "222-222"
+        function: (External Account Binding key generation)
+        algorithm: CSPRNG token generation
+        library: crypto/rand
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          uuid.GenerateRandomBytesWithReader(size, rand.Reader) generates the
+          ACME External Account Binding (RFC 8555 §7.3.4) key ID material.
+          Security-relevant: this is a shared-secret-like credential used to
+          bind ACME accounts to pre-authorized clients.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_acme_order.go
+        line_range: "429-571"
+        function: validateCsrNotUsingAccountKey, validateCsrMatchesOrder, getIdentifiersFromCSR, issueCertFromCsr
+        algorithm: X.509 CSR validation for ACME finalize
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Validates the CSR presented at ACME order finalization: rejects
+          CSRs signed with the ACME account key (anti-key-confusion check,
+          validateCsrNotUsingAccountKey) and cross-checks CSR SANs against
+          the authorized order identifiers before issuance.
+          Security-relevant: prevents domain-validation bypass via CSR
+          substitution.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_acme_revoke.go
+        line_range: "48-174"
+        function: acmeRevocationByPoP, acmeRevocationByAccount
+        algorithm: X.509 certificate parsing + proof-of-possession check for ACME revocation
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Parses the certificate to revoke and enforces that the ACME
+          revocation request either proves possession of the cert's private
+          key or comes from the owning ACME account. Security-relevant
+          authorization check on an otherwise-unauthenticated ACME endpoint.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_issue_sign.go
+        line_range: "449-449"
+        function: (issue/sign path handler)
+        algorithm: X.509 certificate signing (delegates to generateCert with crypto/rand)
+        library: crypto/rand
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Passes rand.Reader into generateCert for the standard
+          `pki/issue/:role` and `pki/sign/:role` endpoints — the most
+          frequently exercised certificate-issuance code path in the engine.
+          Security-relevant: signs the leaf certificate returned to the
+          caller.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/path_tidy.go
+        line_range: "892-980"
+        function: (tidy job certificate re-parse for cleanup)
+        algorithm: X.509 certificate parsing during storage tidy/cleanup
+        library: crypto/x509
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Re-parses stored certificate/revocation-entry bytes
+          (x509.ParseCertificate, lines 892, 980) while deciding what expired
+          data is safe to delete during `pki/tidy`. Security-relevant:
+          an incorrect parse could cause premature deletion of
+          still-relevant revocation data.
+        engine_or_method: pki
+
+      - file: builtin/logical/pki/test_helpers.go
+        line_range: "1-9999"
+        function: (test fixture helpers)
+        algorithm: "RSA/ECDSA key + X.509 cert generation for test fixtures"
+        library: "crypto/ecdsa, crypto/rand, crypto/rsa, crypto/x509, crypto/x509/pkix, golang.org/x/crypto/ocsp"
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          Test-only fixture generation, per WO-007 edge case: "engines may
+          import crypto packages only in test files — these should be
+          cataloged separately with test_only: true and excluded from
+          security-relevance classification." Not part of any production
+          request path.
+        engine_or_method: pki
+        status: test_only
+        test_only: true
+
+  # --------------------------------------------------------------------------
+  pkiext:
+    directory: builtin/logical/pkiext
+    file_count: 6
+    entries:
+      - file: builtin/logical/pkiext/test_helpers.go, pkcs12_jks_java_validator_test.go, pkcs12_openssl_validator_test.go, nginx_test.go, pkiext_binary/acme_test.go
+        line_range: "N/A"
+        function: (integration test helpers)
+        algorithm: X.509 certificate handling and ACME client usage for Docker-based integration tests (nginx, zlint, PKCS#12/JKS validators)
+        library: "crypto/x509, golang.org/x/crypto/acme"
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          pkiext/ is entirely a _test.go integration-test package (no
+          non-test .go files); every crypto import here is test_only per the
+          WO-007 edge case rule and excluded from security-relevance
+          classification.
+        engine_or_method: pki
+        status: test_only
+        test_only: true
+
+  # --------------------------------------------------------------------------
+  database:
+    directory: builtin/logical/database
+    file_count: 31
+    entries:
+      - file: builtin/logical/database/credentials.go
+        line_range: "120-167"
+        function: rsaKeyGenerator.generate
+        algorithm: RSA key-pair generation (2048/3072/4096-bit) for dynamic database credentials
+        library: crypto/rand, crypto/x509 (via github.com/hashicorp/vault/sdk/helper/cryptoutil.GenerateRSAKey)
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Generates a fresh RSA key pair per dynamic-credential lease (e.g.
+          Snowflake key-pair auth) using crypto/rand.Reader and marshals it
+          via x509.MarshalPKIXPublicKey / MarshalPKCS8PrivateKey.
+          Security-relevant: this key pair becomes a live database
+          credential. RSA is FIPS-approved.
+        engine_or_method: database
+
+      - file: builtin/logical/database/credentials.go
+        line_range: "303-381"
+        function: ClientCertificateGenerator.generate
+        algorithm: X.509 client certificate issuance for database client-cert auth (RSA/EC/Ed25519 key types)
+        library: "crypto/x509, crypto/x509/pkix"
+        security_relevant: true
+        fips_approved: false
+        classification_rationale: >-
+          Issues a short-lived client certificate signed by an
+          operator-supplied CA (ca_cert/ca_private_key) for databases that
+          support certificate-based auth. Security-relevant: produces a live
+          database credential. key_type=ed25519 is a supported option (line
+          233), which is not FIPS-approved; rsa/ec key_type options on the
+          same code path are.
+        engine_or_method: database
+
+      - file: builtin/logical/database/rollback.go
+        line_range: "234-259"
+        function: derivePublicKeyFromPrivateKeyPEM
+        algorithm: RSA private-key parsing and public-key re-derivation
+        library: "crypto/rsa, crypto/x509"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Parses a stored RSA private key (x509.ParsePKCS8PrivateKey) to
+          re-derive its public key when rolling back a failed Snowflake
+          key-pair credential rotation. Security-relevant: handles raw
+          private key material during a WAL rollback.
+        engine_or_method: database
+
+  # --------------------------------------------------------------------------
+  kv:
+    directory: "N/A — not present under builtin/logical/ in this repository"
+    entries:
+      - file: "N/A — not present under builtin/logical/ in this repository"
+        line_range: "N/A"
+        function: "N/A"
+        algorithm: "N/A"
+        library: "github.com/hashicorp/vault-plugin-secrets-kv v0.26.3-0.20260626165612-824fb96aa7a8 (go.mod:174)"
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          The kv engine is registered in helper/builtinplugins/registry.go
+          via the external module github.com/hashicorp/vault-plugin-secrets-kv,
+          not vendored source under builtin/logical/kv/. There is no file to
+          scan in this repository; kv itself performs no direct
+          cryptography (it stores caller-supplied data as-is behind Vault's
+          barrier encryption, which is cataloged separately under
+          vault/barrier_aes_gcm.go by WO-006). Recorded here for AC
+          completeness per this work order's 16-engine list.
+        engine_or_method: kv
+        status: not_present_in_repo
+
+  # --------------------------------------------------------------------------
+  aws:
+    directory: builtin/logical/aws
+    file_count: 26
+    entries:
+      - file: builtin/logical/aws/*.go
+        line_range: "N/A"
+        function: "N/A"
+        algorithm: "N/A — no direct crypto/* or golang.org/x/crypto/* imports found"
+        library: "N/A"
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          `grep -rn '"crypto\|golang.org/x/crypto' builtin/logical/aws/*.go`
+          returns zero matches (excluding _test.go). The AWS secrets engine
+          manages IAM users/STS credentials entirely via aws-sdk-go-v2,
+          which handles its own TLS to the AWS API; no direct cryptographic
+          call sites exist in this package. Recorded per the WO-007 edge
+          case: "engines may have zero crypto imports — document these as
+          'no direct crypto imports' entries for completeness."
+        engine_or_method: aws
+        status: no_direct_imports
+
+  # --------------------------------------------------------------------------
+  gcp:
+    directory: "N/A — not present under builtin/logical/ in this repository"
+    entries:
+      - file: "N/A — not present under builtin/logical/ in this repository"
+        line_range: "N/A"
+        function: "N/A"
+        algorithm: "N/A"
+        library: "github.com/hashicorp/vault-plugin-secrets-gcp v0.25.0 (go.mod:171); also vault-plugin-secrets-gcpkms v0.25.0 (go.mod:172)"
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          Externalized plugin module, no source under builtin/logical/gcp/
+          in this repository. gcpkms specifically brokers to Google Cloud
+          KMS (an external HSM boundary), which is directly relevant to the
+          Phase 3 validated-module-boundary work but out of scope for a
+          builtin/ source scan. Recorded for AC completeness.
+        engine_or_method: gcp
+        status: not_present_in_repo
+
+  # --------------------------------------------------------------------------
+  azure:
+    directory: "N/A — not present under builtin/logical/ in this repository"
+    entries:
+      - file: "N/A — not present under builtin/logical/ in this repository"
+        line_range: "N/A"
+        function: "N/A"
+        algorithm: "N/A"
+        library: "github.com/hashicorp/vault-plugin-secrets-azure v0.25.1 (go.mod:170)"
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          Externalized plugin module, no source under builtin/logical/azure/
+          in this repository. Recorded for AC completeness.
+        engine_or_method: azure
+        status: not_present_in_repo
+
+  # --------------------------------------------------------------------------
+  ssh:
+    directory: builtin/logical/ssh
+    file_count: 21
+    entries:
+      - file: builtin/logical/ssh/util.go
+        line_range: "24-44"
+        function: generateRSAKeys
+        algorithm: RSA key-pair generation for dynamic SSH keys (OTP mode)
+        library: crypto/rand, crypto/rsa (via sdk/helper/certutil)
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Generates an RSA key pair used to install a one-time-use key on a
+          target host for OTP-style SSH access. Security-relevant: this key
+          grants host access. RSA is FIPS-approved.
+        engine_or_method: ssh
+
+      - file: builtin/logical/ssh/path_config_ca.go
+        line_range: "356-455"
+        function: generateSSHKeyPair, createStoredKey, createManagedKey
+        algorithm: RSA/ECDSA/Ed25519 CA key-pair generation and storage
+        library: "crypto/rand, crypto/ecdsa, crypto/ed25519, crypto/elliptic, crypto/x509"
+        security_relevant: true
+        fips_approved: false
+        classification_rationale: >-
+          Generates (or accepts an operator-provided) the SSH CA key pair
+          used to sign every issued SSH certificate for the mount.
+          Security-relevant: this is the trust anchor for the SSH secrets
+          engine. key_type=ed25519 is a supported CA key type (also
+          delegatable to a managed key) — not FIPS-approved; rsa/ec_p256_
+          based CA keys on the same path are Approved.
+        engine_or_method: ssh
+
+      - file: builtin/logical/ssh/path_issue_sign.go
+        line_range: "490-553"
+        function: creationBundle.sign
+        algorithm: SSH certificate signing (delegates to golang.org/x/crypto/ssh Certificate.SignCert)
+        library: "crypto/rand, golang.org/x/crypto/ssh"
+        security_relevant: true
+        fips_approved: false
+        classification_rationale: >-
+          certificate.SignCert(rand.Reader, authority) signs every SSH
+          certificate issued by this mount, restricting to
+          ssh.KeyAlgoRSASHA256 when the CA is an RSA key (line 511-513) but
+          otherwise using the CA's native algorithm. Security-relevant: this
+          is the actual cert-issuance signature. When the CA key is Ed25519,
+          the resulting signature algorithm is not FIPS-approved (SSH itself
+          has no FIPS-approved certificate-signature profile defined by
+          CMVP for Ed25519); RSA-SHA256 CA signing on the same path is
+          effectively Approved-equivalent.
+        engine_or_method: ssh
+
+      - file: builtin/logical/ssh/path_issue_sign.go
+        line_range: "570-602"
+        function: getCASigner
+        algorithm: SSH CA signer retrieval (parses stored/managed private key into an ssh.Signer)
+        library: "golang.org/x/crypto/ssh"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Loads the CA private key (from Vault storage or a managed key
+          provider) as an ssh.Signer used by sign(). Security-relevant: this
+          is direct handling of the CA's signing key material.
+        engine_or_method: ssh
+
+      - file: builtin/logical/ssh/path_issue_sign.go
+        line_range: "264-290"
+        function: calculateKeyID
+        algorithm: SHA-256 public-key hash used as a display/template token in the certificate KeyID
+        library: crypto/sha256
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          sha256.Sum256(pubKey.Marshal()) at line 286 feeds the
+          `{{public_key_hash}}` template variable in the certificate's
+          human-readable KeyID field (default format
+          "vault-{{token_display_name}}-{{public_key_hash}}"). Analogous to
+          the SSH-fingerprint-display case called out in this WO's edge
+          cases: non-security, informational identifier only — the KeyID is
+          never used by an SSH server to make an authorization decision.
+        engine_or_method: ssh
+
+      - file: builtin/logical/ssh/path_config_ca.go
+        line_range: "170-535"
+        function: readStoredKeyEntry, readStoredKey, getCAPublicKey, readManagedKey, caKeysConfigured
+        algorithm: CA key storage/retrieval bookkeeping (delegates crypto to generateSSHKeyPair/getCASigner)
+        library: golang.org/x/crypto/ssh
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Storage-layer plumbing around the CA key pair (read/migrate/check
+          existence). Security-relevant as it gates whether a CA key exists
+          before signing is allowed, though the cryptographic operations
+          themselves are cataloged in the entries above.
+        engine_or_method: ssh
+
+      - file: builtin/logical/ssh/managed_key/common.go
+        line_range: "62-70"
+        function: ManagedKeyInfo.PublicKey, ManagedKeyInfo.Sign, ManagedKeyInfo.SignWithAlgorithm
+        algorithm: SSH signer interface adapter over Vault Managed Keys (delegates actual signing to the managed key provider)
+        library: golang.org/x/crypto/ssh
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          Adapts a Vault Managed Key (potentially backed by an external
+          HSM/KMS) to the ssh.Signer interface used by getCASigner/sign.
+          Security-relevant: this is the integration point that lets SSH CA
+          signing be delegated to a validated external module — directly
+          relevant to the Phase 3 validated-boundary goal.
+        engine_or_method: ssh
+
+  # --------------------------------------------------------------------------
+  totp:
+    directory: builtin/logical/totp
+    file_count: 6
+    entries:
+      - file: builtin/logical/totp/*.go
+        line_range: "N/A"
+        function: "N/A"
+        algorithm: "HOTP/TOTP (RFC 4226/6238) via github.com/pquerna/otp; SHA-1 is the RFC-mandated default, SHA-256/SHA-512 are selectable (path_keys.go:319-326)"
+        library: "github.com/pquerna/otp, github.com/pquerna/otp/totp (no direct crypto/* or golang.org/x/crypto/* import)"
+        security_relevant: true
+        fips_approved: false
+        classification_rationale: >-
+          `grep -rn '"crypto\|golang.org/x/crypto' builtin/logical/totp/*.go`
+          returns zero matches — the TOTP engine has no direct stdlib crypto
+          import; all HMAC-based OTP computation (crypto/hmac, crypto/sha1/
+          sha256/sha512 equivalents) happens inside the third-party
+          github.com/pquerna/otp dependency. Recorded as security_relevant
+          per the WO-007 edge case ("TOTP engine uses HMAC-based OTP
+          generation — classify as security_relevant since it protects
+          authentication tokens"). fips_approved is false because
+          AlgorithmSHA1 is the library's and this engine's default
+          (otplib.AlgorithmSHA1 selected when Algorithm=="" at
+          path_keys.go:322) — flag the SHA-1 HOTP/TOTP default for Phase 2
+          remediation (change new-key default to SHA256); SHA-256/512
+          options on the same path are Approved. Full third-party dependency
+          audit (including whether pquerna/otp uses a FIPS-validated HMAC
+          implementation) is in WO-009's scope.
+        engine_or_method: totp
+        status: no_direct_imports
+
+  # --------------------------------------------------------------------------
+  consul:
+    directory: builtin/logical/consul
+    file_count: 10
+    entries:
+      - file: builtin/logical/consul/path_config.go
+        line_range: "173-175"
+        function: (client config builder)
+        algorithm: TLS client configuration for the Consul API client (CA/client cert/key passed as PEM bytes, no direct crypto/tls import)
+        library: "github.com/hashicorp/consul/api (consulConf.TLSConfig.{CAPem,CertPEM,KeyPEM})"
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          consulConf.TLSConfig.CAPem/CertPEM/KeyPEM are set from
+          operator-supplied PEM strings and handed to the Consul API client,
+          which constructs the actual crypto/tls.Config internally — no
+          direct crypto/* import exists in this package
+          (`grep -rn '"crypto\|golang.org/x/crypto' builtin/logical/consul/*.go`
+          returns zero). Security-relevant: this configures the TLS
+          connection carrying a management token to Consul, even though the
+          TLS primitives are one level removed via the dependency. Recorded
+          per the "no direct crypto imports" edge case with a note, rather
+          than a plain no-imports entry, because the security relevance is
+          real even though there's no local call site to cite.
+        engine_or_method: consul
+        status: no_direct_imports
+
+  # --------------------------------------------------------------------------
+  nomad:
+    directory: builtin/logical/nomad
+    file_count: 9
+    entries:
+      - file: builtin/logical/nomad/backend.go
+        line_range: "106-107"
+        function: (HTTP transport builder inside Backend())
+        algorithm: TLS 1.2 minimum for the outbound Nomad API client
+        library: crypto/tls
+        security_relevant: true
+        fips_approved: true
+        classification_rationale: >-
+          t.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12} pins
+          the minimum TLS version for the client used to manage Nomad ACL
+          tokens. Security-relevant: protects the Nomad management token
+          in transit. TLS 1.2 is FIPS-approved (no cipher-suite allowlist is
+          set here, so the Go default suite set applies — worth flagging to
+          WO-008's TLS-listener/client inventory for a cipher-suite-level
+          check, but out of scope for this call-site-level entry).
+        engine_or_method: nomad
+
+  # --------------------------------------------------------------------------
+  rabbitmq:
+    directory: builtin/logical/rabbitmq
+    file_count: 13
+    entries:
+      - file: builtin/logical/rabbitmq/*.go
+        line_range: "N/A"
+        function: "N/A"
+        algorithm: "N/A — no direct crypto/* or golang.org/x/crypto/* imports found"
+        library: "N/A"
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          `grep -rn '"crypto\|golang.org/x/crypto\|tls\|amqps' builtin/logical/rabbitmq/*.go`
+          returns zero matches (excluding _test.go). This engine manages
+          RabbitMQ users/permissions via the RabbitMQ HTTP management API
+          client, which owns any TLS configuration internally. Recorded per
+          the "no direct crypto imports" edge case.
+        engine_or_method: rabbitmq
+        status: no_direct_imports
+
+  # --------------------------------------------------------------------------
+  ldap:
+    directory: "N/A — not present under builtin/logical/ in this repository (see builtin/credential/ldap for the LDAP AUTH method, a separate component)"
+    entries:
+      - file: "N/A — not present under builtin/logical/ in this repository"
+        line_range: "N/A"
+        function: "N/A"
+        algorithm: "N/A"
+        library: "github.com/hashicorp/vault-plugin-secrets-openldap v0.19.0 (go.mod:176)"
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          The LDAP dynamic-secrets engine (openldap) is externalized; no
+          source under builtin/logical/ldap/ in this repository. Do not
+          confuse with builtin/credential/ldap/ (the LDAP AUTH method),
+          which IS vendored here and is cataloged in
+          builtin_credential_crypto_sites.yaml with zero direct crypto
+          imports of its own.
+        engine_or_method: ldap
+        status: not_present_in_repo
+
+  # --------------------------------------------------------------------------
+  terraform:
+    directory: "N/A — not present under builtin/logical/ in this repository"
+    entries:
+      - file: "N/A — not present under builtin/logical/ in this repository"
+        line_range: "N/A"
+        function: "N/A"
+        algorithm: "N/A"
+        library: "github.com/hashicorp/vault-plugin-secrets-terraform v0.15.0 (go.mod:177)"
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          Externalized plugin module, no source under
+          builtin/logical/terraform/ in this repository. Recorded for AC
+          completeness.
+        engine_or_method: terraform
+        status: not_present_in_repo
+
+  # --------------------------------------------------------------------------
+  ad:
+    directory: "N/A — not present under builtin/logical/ in this repository"
+    entries:
+      - file: "N/A — not present under builtin/logical/ in this repository"
+        line_range: "N/A"
+        function: "N/A"
+        algorithm: "N/A"
+        library: "github.com/hashicorp/vault-plugin-secrets-ad v0.23.0 (go.mod:168)"
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          Externalized plugin module, no source under builtin/logical/ad/ in
+          this repository. Recorded for AC completeness.
+        engine_or_method: ad
+        status: not_present_in_repo
+
+  # --------------------------------------------------------------------------
+  alicloud:
+    directory: "N/A — not present under builtin/logical/ in this repository"
+    entries:
+      - file: "N/A — not present under builtin/logical/ in this repository"
+        line_range: "N/A"
+        function: "N/A"
+        algorithm: "N/A"
+        library: "github.com/hashicorp/vault-plugin-secrets-alicloud v0.23.0 (go.mod:169)"
+        security_relevant: false
+        fips_approved: true
+        classification_rationale: >-
+          Externalized plugin module, no source under
+          builtin/logical/alicloud/ in this repository. Recorded for AC
+          completeness.
+        engine_or_method: alicloud
+        status: not_present_in_repo
+
+summary:
+  engines_required_by_ac: 16
+  engines_present_in_repo: 9 # transit, pki(+pkiext), database, aws, ssh, totp, consul, nomad, rabbitmq
+  engines_not_present_in_repo: 7 # kv, gcp, azure, ldap, terraform, ad, alicloud (externalized plugin modules)
+  md5_usages_found: 0
+  sha1_usages_found: 1 # builtin/logical/transit/path_import.go:472 (see entry above)
+  security_relevant_findings_flagged_for_phase2:
+    - "builtin/logical/pki/path_root.go:773-828 — Ed25519 root/intermediate CA issuance (not FIPS-approved)"
+    - "builtin/logical/pki/issuing/signing_utils.go:82-155 — Ed25519 signature-algorithm branch"
+    - "builtin/logical/pki/path_revoke.go:458-509 — Ed25519 key-match branch in revoke-with-key"
+    - "builtin/logical/pki/acme_challenges.go:540-554 — ChaCha20-Poly1305 in ACME TLS-ALPN-01 client cipher allowlist"
+    - "builtin/logical/pki/export_crypto.go:202-353 — Ed25519/ML-KEM key-export eligibility (ML-KEM/FIPS203 itself is approved; noted for Phase 3 module-boundary review)"
+    - "builtin/logical/transit/path_import.go:469-481 — SHA-1 selectable as RSA-OAEP hash for BYOK import"
+    - "builtin/logical/transit/path_byok.go:158-214 — Ed25519 key-type export eligibility"
+    - "builtin/logical/database/credentials.go:303-381 — Ed25519 client-certificate key_type option"
+    - "builtin/logical/ssh/path_config_ca.go:356-455 and path_issue_sign.go:490-553 — Ed25519 SSH CA key/signing option"
+    - "builtin/logical/totp/*.go — SHA-1 is the default HOTP/TOTP algorithm (github.com/pquerna/otp)"
