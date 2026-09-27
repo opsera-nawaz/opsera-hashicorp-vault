@@ -1,0 +1,603 @@
+# FIPS 140-3 Phase 1 — Cryptographic Dependency Inventory
+#
+# WO-009: Identify crypto-relevant dependencies via `go list` classification.
+# Satisfies quality gate FIPS-DEP-001 (dependency identification). Feeds the
+# capstone aggregate inventory produced by WO-019.
+#
+# This is a classification artifact only. It does NOT upgrade, consolidate,
+# or modify any dependency version.
+#
+# Methodology
+# -----------
+# 1. `GOWORK=off go list -m all` was run independently in each of the four
+#    module roots (workspace mode is disabled per-module because the repo's
+#    go.work file otherwise pulls tools/pipeline's unrelated, unresolvable
+#    github.com/hashicorp/releases-api dependency into every module's build
+#    list — see "known_limitations" below).
+# 2. Output was filtered for known crypto-relevant module path patterns
+#    (golang.org/x/crypto, tink-crypto, cloudflare/circl, go-jose,
+#    golang-jwt, go-kms-wrapping, go-secure-stdlib, lestrrat-go/jwx,
+#    youmark/pkcs8, pkcs11/pkcs12).
+# 3. Each go.mod (go.mod, sdk/go.mod, internalshared/go.mod,
+#    tools/pipeline/go.mod) was read directly to determine direct
+#    (no `// indirect` comment) vs. transitive status per module.
+# 4. `grep -rn` over the Go source tree located actual import sites for each
+#    dependency to identify the specific sub-packages/algorithms in use.
+#    `go mod why -m <module>` was used to trace unreachable or deeply
+#    transitive nodes.
+# 5. FIPS-Approved status was assigned per the classification rule set:
+#    AES-GCM=Approved, ChaCha20-Poly1305=Not Approved, ECDSA (NIST curves)=
+#    Approved, Ed25519=Not Approved (non-NIST curve), RSA>=2048=Approved,
+#    SHA-256/384/512=Approved, HKDF-SHA256=Approved.
+# 6. Dependencies present only as unreachable module-graph artifacts (no
+#    entry in any of the four go.mod require blocks, and confirmed via
+#    `go mod why` as "main module does not need [package|module]") were
+#    excluded from the dependency list below per the WO-009 constraint to
+#    exclude transitive deps that introduce no cryptographic functionality
+#    into the built binary. They are recorded in `excluded_graph_only_nodes`
+#    for traceability.
+# 7. Verification: a fresh, independent `GOWORK=off go list -m all` scan
+#    (plus a tools/pipeline/go.mod read) filtered for the same patterns
+#    produced 40 candidate module@version pairs. Diffed against every
+#    module_path documented below (25 `entries` + 4
+#    `excluded_graph_only_nodes`, 29 total), the only 11 unaccounted-for
+#    candidates were github.com/hashicorp/go-secure-stdlib/{awsutil/v2,
+#    fileutil, gatedwriter, kv-builder, mlock, parseutil, password,
+#    permitpool, plugincontainer, regexp, strutil} — each individually
+#    confirmed (`grep -rl '"crypto/' <module-cache-dir>/*.go`) to contain no
+#    `crypto/*` stdlib import, i.e. general-purpose utilities that wrap no
+#    cryptographic primitive. This closes the loop on AC #1's completeness
+#    requirement with zero unexplained gaps.
+#
+# known_limitations:
+#   - `go list -m all` cannot complete for tools/pipeline/go.mod (even with
+#     GOWORK=off): it requires github.com/hashicorp/releases-api@v0.4.14,
+#     whose GitHub repository is not resolvable from this environment
+#     ("remote: Repository not found"). tools/pipeline's crypto-relevant
+#     dependency set was therefore derived by reading tools/pipeline/go.mod
+#     directly instead of via `go list`. Go 1.17+ module graph pruning means
+#     go.mod already records the full direct+indirect requirement set needed
+#     to build that module, so this substitution does not reduce coverage
+#     for tools/pipeline's own crypto-relevant entries (it has exactly one:
+#     golang.org/x/crypto, indirect).
+#
+schema_version: 1
+generated_for_work_order: WO-009
+source_repo: opsera-nawaz/opsera-hashicorp-vault
+go_version: go1.27.1
+modules_analyzed:
+  - go.mod
+  - sdk/go.mod
+  - internalshared/go.mod
+  - tools/pipeline/go.mod
+
+entries:
+
+  # ---------------------------------------------------------------------
+  - module_path: golang.org/x/crypto
+    version: v0.57.0
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - sdk/go.mod
+      - internalshared/go.mod
+      - tools/pipeline/go.mod
+    crypto_operations:
+      - "chacha20poly1305: AEAD cipher for the Transit secrets engine's KeyType_ChaCha20_Poly1305 (sdk/helper/keysutil/policy.go)"
+      - "ed25519: EdDSA key generation/signing for Transit/PKI KeyType_ED25519 (sdk/helper/keysutil/policy.go)"
+      - "hkdf: HKDF key derivation used in barrier/seal key material derivation (sdk/helper/keysutil/policy.go)"
+      - "ocsp: OCSP request/response parsing for the PKI OCSP responder and cert-auth revocation checks (sdk/helper/ocsp/client.go, builtin/logical/pki/backend.go, builtin/credential/cert/test_responder.go)"
+      - "ssh: SSH certificate/key handling for the SSH secrets engine (builtin/logical/ssh/util.go, builtin/logical/ssh/path_config_ca.go, builtin/logical/ssh/managed_key/common.go)"
+      - "bcrypt: password hashing for the userpass auth method (builtin/credential/userpass/path_login.go, path_user_password.go)"
+      - "blake2b: hashing utility (sdk/helper/cryptoutil/cryptoutil.go, command/agentproxyshared/auth/cert/cert.go)"
+      - "curve25519: X25519 Diffie-Hellman key exchange for unseal/recovery key encryption (internalshared/dhutil/dhutil.go)"
+      - "pbkdf2: PBKDF2 KDF for PostgreSQL SCRAM client authentication (plugins/database/postgresql/scram/scram.go)"
+      - "sha3: SHA-3 hash option for the Transit hash operation (builtin/logical/transit/path_hash.go, sdk/helper/keysutil/consts.go)"
+      - "cryptobyte, cryptobyte/asn1: ASN.1 byte-string parsing helper (non-primitive) used by TLS/OCSP code paths"
+      - "acme: ACME protocol client support for PKI ACME issuance healthcheck (command/healthcheck/pki_enable_acme_issuance.go)"
+    fips_approved_algorithms:
+      - "HKDF-SHA256"
+      - "SHA3-256/384/512 (FIPS 202)"
+      - "PBKDF2 (SP 800-132, when instantiated with an Approved hash)"
+    non_approved_algorithms:
+      - "ChaCha20-Poly1305"
+      - "Ed25519 (non-NIST curve)"
+      - "X25519 / Curve25519 (non-NIST curve)"
+      - "bcrypt (not a NIST-approved password hashing scheme)"
+      - "BLAKE2b (not a FIPS-approved hash function)"
+    consolidation_finding: ""
+    notes: >
+      Direct dependency of go.mod, sdk/go.mod, and internalshared/go.mod;
+      listed with `// indirect` only in tools/pipeline/go.mod. OCSP and SSH
+      are protocol packages whose effective Approved/Not-Approved status
+      depends on the negotiated signature/cipher suite rather than being a
+      single fixed algorithm.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/tink-crypto/tink-go/v2
+    version: v2.7.0
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - sdk/go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "kwp/subtle: AES Key Wrap with Padding (KWP) for wrapping/unwrapping managed-key material (sdk/helper/keysutil/policy.go, sdk/helper/keysutil/managed_key_util.go)"
+    fips_approved_algorithms:
+      - "AES-KWP (NIST SP 800-38F key-wrap construction)"
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Direct in go.mod and sdk/go.mod; indirect in internalshared/go.mod.
+      The AES-KWP construction itself is NIST-specified, but the Tink Go
+      library is not a CMVP-validated cryptographic module — actual FIPS
+      posture depends on the underlying Go crypto/aes + crypto/cipher
+      provider that tink-go delegates AES operations to at runtime.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/cloudflare/circl
+    version: v1.6.3
+    direct_or_transitive: transitive
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "dh/x25519: X25519 ECDH, reachable via github.com/ProtonMail/go-crypto/openpgp/internal/ecc (OpenPGP support used for PGP-wrapped unseal/recovery keys)"
+      - "Library also ships post-quantum primitives not currently reachable from Vault code: ML-KEM/Kyber (KEM), ML-DSA/Dilithium and SLH-DSA/SPHINCS+ (signatures), and HPKE"
+    fips_approved_algorithms: []
+    non_approved_algorithms:
+      - "X25519 (RFC 7748 ECDH, non-NIST curve)"
+    consolidation_finding: ""
+    notes: >
+      `go mod why -m` traces this to
+      github.com/hashicorp/vault/vault -> github.com/ProtonMail/go-crypto/openpgp
+      -> .../openpgp/internal/ecc -> github.com/cloudflare/circl/dh/x25519 — a
+      transitive dependency that Vault never calls directly. The bundled
+      post-quantum algorithms (ML-KEM/Kyber, ML-DSA/Dilithium) are pending
+      FIPS standardization (FIPS 203/204 define the algorithms, but CMVP
+      module validations for implementations are still pending) rather than
+      simply "Not Approved", per FIPS-DEP-001 guidance for post-quantum
+      crypto classification.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/go-jose/go-jose/v3
+    version: v3.0.5
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "JWS signing/verification and JWE encryption for OIDC identity tokens and Cubbyhole response-wrapping JWTs, configured with ES512 (audit/entry_formatter.go, builtin/logical/pki/acme_jws.go, vault/identity_store_oidc.go, vault/identity_store_oidc_provider.go, vault/identity_store_oidc_provider_util.go, vault/wrapping.go)"
+    fips_approved_algorithms:
+      - "ES512 (ECDSA P-521 + SHA-512, as configured for response-wrapping JWTs)"
+    non_approved_algorithms:
+      - "EdDSA (library-supported JOSE algorithm; not invoked in current Vault configuration)"
+    consolidation_finding: "Duplicate major versions — consolidation recommended for dependency hygiene"
+    notes: >
+      Direct in go.mod; indirect in internalshared/go.mod. Not referenced by
+      sdk/go.mod or tools/pipeline/go.mod. Coexists with go-jose/v4 below —
+      see consolidation_finding.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/go-jose/go-jose/v4
+    version: v4.1.5
+    direct_or_transitive: transitive
+    referencing_go_mods:
+      - go.mod
+      - sdk/go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "JWS signing/verification (ES512) for plugin cubbyhole response-wrapping tokens, implemented in the api/ submodule (api/plugin_helpers.go — api/go.mod is a separate module outside this WO's four in-scope go.mod files) and reached by the root module transitively via github.com/hashicorp/vault/api"
+    fips_approved_algorithms:
+      - "ES512 (ECDSA P-521 + SHA-512)"
+    non_approved_algorithms: []
+    consolidation_finding: "Duplicate major versions — consolidation recommended for dependency hygiene"
+    notes: >
+      Listed with `// indirect` in all three referencing go.mod files.
+      `go mod why -m` traces the root module's need to
+      builtin/credential/approle/cmd/approle -> github.com/hashicorp/vault/api
+      -> github.com/go-jose/go-jose/v4. Coexists with go-jose/v3 above —
+      see consolidation_finding.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/golang-jwt/jwt/v4
+    version: v4.5.2
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "HS256 (HMAC-SHA256) JWT signing/parsing for Login MFA push-notification callback validation (vault/login_mfa.go)"
+    fips_approved_algorithms:
+      - "HMAC-SHA256"
+    non_approved_algorithms: []
+    consolidation_finding: "Duplicate major versions — consolidation recommended for dependency hygiene"
+    notes: >
+      Direct in go.mod; indirect in internalshared/go.mod. Not referenced by
+      sdk/go.mod or tools/pipeline/go.mod.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/golang-jwt/jwt/v5
+    version: v5.3.1
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "RS256 (RSA PKCS#1v1.5 + SHA-256) JWT signing/parsing exercised in identity external-groups duplicate-claim test coverage (vault/external_tests/identity/external_group_duplicate_claim_test.go)"
+    fips_approved_algorithms:
+      - "RS256 (RSA >= 2048-bit + SHA-256)"
+    non_approved_algorithms: []
+    consolidation_finding: "Duplicate major versions — consolidation recommended for dependency hygiene"
+    notes: >
+      Direct in go.mod; indirect in internalshared/go.mod. Not referenced by
+      sdk/go.mod or tools/pipeline/go.mod. golang-jwt/jwt (bare, v3.2.1+incompatible)
+      also appears in the full `go list -m all` module graph but is absent
+      from every in-scope go.mod's require block, and `go mod why -m
+      github.com/golang-jwt/jwt` returns "main module does not need module" —
+      it is an unreachable graph-only artifact and is excluded from this
+      inventory (see excluded_graph_only_nodes) rather than treated as a
+      third duplicate lineage.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-kms-wrapping/v2
+    version: v2.0.26
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - sdk/go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "Wrapper interface + multiwrapper orchestration for seal/unseal key-wrap operations (vault/core.go, vault/seal/, sdk/logical/managed_key.go, internalshared/configutil/encrypt_decrypt.go)"
+    fips_approved_algorithms: []
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Interface/orchestration layer only — delegates the actual AEAD or
+      external-KMS operation to one of the wrapper implementations listed
+      separately below (aead, awskms, azurekeyvault, gcpckms, alicloudkms,
+      ocikms, transit). Classified as "seal-external-kms" orchestration per
+      the edge_cases guidance that KMS wrappers do not themselves perform
+      cryptographic primitives.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-kms-wrapping/entropy/v2
+    version: v2.0.1
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - sdk/go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "External entropy-source augmentation interface for seal key generation randomness (delegates to configured entropy plugin, not a fixed algorithm)"
+    fips_approved_algorithms: []
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: "Infrastructure interface, not an algorithm implementation."
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-kms-wrapping/wrappers/aead/v2
+    version: v2.0.10
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "In-process AES-GCM AEAD wrap/unwrap for the default (non-external-KMS) seal and Shamir/recovery key wrapping"
+    fips_approved_algorithms:
+      - "AES-128/256-GCM"
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Unlike the six cloud-provider wrappers below, this wrapper performs
+      AES-GCM itself (delegating to Go's crypto/aes + crypto/cipher) rather
+      than delegating to an external validated module — classified
+      separately from "seal-external-kms".
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-kms-wrapping/wrappers/awskms/v4
+    version: v4.0.4
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "seal-external-kms: delegates key encrypt/decrypt to AWS KMS (CMVP-validated HSM boundary when configured)"
+    fips_approved_algorithms: []
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: "Wrapper delegates to an external validated module; does not itself perform cryptographic primitives."
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-kms-wrapping/wrappers/azurekeyvault/v2
+    version: v2.0.16
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "seal-external-kms: delegates key encrypt/decrypt to Azure Key Vault (CMVP-validated HSM boundary when configured)"
+    fips_approved_algorithms: []
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Listed with `// indirect` in go.mod but direct (no indirect comment)
+      in internalshared/go.mod — classified direct overall. Wrapper
+      delegates to an external validated module.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-kms-wrapping/wrappers/gcpckms/v2
+    version: v2.0.14
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "seal-external-kms: delegates key encrypt/decrypt to Google Cloud KMS (CMVP-validated HSM boundary when configured)"
+    fips_approved_algorithms: []
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Listed with `// indirect` in go.mod but direct in internalshared/go.mod
+      — classified direct overall. Wrapper delegates to an external
+      validated module.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-kms-wrapping/wrappers/alicloudkms/v2
+    version: v2.0.5
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "seal-external-kms: delegates key encrypt/decrypt to Alibaba Cloud KMS"
+    fips_approved_algorithms: []
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Listed with `// indirect` in go.mod but direct in internalshared/go.mod
+      — classified direct overall. Wrapper delegates to an external module;
+      Alibaba Cloud KMS CMVP status should be confirmed separately (see
+      WO-010 container/KMS CMVP survey).
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-kms-wrapping/wrappers/ocikms/v2
+    version: v2.0.11
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "seal-external-kms: delegates key encrypt/decrypt to Oracle Cloud Infrastructure KMS"
+    fips_approved_algorithms: []
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Listed with `// indirect` in go.mod but direct in internalshared/go.mod
+      — classified direct overall. Wrapper delegates to an external module;
+      OCI KMS CMVP status should be confirmed separately (see WO-010).
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-kms-wrapping/wrappers/transit/v2
+    version: v2.0.13
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "seal-external-kms: delegates key encrypt/decrypt to a (possibly remote) Vault Transit secrets engine mount"
+    fips_approved_algorithms: []
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Listed with `// indirect` in go.mod but direct in internalshared/go.mod
+      — classified direct overall. Unlike the cloud-KMS wrappers, the
+      "external validated module" here is Vault's own Transit engine, whose
+      FIPS posture is governed by whichever key type/algorithm is configured
+      on the referenced Transit key (see the KeyType classifications under
+      golang.org/x/crypto and tink-crypto entries above).
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-secure-stdlib/cryptoutil
+    version: v0.1.1
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - sdk/go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "GenerateRSAKey: RSA key-pair generation helper (sdk/helper/cryptoutil/rsa.go -> cryptoutil.GenerateRSAKey)"
+    fips_approved_algorithms:
+      - "RSA key generation (Approved when key size >= 2048 bits)"
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Direct in sdk/go.mod; listed with `// indirect` in go.mod and
+      internalshared/go.mod. Thin wrapper over Go's crypto/rsa.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-secure-stdlib/tlsutil
+    version: v0.1.3
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - sdk/go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "TLS minimum-version and cipher-suite-string parsing/enforcement helper used across listener and client TLS configuration (15 call sites, e.g. internalshared/configutil, vault/, http/)"
+    fips_approved_algorithms: []
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Configuration helper — delegates all actual TLS crypto to Go's
+      crypto/tls. Direct in all three referencing go.mod files. See WO-008
+      for the full TLS listener cipher-suite inventory.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-secure-stdlib/base62
+    version: v0.1.2
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - sdk/go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "Random(): CSPRNG-backed (crypto/rand) random string generation used for root-token OTPs and generated database credentials (sdk/helper/roottoken/otp.go, sdk/database/helper/credsutil/credsutil.go)"
+    fips_approved_algorithms:
+      - "DRBG via crypto/rand (Go's OS CSPRNG)"
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: "Direct in all three referencing go.mod files. Thin wrapper over crypto/rand for security-sensitive random identifiers."
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-secure-stdlib/nonceutil
+    version: v0.1.0
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "encryptedNonceService: AES-GCM encryption of (expiry, counter) nonce tuples for the PKI ACME server's replay-protection nonce store (builtin/logical/pki/acme_state.go)"
+    fips_approved_algorithms:
+      - "AES-GCM"
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Direct in go.mod; listed with `// indirect` in internalshared/go.mod.
+      Not referenced by sdk/go.mod or tools/pipeline/go.mod. Implements
+      crypto/aes + crypto/cipher AES-GCM directly rather than delegating to
+      a higher-level library.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-secure-stdlib/reloadutil
+    version: v0.1.1
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "CertificateGetter: crypto/tls.X509KeyPair + crypto/x509.DecryptPEMBlock for hot-reloadable TLS listener certificate/key pairs (internalshared/listenerutil/listener.go), wired into vault/core.go's reloadFuncs and used by command/server.go, command/proxy.go, command/agent.go, command/operator_diagnose.go, helper/serverconfig/listener*.go"
+    fips_approved_algorithms: []
+    non_approved_algorithms:
+      - "PEM legacy private-key encryption via x509.DecryptPEMBlock (RFC 1423 PBE with DES/3DES-CBC) — deprecated by the Go standard library and not a FIPS-approved key-protection scheme when an encrypted PEM private key is configured"
+    consolidation_finding: ""
+    notes: >
+      Direct in go.mod and internalshared/go.mod; not referenced by
+      sdk/go.mod or tools/pipeline/go.mod. X509KeyPair parsing itself defers
+      FIPS status to the leaf key's own algorithm (RSA/ECDSA — see the TLS
+      listener inventory from WO-008); flagged separately here only for the
+      legacy encrypted-PEM decrypt path.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/hashicorp/go-secure-stdlib/httputil
+    version: v0.1.0
+    direct_or_transitive: transitive
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "ignoreExtensionsRoundTripper.customVerifyConnection: custom crypto/x509 chain verification (x509.VerifyOptions / x509.NewCertPool) that tolerates unknown critical certificate extensions during a crypto/tls handshake, reachable via github.com/hashicorp/vault/command -> github.com/hashicorp/vault-plugin-auth-jwt -> go-secure-stdlib/httputil"
+    fips_approved_algorithms: []
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Not imported by Vault's own source tree; `go mod why` traces it to the
+      vendored vault-plugin-auth-jwt dependency's HTTP client used for
+      OIDC/JWT discovery-document requests. Implements a custom X.509
+      chain-verification policy rather than a distinct primitive — Approved
+      status is inherited from whatever leaf-certificate algorithm and TLS
+      configuration is negotiated. Listed with `// indirect` in both
+      referencing go.mod files.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/lestrrat-go/jwx
+    version: v1.2.29
+    direct_or_transitive: transitive
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "jwx/jwk: JWK (JSON Web Key) parsing/validation, reachable via builtin/credential/okta -> github.com/okta/okta-sdk-golang/v5/okta -> lestrrat-go/jwx/jwk for Okta OIDC token validation"
+    fips_approved_algorithms: []
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Not directly imported by Vault source; algorithm approval depends on
+      the JWK's declared algorithm as issued by the configured Okta org.
+      Indirect in both referencing go.mod files; not referenced by
+      sdk/go.mod or tools/pipeline/go.mod.
+
+  # ---------------------------------------------------------------------
+  - module_path: github.com/youmark/pkcs8
+    version: v0.0.0-20240726163527-a2c0da244d78
+    direct_or_transitive: transitive
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "Encrypted PKCS#8 private-key decoding, reachable via helper/testhelpers/mongodb -> go.mongodb.org/mongo-driver/mongo/options -> youmark/pkcs8"
+    fips_approved_algorithms: []
+    non_approved_algorithms: []
+    consolidation_finding: ""
+    notes: >
+      Reachable only through helper/testhelpers/mongodb, a test-helper
+      package compiled for Vault's own test suite, not part of the
+      production Vault binary's normal build closure. Indirect in both
+      referencing go.mod files; not referenced by sdk/go.mod or
+      tools/pipeline/go.mod.
+
+  # ---------------------------------------------------------------------
+  - module_path: software.sslmate.com/src/go-pkcs12
+    version: v0.7.2
+    direct_or_transitive: direct
+    referencing_go_mods:
+      - go.mod
+      - internalshared/go.mod
+    crypto_operations:
+      - "PKCS#12 bundle encode/decode for PKI certificate export/import (builtin/logical/pki/cert_util.go, builtin/logical/pki/fields.go)"
+    fips_approved_algorithms: []
+    non_approved_algorithms:
+      - "PKCS#12 legacy RC2/3DES-based encryption modes when reading older .p12 files produced outside Vault (algorithm choice depends on the input bundle, not Vault-controlled)"
+    consolidation_finding: ""
+    notes: >
+      Direct in go.mod; listed with `// indirect` in internalshared/go.mod.
+      Not referenced by sdk/go.mod or tools/pipeline/go.mod.
+
+excluded_graph_only_nodes:
+  description: >
+    Modules that appear in the full `go list -m all` module graph for one or
+    more of the four in-scope go.mod files but (a) are not present in any of
+    those four go.mod require blocks, and (b) are confirmed via
+    `go mod why -m` as not needed by the main module for compilation. These
+    do not introduce cryptographic functionality into the built Vault binary
+    and are excluded from the `entries` list per the WO-009 scoping constraint.
+  entries:
+    - module_path: github.com/golang-jwt/jwt
+      version: v3.2.1+incompatible
+      evidence: "go mod why -m github.com/golang-jwt/jwt -> \"main module does not need module github.com/golang-jwt/jwt\""
+    - module_path: github.com/miekg/pkcs11
+      version: v1.1.1
+      evidence: "go mod why github.com/miekg/pkcs11 -> \"main module does not need package github.com/miekg/pkcs11\""
+    - module_path: github.com/letsencrypt/pkcs11key/v4
+      version: v4.0.0
+      evidence: "go mod why github.com/letsencrypt/pkcs11key/v4 -> \"main module does not need package github.com/letsencrypt/pkcs11key/v4\""
+    - module_path: github.com/google/go-pkcs11
+      version: v0.3.0
+      evidence: "go mod why github.com/google/go-pkcs11 -> \"main module does not need package github.com/google/go-pkcs11\""
+
+pkcs11_boundary_confirmation:
+  wrapper_module: github.com/hashicorp/go-kms-wrapping/wrappers/pkcs11
+  present_in_root_go_mod: false
+  finding: >
+    `github.com/hashicorp/go-kms-wrapping/wrappers/pkcs11` does not appear
+    anywhere in `go.mod`'s require block or in the resolved
+    `GOWORK=off go list -m all` module graph for the root module. The three
+    generic PKCS#11 libraries that do appear in the graph
+    (github.com/miekg/pkcs11, github.com/letsencrypt/pkcs11key/v4,
+    github.com/google/go-pkcs11 — see excluded_graph_only_nodes) are
+    unreachable transitive artifacts of unrelated dependencies and are not
+    imported by any Vault package (`go mod why` confirms "main module does
+    not need package" for each). This confirms Vault Community Edition (CE)
+    excludes HSM/PKCS#11 integration — that capability is Enterprise-only
+    and is out of scope for the CE cryptographic boundary this inventory
+    describes.

@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://forge.opsera.io/schemas/fips/crypto_dependency_entry.json",
+  "title": "FIPS Cryptographic Dependency Inventory Entry",
+  "description": "Schema for a single crypto-relevant Go module entry in the FIPS 140-3 dependency inventory (FIPS-DEP-001), produced by WO-009 via `go list`/go.mod classification. Distinct from fips/schemas/crypto_inventory_entry.json, which schemas per-call-site entries (file/line/function) for WO-005..WO-011/WO-008. This schema covers module-level (module_path/version) entries and is consumed by the aggregate inventory produced in WO-019.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "module_path",
+    "version",
+    "direct_or_transitive",
+    "referencing_go_mods",
+    "crypto_operations",
+    "fips_approved_algorithms",
+    "non_approved_algorithms",
+    "consolidation_finding"
+  ],
+  "properties": {
+    "module_path": {
+      "type": "string",
+      "description": "Go module import path (e.g. 'golang.org/x/crypto').",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "description": "Resolved module version as reported by `go list -m all` / go.mod (e.g. 'v0.57.0').",
+      "minLength": 1
+    },
+    "direct_or_transitive": {
+      "type": "string",
+      "description": "Whether the module is a direct or transitive (indirect) requirement. When status differs across referencing_go_mods, this reflects the dominant/most-permissive classification, with the split documented in 'notes'.",
+      "enum": ["direct", "transitive"]
+    },
+    "referencing_go_mods": {
+      "type": "array",
+      "description": "Which of the four in-scope go.mod files (go.mod, sdk/go.mod, internalshared/go.mod, tools/pipeline/go.mod) require this module.",
+      "minItems": 1
+    },
+    "crypto_operations": {
+      "type": "array",
+      "description": "Cryptographic algorithms/operations this module provides or wraps, with evidence (source file paths) where the operation was confirmed by import-site inspection.",
+      "minItems": 1
+    },
+    "fips_approved_algorithms": {
+      "type": "array",
+      "description": "Algorithms provided by this module that are FIPS 140-3 Approved (may be empty)."
+    },
+    "non_approved_algorithms": {
+      "type": "array",
+      "description": "Algorithms provided by this module that are not FIPS 140-3 Approved (may be empty)."
+    },
+    "consolidation_finding": {
+      "type": "string",
+      "description": "Dependency-hygiene finding string (e.g. duplicate major-version consolidation recommendation). Empty string when not applicable."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free-text context: reachability evidence (go mod why chains), version-status caveats across modules, and cross-references.",
+      "minLength": 1
+    }
+  }
+}
