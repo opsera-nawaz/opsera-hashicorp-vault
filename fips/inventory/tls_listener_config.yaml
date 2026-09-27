@@ -1,0 +1,365 @@
+# FIPS 140-3 Phase 1 — Cryptographic Inventory and Discovery
+# WO-008: TLS listener configuration inventory with protocol documentation
+# Requirement: FIPS-TLS-001
+#
+# Scope: every TLS configuration point across api/client.go,
+# internalshared/configutil/listener.go, and http/handler.go, plus the
+# supporting wiring (internalshared/listenerutil/listener.go,
+# helper/serverconfig/listener_tcp.go, vault/cluster/cluster.go, vault/core.go,
+# helper/serverconfig/config.go) and inter-node TLS
+# (physical/raft/raft.go, physical/raft/streamlayer.go,
+# go-secure-stdlib/tlsutil v0.1.3), and the existing validation tooling in
+# vault/diagnose (ListenerChecks()).
+#
+# This is a static source-code inventory only. It does NOT change any TLS
+# behavior (Phase 2 scope) and does NOT constitute a runtime FIPS validation.
+# Per FIPS-TLS-001, the actual negotiated protocol version and cipher suite
+# in a live deployment must be confirmed via runtime verification (e.g.
+# `vault operator diagnose`, which already invokes vault/diagnose.ListenerChecks(),
+# or an external TLS scanner such as `openssl s_client` / `testssl.sh`) —
+# source defaults documented here describe what the code will do, not what
+# has been observed on the wire.
+schema_version: "1.0"
+work_order: WO-008
+requirement_id: FIPS-TLS-001
+epic: "FIPS Phase 1 — Cryptographic Inventory and Discovery"
+generated: "2026-09-27"
+repo: hashicorp/vault
+
+entries:
+  # ---------------------------------------------------------------------
+  # Client API listener (port 8200) — schema declaration
+  # internalshared/configutil/listener.go
+  # ---------------------------------------------------------------------
+  - id: listener-tls-min-version
+    file: internalshared/configutil/listener.go
+    line: 75
+    component: api_listener
+    listener_port: 8200
+    config_parameter: tls_min_version
+    default_value: "\"\" (empty in the HCL struct; internalshared/listenerutil/listener.go:114-116 fills the empty value to \"tls12\" at TLS-config-build time)"
+    configurable_range: "tls10, tls11, tls12, tls13 (validated against go-secure-stdlib/tlsutil.TLSLookup, internalshared/listenerutil/listener.go:123-126)"
+    fips_compliant_default: true
+    fips_gap: "TLS 1.0 and 1.1 remain configurable — must be restricted to TLS 1.2+ for FIPS compliance in Phase 2"
+    cipher_suites: null
+    notes: >
+      Field is a bare string with hcl:"tls_min_version" (no Raw/parsed pair,
+      unlike the boolean/duration fields in this struct) — HCL decoding
+      populates it directly. Enforcement happens downstream in
+      internalshared/listenerutil/listener.go:TLSConfig(), not in this file.
+      This field is honored ONLY for the client API listener (port 8200);
+      see the cluster-listener entries below for why it does not apply to
+      port 8201.
+
+  - id: listener-tls-max-version
+    file: internalshared/configutil/listener.go
+    line: 76
+    component: api_listener
+    listener_port: 8200
+    config_parameter: tls_max_version
+    default_value: "\"\" (empty in the HCL struct; internalshared/listenerutil/listener.go:118-119 fills the empty value to \"tls13\")"
+    configurable_range: "tls10, tls11, tls12, tls13 (go-secure-stdlib/tlsutil.TLSLookup, internalshared/listenerutil/listener.go:128-131)"
+    fips_compliant_default: true
+    fips_gap: "TLS 1.0 and 1.1 remain configurable — must be restricted to TLS 1.2+ for FIPS compliance in Phase 2. An operator can also misconfigure tls_max_version below tls12, which internalshared/listenerutil/listener.go:133-135 only rejects if it is lower than tls_min_version, not if both are below the FIPS floor."
+    cipher_suites: null
+    notes: >
+      Same schema pattern as tls_min_version. There is no separate FIPS
+      profile that pins this to tls13 or clamps the pair to [tls12,tls13].
+
+  - id: listener-tls-disable
+    file: internalshared/configutil/listener.go
+    line: "71-72"
+    component: api_listener
+    listener_port: 8200
+    config_parameter: tls_disable
+    default_value: "false (parsed via parseAndClearBool, internalshared/configutil/listener.go:552-554)"
+    configurable_range: "true, false"
+    fips_compliant_default: true
+    fips_gap: "If set to true, internalshared/listenerutil/listener.go:86-88 returns a nil *tls.Config and the listener serves plaintext HTTP with no TLS boundary at all. Flag as a FIPS-incompatible configuration option for any production/FIPS-path listener."
+    cipher_suites: null
+
+  - id: listener-tls-cipher-suites
+    file: internalshared/configutil/listener.go
+    line: "77-78, 556-562"
+    component: api_listener
+    listener_port: 8200
+    config_parameter: tls_cipher_suites
+    default_value: "\"\" (empty) — when unset, l.TLSCipherSuites stays nil and internalshared/listenerutil/listener.go:137 skips setting tlsConf.CipherSuites, so Go's crypto/tls default suite ordering for the negotiated version is used unfiltered"
+    configurable_range: "Comma-separated list parsed by go-secure-stdlib/tlsutil.ParseCiphers (tlsutil.go v0.1.3:60-73) against a fixed 26-entry cipherMap spanning TLS_RSA_*, TLS_ECDHE_*, and TLS 1.3 suites (see cipher_suites below)."
+    fips_compliant_default: false
+    fips_gap: "No explicit FIPS-Approved cipher suite allowlist is enforced. AES-GCM/AES-CBC suites use FIPS-Approved algorithms but their FIPS 140-3 status additionally depends on a CMVP-validated crypto provider (Phase 3 / WO-010, WO-011 scope — Go stdlib crypto is not itself CMVP-validated). TLS_RSA_WITH_RC4_128_SHA, TLS_RSA_WITH_3DES_EDE_CBC_SHA, TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA, TLS_ECDHE_ECDSA_WITH_RC4_128_SHA, TLS_ECDHE_RSA_WITH_RC4_128_SHA, and the four ChaCha20-Poly1305 suites are non-Approved algorithms regardless of provider and are still selectable via this field. If tls_cipher_suites is left unset entirely (the default), the operator has no allowlist at all and Go's built-in default ordering (which can still negotiate ChaCha20-Poly1305 with a client that prefers it) applies."
+    cipher_suites:
+      - TLS_RSA_WITH_RC4_128_SHA                       # non-Approved (RC4)
+      - TLS_RSA_WITH_3DES_EDE_CBC_SHA                   # non-Approved (3DES)
+      - TLS_RSA_WITH_AES_128_CBC_SHA                    # AES (provider-dependent)
+      - TLS_RSA_WITH_AES_256_CBC_SHA                    # AES (provider-dependent)
+      - TLS_RSA_WITH_AES_128_CBC_SHA256                 # AES (provider-dependent)
+      - TLS_RSA_WITH_AES_128_GCM_SHA256                 # AES-GCM (provider-dependent)
+      - TLS_RSA_WITH_AES_256_GCM_SHA384                 # AES-GCM (provider-dependent)
+      - TLS_ECDHE_ECDSA_WITH_RC4_128_SHA                # non-Approved (RC4)
+      - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA            # AES (provider-dependent)
+      - TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA            # AES (provider-dependent)
+      - TLS_ECDHE_RSA_WITH_RC4_128_SHA                  # non-Approved (RC4)
+      - TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA             # non-Approved (3DES)
+      - TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA               # AES (provider-dependent)
+      - TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA               # AES (provider-dependent)
+      - TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256          # AES (provider-dependent)
+      - TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256            # AES (provider-dependent)
+      - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256            # AES-GCM (provider-dependent)
+      - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256          # AES-GCM (provider-dependent)
+      - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384            # AES-GCM (provider-dependent)
+      - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384          # AES-GCM (provider-dependent)
+      - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305             # non-Approved (ChaCha20-Poly1305)
+      - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305           # non-Approved (ChaCha20-Poly1305)
+      - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256      # non-Approved (ChaCha20-Poly1305)
+      - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256    # non-Approved (ChaCha20-Poly1305)
+      - TLS_AES_128_GCM_SHA256                           # TLS 1.3, AES-GCM (provider-dependent)
+      - TLS_AES_256_GCM_SHA384                           # TLS 1.3, AES-GCM (provider-dependent)
+    notes: >
+      Source: go-secure-stdlib/tlsutil v0.1.3 cipherMap (pinned in go.mod:135,
+      go.sum:771-772; verified by extracting the cached module zip at
+      github.com/hashicorp/go-secure-stdlib/tlsutil@v0.1.3/tlsutil.go:30-58).
+      Note TLS 1.3's own three suites (TLS_AES_128_GCM_SHA256,
+      TLS_AES_256_GCM_SHA384, TLS_CHACHA20_POLY1305_SHA256) are not
+      independently selectable in Go's crypto/tls for TLS 1.3 connections —
+      Go always offers all three regardless of CipherSuites — so setting
+      tls_cipher_suites has no effect on TLS 1.3 cipher negotiation, only on
+      TLS 1.2 and below. tlsutil also warns (internalshared/listenerutil/listener.go:143-164)
+      if all/some configured suites are blacklisted by RFC 7540 Appendix A
+      for HTTP/2, but this is an HTTP/2-compatibility warning, not a FIPS check.
+
+  - id: listener-tls-require-and-verify-client-cert
+    file: internalshared/configutil/listener.go
+    line: "79-80, 564-566"
+    component: api_listener
+    listener_port: 8200
+    config_parameter: tls_require_and_verify_client_cert
+    default_value: "false"
+    configurable_range: "true, false"
+    fips_compliant_default: true
+    fips_gap: ""
+    cipher_suites: null
+    notes: >
+      When true, internalshared/listenerutil/listener.go:168-182 sets
+      tls.RequireAndVerifyClientCert and loads tls_client_ca_file into
+      tlsConf.ClientCAs. Mutual TLS is an authentication design choice, not
+      itself a FIPS algorithm requirement — no gap either way.
+
+  - id: listener-tls-disable-client-certs
+    file: internalshared/configutil/listener.go
+    line: "82-83, 568-570"
+    component: api_listener
+    listener_port: 8200
+    config_parameter: tls_disable_client_certs
+    default_value: "false"
+    configurable_range: "true, false"
+    fips_compliant_default: true
+    fips_gap: ""
+    cipher_suites: null
+    notes: >
+      Mutually exclusive with tls_require_and_verify_client_cert — both true
+      is rejected at internalshared/listenerutil/listener.go:184-189 and
+      independently flagged by vault/diagnose.TLSMutualExclusionCertCheck()
+      (vault/diagnose/tls_verification.go:287-295).
+
+  - id: listener-tls-client-ca-file
+    file: internalshared/configutil/listener.go
+    line: 81
+    component: api_listener
+    listener_port: 8200
+    config_parameter: tls_client_ca_file
+    default_value: "\"\""
+    configurable_range: "filesystem path to a PEM-encoded CA certificate bundle"
+    fips_compliant_default: true
+    fips_gap: ""
+    cipher_suites: null
+    notes: >
+      Path-only setting; algorithm strength of the CA/leaf keys themselves
+      is a certificate/PKI concern tracked under the broader crypto
+      inventory (WO-005/WO-006), not a TLS protocol/cipher setting. Validity
+      is checked by vault/diagnose.TLSClientCAFileCheck() (see below).
+
+  # ---------------------------------------------------------------------
+  # Client API listener (port 8200) — enforcement / wiring
+  # internalshared/listenerutil/listener.go + helper/serverconfig/listener_tcp.go
+  # ---------------------------------------------------------------------
+  - id: listenerutil-tls-config-builder
+    file: internalshared/listenerutil/listener.go
+    line: "79-192"
+    component: api_listener
+    listener_port: 8200
+    config_parameter: "listenerutil.TLSConfig() — the function that turns the configutil.Listener TLS fields above into an actual *tls.Config"
+    default_value: "MinVersion=tls.VersionTLS12, MaxVersion=tls.VersionTLS13 when tls_min_version/tls_max_version are unset (lines 114-131); ClientAuth defaults to tls.RequestClientCert (line 111)"
+    configurable_range: "tls10-tls13 via the fields above; wired into the real OS listener by helper/serverconfig/listener_tcp.go:76 (tcpListenerFactory), which binds l.Address (defaults to 127.0.0.1:8200, listener_tcp.go:20-24) and wraps it with tls.NewListener(ln, tlsConfig) at listener_tcp.go:81"
+    fips_compliant_default: true
+    fips_gap: "Same TLS 1.0/1.1-configurable gap as tls_min_version/tls_max_version above — this is the single enforcement point where that gap would be closed in Phase 2."
+    cipher_suites: null
+    notes: >
+      This is the authoritative call path for the client API listener
+      (port 8200): command/server.go -> helper/serverconfig/listener_tcp.go:tcpListenerFactory
+      -> internalshared/listenerutil.TLSConfig(). http/handler.go (below)
+      is downstream of this and does not participate in TLS setup.
+
+  # ---------------------------------------------------------------------
+  # http/handler.go — no TLS construction; documents absence of overrides
+  # ---------------------------------------------------------------------
+  - id: http-handler-tls-role
+    file: http/handler.go
+    line: "835-841"
+    component: api_listener
+    listener_port: 8200
+    config_parameter: "handler-level TLS checks (none) / x_forwarded_for_client_cert_header peer-cert synthesis"
+    default_value: "http/handler.go performs no TLS protocol-version or cipher-suite logic of its own; it only reads the *tls.Config already applied by the listener via internalshared/listenerutil.TLSConfig(). WrapForwardedForHandler synthesizes r.TLS.PeerCertificates from a proxy header (default: disabled, since x_forwarded_for_authorized_addrs is unset)"
+    configurable_range: "x_forwarded_for_client_cert_header / x_forwarded_for_client_cert_header_decoders (internalshared/configutil/listener.go:106-107), gated by x_forwarded_for_authorized_addrs"
+    fips_compliant_default: true
+    fips_gap: "No handler-level TLS enforcement or override exists — confirmed by reading the full file for `tls.` and `TLS` references (only match is this PeerCertificates synthesis). When x_forwarded_for_client_cert_header is enabled behind a trusted reverse proxy, the handler trusts a client-cert header instead of performing its own handshake verification; this must remain paired with a strict x_forwarded_for_authorized_addrs allow-list so an untrusted peer cannot forge the header, but it is not itself a TLS-protocol-version/cipher gap."
+    cipher_suites: null
+
+  # ---------------------------------------------------------------------
+  # Cluster listener (port 8201, mutual TLS) — documented separately from
+  # the API listener per AC. Does NOT consume tls_min_version/tls_max_version.
+  # ---------------------------------------------------------------------
+  - id: cluster-listener-min-version
+    file: vault/cluster/cluster.go
+    line: "232-241, 263-270"
+    component: cluster_listener
+    listener_port: 8201
+    config_parameter: "cluster listener TLS.Config.MinVersion (Listener.TLSConfig())"
+    default_value: "tls.VersionTLS12 (hardcoded at both lines 236 and 268)"
+    configurable_range: "Not configurable. There is no HCL field for the cluster listener's TLS version. The listener stanza's cluster_address (internalshared/configutil/listener.go:63) only supplies the bind address used by command/server.go:findClusterAddress()/InitListeners() (command/server.go:854-961) to construct clusterAddrs, which is passed to core.SetClusterListenerAddrs(); the stanza's tls_min_version/tls_max_version/tls_cipher_suites fields are never read for this listener."
+    fips_compliant_default: true
+    fips_gap: ""
+    cipher_suites: null
+    notes: >
+      ClientAuth is always tls.RequireAndVerifyClientCert (lines 233, 264) —
+      the cluster listener is always mutual TLS, unconditionally, unlike the
+      API listener where mTLS is opt-in via tls_require_and_verify_client_cert.
+      GetCertificate/GetClientCertificate are dynamic lookups (serverLookup/
+      clientLookup, lines 198-227) delegated to registered cluster.Handler/
+      cluster.Client implementations — see the raft streamlayer entry below
+      for the handler that raft storage registers.
+
+  - id: cluster-cipher-suites
+    file: vault/core.go
+    line: "1292-1315"
+    component: cluster_listener
+    listener_port: 8201
+    config_parameter: "cluster_cipher_suites (top-level HCL parameter, NOT part of the listener stanza — declared at helper/serverconfig/config.go:77 as `ClusterCipherSuites string`)"
+    default_value: >
+      When unset (""), vault/core.go:1298-1307 sets c.clusterCipherSuites to:
+      TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384, TLS_CHACHA20_POLY1305_SHA256
+      (TLS 1.3), TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+      TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384, TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+      (TLS 1.2). If explicitly set to the literal string "tls12" or "tls13",
+      vault/core.go:1292-1295 leaves c.clusterCipherSuites nil/empty and lets
+      Go's crypto/tls default suite set apply instead.
+    configurable_range: "Any comma-separated list accepted by go-secure-stdlib/tlsutil.ParseCiphers (vault/core.go:1310, same 26-entry cipherMap as tls_cipher_suites above), or the literal strings \"tls12\"/\"tls13\" to fall back to Go's built-in defaults."
+    fips_compliant_default: false
+    fips_gap: "The DEFAULT cluster cipher suite list (used whenever cluster_cipher_suites is left unset, which is the common case) includes TLS_CHACHA20_POLY1305_SHA256 and TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305 — both non-FIPS-Approved algorithms. No explicit FIPS-Approved cipher suite allowlist is enforced for the cluster (port 8201) listener out of the box; an operator must manually set cluster_cipher_suites to an AES-GCM-only list to close this gap, which is exactly the Phase 2 TLS enforcement work."
+    cipher_suites:
+      - TLS_AES_128_GCM_SHA256                        # default, TLS 1.3, AES-GCM
+      - TLS_AES_256_GCM_SHA384                        # default, TLS 1.3, AES-GCM
+      - TLS_CHACHA20_POLY1305_SHA256                  # default, TLS 1.3, non-Approved
+      - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256       # default, TLS 1.2, AES-GCM
+      - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384       # default, TLS 1.2, AES-GCM
+      - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305        # default, TLS 1.2, non-Approved
+
+  # ---------------------------------------------------------------------
+  # Client library defaults — api/client.go
+  # ---------------------------------------------------------------------
+  - id: api-client-min-version
+    file: api/client.go
+    line: "268-271"
+    component: api_client_library
+    listener_port: null
+    config_parameter: "http.Transport.TLSClientConfig.MinVersion, set in DefaultConfig()"
+    default_value: "tls.VersionTLS12"
+    configurable_range: "Hardcoded. Not exposed through the public api.TLSConfig struct (api/client.go:221-247, fields CACert/CACertBytes/CAPath/ClientCert/ClientKey/TLSServerName/Insecure — no MinVersion/MaxVersion/CipherSuites field exists). The only way to change it is for a caller to directly mutate config.HttpClient.Transport.(*http.Transport).TLSClientConfig after DefaultConfig(), which is unsupported and undocumented."
+    fips_compliant_default: true
+    fips_gap: ""
+    cipher_suites: null
+    notes: >
+      MaxVersion is left unset, so it negotiates up to whatever the running
+      Go toolchain's crypto/tls supports as a maximum (currently TLS 1.3).
+      transport.TLSHandshakeTimeout is also hardcoded to 10s (line 268), and
+      http2.ConfigureTransport(transport) (line 272) enables HTTP/2 over
+      this same TLS config — both operational settings, not FIPS-relevant
+      by themselves, included here per implementation_steps for completeness.
+
+  - id: api-client-insecure
+    file: api/client.go
+    line: "245-246, 342-344"
+    component: api_client_library
+    listener_port: null
+    config_parameter: "TLSConfig.Insecure (env: VAULT_SKIP_VERIFY)"
+    default_value: "false"
+    configurable_range: "true, false"
+    fips_compliant_default: true
+    fips_gap: "When set to true, configureTLS() (api/client.go:342-344) sets clientTLSConfig.InsecureSkipVerify = true, which disables server certificate verification entirely. This is a FIPS-incompatible configuration option — it defeats the TLS trust boundary regardless of the negotiated version or cipher — and must be documented as prohibited for FIPS-path deployments in Phase 2."
+    cipher_suites: null
+
+  - id: api-client-cert-material
+    file: api/client.go
+    line: "221-247, 299-361"
+    component: api_client_library
+    listener_port: null
+    config_parameter: "TLSConfig{CACert, CACertBytes, CAPath, ClientCert, ClientKey, TLSServerName}"
+    default_value: "all empty/unset — uses the system root CA pool via hashicorp/go-rootcerts and presents no client certificate unless explicitly configured"
+    configurable_range: "operator-supplied PEM file paths, inline PEM bytes (CACertBytes), or a directory of PEM files (CAPath); TLSServerName overrides SNI (api/client.go:355-356)"
+    fips_compliant_default: true
+    fips_gap: ""
+    cipher_suites: null
+    notes: >
+      Certificate/key algorithm strength (e.g. RSA vs ECDSA key size/curve)
+      is a PKI/crypto-material concern tracked under the broader
+      cryptographic inventory (WO-005/WO-006), not a TLS listener
+      configuration point.
+
+  # ---------------------------------------------------------------------
+  # Inter-node TLS — physical/raft/raft.go retry_join (bootstrap join to
+  # an existing cluster leader) via go-secure-stdlib/tlsutil
+  # ---------------------------------------------------------------------
+  - id: raft-retry-join-tls
+    file: physical/raft/raft.go
+    line: "307-420"
+    component: raft_inter_node
+    listener_port: null
+    config_parameter: "retry_join leader TLS: LeaderCACert[File], LeaderClientCert[File], LeaderClientKey[File], LeaderTLSServerName (LeaderJoinInfo struct, lines 309-360); built by parseTLSInfo() at lines 399-420"
+    default_value: "go-secure-stdlib/tlsutil.LoadClientTLSConfig() (file-path variant, used when *File fields are set) or tlsutil.ClientTLSConfig() (inline-PEM variant) both hardcode MinVersion: tls.VersionTLS12 and ClientAuth: tls.RequireAndVerifyClientCert (tlsutil.go v0.1.3 lines 106-110 and 155-159); MaxVersion is left unset (negotiates up to Go's max, currently TLS 1.3); no CipherSuites are set (Go stdlib default for the negotiated version applies)."
+    configurable_range: "No tls_min_version/tls_max_version/tls_cipher_suites fields exist for retry_join. TLS protocol behavior is entirely hardcoded inside go-secure-stdlib/tlsutil v0.1.3 (pinned in go.mod:135); only certificate material (CA/client cert/key, by file path or inline PEM) and LeaderTLSServerName (SNI override, raft.go:416) are operator-configurable."
+    fips_compliant_default: true
+    fips_gap: "MinVersion is unconditionally TLS 1.2 with no downgrade path, which is FIPS-compliant by construction. However, no explicit cipher-suite allowlist is set either (same ChaCha20-Poly1305-availability caveat as the other Go-stdlib-default entries in this inventory) — flagged for consistency, not a version gap."
+    cipher_suites: null
+    notes: >
+      This TLS config is used only for the initial retry_join bootstrap
+      handshake to a leader's API address (LeaderAPIAddr) — it is separate
+      from the ongoing raft RPC transport, which rides over the cluster
+      listener (port 8201, see cluster-listener entries above) once the
+      node has joined.
+
+  - id: raft-streamlayer-keyring
+    file: physical/raft/streamlayer.go
+    line: "33-139, 208-320"
+    component: raft_inter_node
+    listener_port: 8201
+    config_parameter: "internal raft cluster TLSKeyring (self-generated ECDSA P-521 certs, auto-rotated) — supplies GetCertificate/GetClientCertificate to the cluster listener's tls.Config (vault/cluster/cluster.go) via the cluster.Handler/cluster.Client interfaces (raftLayer.ServerLookup/ClientLookup, streamlayer.go:272-312)"
+    default_value: "Certificates generated internally by GenerateTLSKey() (streamlayer.go:93-139) using crypto/ecdsa with elliptic.P521(), 30-year validity; not derived from any operator-supplied cert/key"
+    configurable_range: "None — no HCL parameters exist to change the raft keyring's key type, curve, or validity period. The TLS protocol version and cipher suite actually enforced for this traffic are governed entirely by vault/cluster/cluster.go's tls.Config (MinVersion=tls.VersionTLS12, cipher_suites per cluster_cipher_suites — see cluster-listener entries above); streamlayer.go only supplies certificates, not protocol/cipher policy."
+    fips_compliant_default: true
+    fips_gap: "Not a TLS version/cipher-suite configuration point by design — flagged here only to make explicit that raft's own inter-node transport has no separate, independently configurable TLS surface; it inherits whatever protocol/cipher policy the cluster listener enforces. The ECDSA P-521 key-generation algorithm itself is in scope of the broader cryptographic inventory (WO-005/WO-006), not this TLS listener inventory."
+    cipher_suites: null
+
+  # ---------------------------------------------------------------------
+  # Existing validation tooling to leverage in Phase 2
+  # ---------------------------------------------------------------------
+  - id: diagnose-listener-checks
+    file: vault/diagnose/tls_verification.go
+    line: "22-99"
+    component: validation_tooling
+    listener_port: null
+    config_parameter: "ListenerChecks(ctx, listeners) — invoked by `vault operator diagnose` at command/operator_diagnose.go:673"
+    default_value: "N/A — diagnostic/validation tooling, not a runtime TLS setting"
+    configurable_range: "N/A"
+    fips_compliant_default: true
+    fips_gap: "ListenerChecks() (lines 29-85) validates that tls_min_version/tls_max_version resolve to a known tlsutil.TLSLookup key (tls10-tls13, lines 54-72), checks tls_disable/tls_disable_client_certs combinations (TLSMutualExclusionCertCheck, lines 287-295), and verifies certificate files parse and chain-verify (TLSFileChecks/TLSCertCheck/TLSClientCAFileCheck, lines 74-80, 101-132, 297-358). It does NOT flag tls10/tls11 as weak/non-Approved, and does NOT verify the actually negotiated cipher suite at runtime — confirmed by the TODO at line 81-82: \"Use listenerutil.TLSConfig to warn on incorrect protocol specified. Alternatively, use tlsutil.SetupTLSConfig.\" This is the existing tooling recommended for extension in Phase 2 to add FIPS-specific TLS profile enforcement and runtime verification per FIPS-TLS-001, rather than building new tooling from scratch."
+    cipher_suites: null
