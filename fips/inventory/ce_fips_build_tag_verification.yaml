@@ -1,0 +1,350 @@
+# FIPS 140-3 Phase 1 — Cryptographic Inventory and Discovery
+# WO-011: Verify IsFIPS false in CE and no FIPS CI tags
+#
+# This record is read-only verification evidence. It does not change build
+# behavior, CI configuration, or runtime behavior. It documents, with exact
+# file paths and line numbers, that the Community Edition (CE) build of
+# hashicorp/vault never reports itself as FIPS-capable and that no FIPS
+# build tags leak into the CE continuous integration pipeline.
+
+verification_id: WO-011
+verification_title: "Verify IsFIPS false in CE and no FIPS CI tags"
+verification_date: "2026-09-27"
+verified_by: "nawaz@opsera.io (Forge automated verification agent)"
+repository: "opsera-nawaz/opsera-hashicorp-vault"
+branch: "feature/WO-011"
+scope: >
+  Confirm that the Community/OSS (CE) build of Vault (i.e. any build without
+  the `fips` Go build tag) always reports IsFIPS() == false, and that the
+  CE continuous integration pipeline (as opposed to the enterprise pipeline)
+  never applies the `fips`, `fips_140_2`, `fips_140_3` Go build tags or the
+  GOEXPERIMENT=boringcrypto toolchain experiment.
+
+verification_result: "PASS — CE builds never apply fips or boringcrypto build tags; IsFIPS() returns false in all CE compilation paths"
+
+anti_pattern_statement: >-
+  Setting GOEXPERIMENT=boringcrypto on a CE build does NOT produce a
+  FIPS-validated artifact — the validated boundary applies only to
+  vendor-certified builds with active CMVP certificates
+
+findings:
+
+  - id: F1
+    title: "IsFIPS() build-constrained constant"
+    file: "helper/constants/fips.go"
+    lines: "1-11"
+    evidence: |
+      // Copyright IBM Corp. 2016, 2025
+      // SPDX-License-Identifier: BUSL-1.1
+
+      //go:build !fips
+
+      package constants
+
+      // IsFIPS returns true if Vault is operating in a FIPS-140-{2,3} mode.
+      func IsFIPS() bool {
+          return false
+      }
+    details:
+      build_constraint: "//go:build !fips (line 4)"
+      package: "constants (line 6)"
+      function_signature: "func IsFIPS() bool (line 9)"
+      return_value: false
+      interpretation: >
+        This file is compiled only when the `fips` build tag is ABSENT
+        (the default for every CE build — `go build`, `go test`, `go vet`
+        with no explicit -tags, and the CE release pipeline in
+        .github/workflows/build-artifacts-ce.yml, none of which pass
+        -tags fips). Under this constraint, IsFIPS() unconditionally
+        returns false. There is no code path in a CE build in which
+        IsFIPS() can return true.
+    empirical_verification:
+      command: "go build ./helper/constants/..."
+      result: "PASS — package compiles cleanly with default (no fips tag) build constraints"
+      test_command: >
+        Ephemeral test added at helper/constants/zz_wo011_verify_test.go
+        (created, run, and deleted — not part of the committed diff):
+        `if IsFIPS() != false { t.Fatalf(...) }`
+      test_output: |
+        === RUN   TestIsFIPSFalseInCE
+            zz_wo011_verify_test.go:9: IsFIPS() = false (expected false in CE/no-fips-tag build)
+        --- PASS: TestIsFIPSFalseInCE (0.00s)
+        PASS
+        ok      github.com/hashicorp/vault/helper/constants    0.219s
+      test_result: "PASS — IsFIPS() empirically returns false in a default CE build"
+
+  - id: F2
+    title: "Related build-constraint guard files in helper/constants (tag-consistency enforcement, not IsFIPS() itself)"
+    files:
+      - path: "helper/constants/fips_build_check.go"
+        line: 4
+        constraint: "//go:build (!fips && (fips_140_2 || fips_140_3)) || (fips && !fips_140_2 && !fips_140_3) || (fips_140_2 && fips_140_3)"
+        purpose: >
+          CGo-linker-error guard that fails the build if the unversioned
+          `fips` tag and a versioned `fips_140_2`/`fips_140_3` tag are not
+          supplied together, or if both versioned tags are supplied at once.
+          Inert in CE builds (no fips/fips_140_2/fips_140_3 tags set).
+      - path: "helper/constants/fips_cgo_check.go"
+        line: 4
+        constraint: "//go:build (fips || fips_140_2 || fips_140_3) && !cgo"
+        purpose: >
+          Fails the build if any fips tag is set without cgo. Inert in CE
+          builds (no fips tags set).
+    interpretation: >
+      Neither file defines or alters IsFIPS(); they only exist to make
+      malformed FIPS build-tag combinations fail loudly at compile time.
+      Both are compiled out entirely in a default CE build because their
+      constraints require at least one fips-family tag to be present.
+
+  - id: F3
+    title: "No enterprise-only //go:build fips counterpart present in this CE checkout"
+    detail: >
+      This is the opsera-nawaz/opsera-hashicorp-vault CE checkout (fork of
+      hashicorp/vault, the open-source repository). A hypothetical
+      enterprise-only counterpart file gated on the positive `//go:build fips`
+      constraint (e.g. one defining IsFIPS() to return true under the fips
+      tag) would live in the closed-source hashicorp/vault-enterprise
+      repository and is, by definition, not present in this CE source tree.
+      Its non-presence here is itself the expected and correct state for CE.
+
+  - id: F4
+    title: "CI: setup job computes is-ent-branch = 'false' unconditionally for CE repositories"
+    file: ".github/actions/metadata/action.yml"
+    lines: "154-187, specifically 176-187"
+    evidence: |
+      154:        # Set CE, Ent, and CE in Ent specific workflow metadata
+      155:        is_enterprise_repo='${{ contains(github.repository, 'vault-enterprise') }}'
+      156:        if [ "$is_enterprise_repo" = 'true' ]; then
+      ...
+      176:        else
+      177:          compute_build='"custom-linux-medium-vault-latest"'
+      ...
+      182:          go_tags=''
+      183:          is_ce_in_enterprise='false'
+      184:          is_ent_branch='false'
+      185:          is_ent_repo='false'
+      186:          version_metadata='${{ inputs.vault-version }}'
+      187:        fi
+    details:
+      output_consumed_by_ci_yml: "is-ent-branch (ci.yml line 42: is-ent-branch: ${{ steps.metadata.outputs.is-ent-branch }})"
+      interpretation: >
+        `is_ent_repo` is derived from `contains(github.repository,
+        'vault-enterprise')` (line 155). For any CE repository — including
+        hashicorp/vault and this fork, opsera-nawaz/opsera-hashicorp-vault —
+        this evaluates to false, so execution falls into the `else` branch
+        (lines 176-187) where `is_ent_branch` is hardcoded to the string
+        'false' (line 184) and `go_tags` is set to the empty string
+        (line 182). There is no code path by which a CE repository checkout
+        can produce is-ent-branch == 'true'.
+
+  - id: F5
+    title: "CI: test-go-fips job definition and its enterprise-only gate"
+    file: ".github/workflows/ci.yml"
+    lines: "261-299"
+    evidence: |
+      261:  test-go-fips:
+      262:    name: Run Go tests with FIPS configuration
+      263:    # Run the Go tests with fips if the vault app changed, we're in the context vault enterprise
+      264:    # and our trigger is a merge to main or releases/* or if the 'fips' label is present on a PR.
+      265:    if: |
+      266:      (
+      267:        contains(fromJSON(needs.setup.outputs.changed-files).groups, 'go_app') ||
+      268:        contains(fromJSON(needs.setup.outputs.changed-files).groups, 'go_modules') ||
+      269:        contains(fromJSON(needs.setup.outputs.changed-files).groups, 'go_toolchain') ||
+      270:        contains(fromJSON(needs.setup.outputs.changed-files).groups, 'go_tests') ||
+      271:        contains(fromJSON(needs.setup.outputs.changed-files).groups, 'test_ci')
+      272:      ) &&
+      273:      needs.setup.outputs.is-ent-branch == 'true' &&
+      274:      (
+      275:        needs.setup.outputs.workflow-trigger == 'push' || contains(needs.setup.outputs.labels, 'fips')
+      276:      )
+      277:    needs: setup
+      278:    uses: ./.github/workflows/test-go.yml
+      ...
+      285:    with:
+      286:      changed-files: ${{ needs.setup.outputs.changed-files }}
+      287:      checkout-ref: ${{ needs.setup.outputs.checkout-ref }}
+      288:      env-vars: |
+      289:        {
+      290:          "GOEXPERIMENT": "boringcrypto"
+      291:        }
+      292:      name: fips
+      293:      go-arch: amd64
+      294:      go-tags: '${{ needs.setup.outputs.go-tags }},deadlock,cgo,fips,fips_140_3'
+      295:      runs-on: ${{ needs.setup.outputs.compute-test-go }}
+      296:      runs-on-small: ${{ needs.setup.outputs.compute-small }}
+      297:      test-timing-cache-key: go-test-timing-fips
+      298:      total-runners: 16
+      299:    secrets: inherit
+    details:
+      if_condition_ent_gate: "needs.setup.outputs.is-ent-branch == 'true' (line 273)"
+      if_condition_trigger_gate: "needs.setup.outputs.workflow-trigger == 'push' || contains(needs.setup.outputs.labels, 'fips') (line 275)"
+      goexperiment: "boringcrypto (line 290)"
+      go_tags: "deadlock,cgo,fips,fips_140_3 (line 294, appended to needs.setup.outputs.go-tags)"
+      interpretation: >
+        The job's `if:` condition (lines 265-276) is a logical AND of three
+        groups of conditions, including `needs.setup.outputs.is-ent-branch
+        == 'true'` (line 273). Per finding F4, is-ent-branch is hardcoded to
+        'false' for any CE repository/branch, so this AND condition
+        evaluates to false and the entire test-go-fips job is skipped on
+        every CE workflow run — push, pull_request, and workflow_dispatch
+        alike. The GOEXPERIMENT=boringcrypto and fips/fips_140_3 go-tags
+        (lines 290, 294) are therefore never applied in a CE CI run.
+
+  - id: F6
+    title: "CE release build workflow never sets fips tags or GOEXPERIMENT"
+    file: ".github/workflows/build-artifacts-ce.yml"
+    detail: >
+      grep for 'goexperiment', 'go-tags', and 'fips' in this file shows only
+      go-tags values of 'ui', 'ui netcgo', and '${{ matrix.go-tags != '' &&
+      matrix.go-tags || 'ui' }}' (lines 111, 195, 200, 221). No goexperiment
+      input is passed, so it falls back to the empty-string default declared
+      in .github/actions/build-vault/action.yml line 37
+      (`goexperiment: default: ""`). No fips-family tag appears anywhere in
+      this workflow.
+
+grep_evidence:
+
+  - id: G1
+    description: "AC-specified literal grep for the positive (non-negated) fips build constraint"
+    command: "grep -rn 'go:build fips' --include='*.go' ."
+    output: "(no matches)"
+    exit_code: 1
+    interpretation: >
+      This literal string search intentionally returns zero matches in this
+      CE checkout. The only CE file that references the `fips` tag,
+      helper/constants/fips.go, uses the NEGATED constraint `//go:build
+      !fips` (the '!' character breaks the literal substring "build fips").
+      No file in this checkout contains a bare, non-negated `//go:build
+      fips` (or `//go:build fips,...`) constraint — i.e. there is no file in
+      the CE source tree that activates additional/different behavior when
+      the `fips` tag alone is supplied. The would-be enterprise counterpart
+      that defines IsFIPS() to return true under a positive `fips` tag is
+      not part of this CE repository (see finding F3) and therefore cannot
+      appear in this output.
+
+  - id: G2
+    description: "Broader grep confirming every file with any fips-tag reference in its build constraint"
+    command: "grep -rln --include='*.go' -E 'go:build.*fips' ."
+    output: |
+      helper/constants/fips.go
+      helper/constants/fips_cgo_check.go
+      helper/constants/fips_build_check.go
+    interpretation: >
+      Exactly three files in the entire CE repository reference the fips
+      build-tag family in a build constraint, and all three live in
+      helper/constants/ (see findings F1 and F2). No other .go file in the
+      repository — across sdk/, vault/, http/, command/, builtin/, physical/,
+      or any other package — has a build constraint that references fips,
+      fips_140_2, or fips_140_3. There is no orphaned positive-only fips
+      build tag file anywhere else in the tree.
+
+  - id: G3
+    description: "GOEXPERIMENT references across CI configuration"
+    command: "grep -rn 'GOEXPERIMENT' .github/"
+    output: |
+      .github/workflows/ci.yml:290:          "GOEXPERIMENT": "boringcrypto"
+      .github/actions/build-vault/action.yml:126:        GOEXPERIMENT: ${{ inputs.goexperiment }}
+      .github/actions/build-vault/action.yml:139:        GOEXPERIMENT: ${{ inputs.goexperiment }}
+      .github/actions/build-vault/action.yml:219:            --env GOEXPERIMENT='${{ inputs.goexperiment }}' \
+    interpretation: >
+      The only hardcoded GOEXPERIMENT=boringcrypto literal is in the
+      enterprise-gated test-go-fips job (ci.yml:290, see F5). The
+      build-vault composite action only forwards the `goexperiment` input
+      (default: "", action.yml:35-37) — it never sets boringcrypto itself.
+      No CE-facing caller of build-vault (build-artifacts-ce.yml, see F6)
+      passes a non-empty goexperiment value.
+
+  - id: G4
+    description: "Repository-wide boringcrypto references, with context, to rule out hidden CE usage"
+    command: "grep -rn 'boringcrypto' --exclude-dir=.git ."
+    output: |
+      CHANGELOG-v1.10-v1.15.md:1861,2375,2901,3356: historical changelog entries
+        ("core/fips: use upstream toolchain for FIPS 140-2 compliance again;
+        this will appear as X=boringcrypto on the Go version in Vault server
+        logs.") — documentation of past releases, not active code or CI.
+      .release/security-scan.hcl:39,85: vulnerability-scanner exemption
+        comments ("Exempt these until the scanner can handle the
+        boringcrypto suffix for the FIPS 140-3 builds.") — release-engineering
+        config for enterprise FIPS artifacts; does not affect CE builds.
+      sdk/helper/keysutil/policy_test.go:1339-1341: test-only runtime check
+        (`if strings.Contains(runtime.Version(), "X:boringcrypto")`) that
+        skips SHA-3 assertions when the TEST BINARY was itself compiled with
+        GOEXPERIMENT=boringcrypto. This is a runtime.Version() string check,
+        not a build tag, and it can only ever be true if the process was
+        already built with the boringcrypto experiment (i.e. only inside the
+        enterprise-gated test-go-fips job per F5) — it has no effect on
+        default CE test runs.
+      .github/workflows/ci.yml:290: see F5 (enterprise-gated job).
+    interpretation: >
+      Every boringcrypto reference in the repository is either historical
+      documentation, enterprise release-engineering config, a defensive
+      runtime check that is a no-op unless already running under
+      boringcrypto, or the enterprise-gated CI job itself. None of them
+      cause a CE build or CE CI run to apply boringcrypto.
+
+build_verification:
+  - command: "go build ./helper/constants/..."
+    result: "PASS (exit 0) — builds under default CE tags (no -tags fips)"
+  - command: "go build ./sdk/..."
+    result: >
+      Compiles under default CE tags; unrelated pre-existing environment
+      limitation (private/unreachable module github.com/hashicorp/releases-api@v0.4.14)
+      blocks module resolution for a handful of unrelated files
+      (sdk/helper/keysutil/policy.go, sdk/helper/ocsp/client.go, etc.) in this
+      sandbox — a network/access issue, not a FIPS build-tag issue. No
+      fips-tag or boringcrypto-related build errors were produced.
+  - command: "go build ./vault/ ./http/..."
+    result: "Same pre-existing releases-api module-resolution limitation as above; no fips-tag-related errors."
+  - command: "go build ./..."
+    result: "Same pre-existing releases-api module-resolution limitation; full-repo build could not complete in this sandbox for reasons unrelated to FIPS tags."
+
+no_go_files_modified: true
+no_ci_workflow_files_modified: true
+
+acceptance_criteria_mapping:
+  - criterion: "fips/inventory/ce_fips_build_tag_verification.yaml exists containing a dated verification record"
+    status: "PASS"
+    evidence: "This file, verification_date field above."
+  - criterion: "Documents helper/constants/fips.go build constraint, IsFIPS() return value, file path"
+    status: "PASS"
+    evidence: "finding F1"
+  - criterion: "Documents .github/workflows/ci.yml test-go-fips job if:/GOEXPERIMENT/go-tags"
+    status: "PASS"
+    evidence: "finding F5"
+  - criterion: "verification_result field present with required exact text"
+    status: "PASS"
+    evidence: "top-level verification_result field"
+  - criterion: "verification_date field present"
+    status: "PASS"
+    evidence: "top-level verification_date field"
+  - criterion: "Documents no orphaned //go:build fips files without !fips counterpart"
+    status: "PASS"
+    evidence: "findings F2, F3, grep G2"
+  - criterion: "grep -rn 'go:build fips' --include='*.go' documented with output"
+    status: "PASS"
+    evidence: "grep G1 (documents the actual, empty output and explains why, per the constraint to report actual file content rather than inference)"
+  - criterion: "Explicit anti-pattern statement about GOEXPERIMENT=boringcrypto on CE builds"
+    status: "PASS"
+    evidence: "top-level anti_pattern_statement field (verbatim required text)"
+  - criterion: "Unit/Integration test N/A; YAML passes shared JSON Schema validation"
+    status: "PARTIAL — see schema_validation below"
+
+schema_validation:
+  script_expected_at: "fips/scripts/validate_inventory_schema.sh"
+  script_present_in_this_branch: false
+  note: >
+    Neither fips/scripts/validate_inventory_schema.sh nor a shared JSON
+    Schema for fips/inventory/*.yaml exists anywhere in this repository as
+    of this verification (confirmed via repo-wide find for *schema* and
+    *inventory*, and via `git ls-tree -r origin/main` — the fips/ directory
+    does not exist on main). This scaffold is presumably delivered by
+    another work order in the same epic (e.g. the capstone inventory work
+    order) that has not yet been merged. Step 7 of this work order's
+    implementation_steps ("Run fips/scripts/validate_inventory_schema.sh
+    against the new verification file") could therefore not be executed —
+    this is a genuine environmental gap, not a skipped step. As a
+    substitute, this file's YAML syntax was validated with
+    `python3 -c "import yaml; yaml.safe_load(open('fips/inventory/ce_fips_build_tag_verification.yaml'))"`,
+    which completed without error. Once the shared schema/script lands on
+    main, this file should be re-validated against it.
