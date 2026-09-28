@@ -7,6 +7,23 @@ set -e
 # Prevent core dumps
 ulimit -c 0
 
+# FIPS 140-3 Phase 3 (WO-046, quality gate FIPS-CONTAINER-001): best-effort,
+# non-blocking visibility into whether the OpenSSL FIPS provider is active
+# in this container, logged so operators can confirm the FIPS-path image
+# is behaving as expected. This is NOT the FIPS-mode enforcement gate --
+# that hard failure lives in the Vault binary's own startup FIPS mode
+# verification check (see the startup FIPS mode verification work order).
+# A missing or inactive FIPS provider is logged but never blocks startup.
+if [ -n "$OPENSSL_CONF" ] && command -v openssl >/dev/null 2>&1; then
+    if openssl list -providers 2>/dev/null | grep -q '^[[:space:]]*fips$'; then
+        echo "FIPS: OpenSSL FIPS provider is active (OPENSSL_CONF=$OPENSSL_CONF)"
+    else
+        echo "FIPS: OpenSSL FIPS provider is NOT active (OPENSSL_CONF=$OPENSSL_CONF) -- this container may not be a FIPS-path image" >&2
+    fi
+else
+    echo "FIPS: OPENSSL_CONF is not set -- this container may not be a FIPS-path image" >&2
+fi
+
 # Allow setting VAULT_REDIRECT_ADDR and VAULT_CLUSTER_ADDR using an interface
 # name instead of an IP address. The interface name is specified using
 # VAULT_REDIRECT_INTERFACE and VAULT_CLUSTER_INTERFACE environment variables. If

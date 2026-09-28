@@ -1,0 +1,41 @@
+# Copyright IBM Corp. 2016, 2026
+# SPDX-License-Identifier: BUSL-1.1
+#
+# FIPS 140-3 Phase 3 (WO-046, quality gate FIPS-CONTAINER-001)
+#
+# OpenSSL 3.x FIPS provider configuration for the Community/OSS FIPS-path
+# UBI container image (Dockerfile `ubi` stage). Installed at
+# /etc/pki/tls/openssl-fips.cnf and activated via the OPENSSL_CONF
+# environment variable set in the Dockerfile. Activates Red Hat's
+# CMVP-validated OpenSSL FIPS provider (/usr/lib64/ossl-modules/fips.so,
+# shipped by the `openssl`/`openssl-libs` packages) as an active provider
+# alongside the default provider.
+#
+# Why this doesn't use a fipsinstall-generated fipsmodule.cnf: Red Hat's
+# OpenSSL build disables the upstream `openssl fipsinstall` bootstrap/
+# self-test subcommand outright --
+#   $ openssl fipsinstall -out /etc/pki/tls/fipsmodule.cnf -module /usr/lib64/ossl-modules/fips.so
+#   This command is not enabled in the Red Hat Enterprise Linux OpenSSL
+#   build, please consult Red Hat documentation to learn how to enable
+#   FIPS mode
+# (verified against this exact base image during this work order). Red
+# Hat's fips.so module ships pre-validated and self-tests its own
+# integrity at provider-load time instead, so there is no customer-run
+# install step. This config therefore `.include`s Red Hat's own pre-shipped
+# FIPS activation fragment, /etc/pki/tls/fips_local.cnf (owned by the
+# openssl-libs RPM: `rpm -ql openssl-libs | grep fips`), which supplies the
+# [fips_sect] `activate = 1` directive.
+config_diagnostics = 1
+openssl_conf = openssl_init
+
+.include /etc/pki/tls/fips_local.cnf
+
+[openssl_init]
+providers = provider_sect
+
+[provider_sect]
+fips = fips_sect
+default = default_sect
+
+[default_sect]
+activate = 1
