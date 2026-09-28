@@ -1,0 +1,519 @@
+{
+  "generated_at": "2026-09-28T02:04:34Z",
+  "endpoints": [
+    {
+      "path": "/",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/robots.txt",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/ui",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/ui/",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/audit",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/audit-hash/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true
+    },
+    {
+      "path": "/v1/sys/audit/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/auth",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/auth/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/capabilities",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/capabilities-accessor",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/capabilities-self",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/config/auditing/request-headers",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/config/auditing/request-headers/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/config/cors",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/config/state/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/ha-status",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/health",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/host-info",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/in-flight-req",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/init",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/internal/ui/feature-flags",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/key-status",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true
+    },
+    {
+      "path": "/v1/sys/leader",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/metrics",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/monitor",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/mounts",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/mounts/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/policy",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/policy/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/pprof/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/rekey/backup",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true
+    },
+    {
+      "path": "/v1/sys/rekey/recovery-key-backup",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true
+    },
+    {
+      "path": "/v1/sys/remount",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/rotate",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true
+    },
+    {
+      "path": "/v1/sys/seal",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true
+    },
+    {
+      "path": "/v1/sys/seal-backend-status",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/seal-status",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/step-down",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/storage/raft/bootstrap",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/storage/raft/join",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false
+    },
+    {
+      "path": "/v1/sys/unseal",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": false,
+      "fips_sensitive": true
+    },
+    {
+      "path": "/v1/sys/wrapping/wrap",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true
+    }
+  ]
+}
