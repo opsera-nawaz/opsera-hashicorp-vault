@@ -317,11 +317,30 @@ func handlerWithSettings(props *vault.HandlerProperties, settings handlerSetting
 		mux.Handle("/v1/sys/generate-recovery-token/attempt", handleSysGenerateRootAttempt(core, strategy))
 		mux.Handle("/v1/sys/generate-recovery-token/update", handleSysGenerateRootUpdate(core, strategy))
 	default:
+		// Endpoints migrated onto the HandlerRegistry are declared here, with
+		// their authorization metadata explicit at the registration site,
+		// then mounted onto mux via RegisterHandlers so they flow through the
+		// same wrapping chain as the not-yet-migrated mux.Handle calls below.
+		// Subsequent stories migrate additional endpoints onto this same
+		// registry. A Register error here is a programmer error (e.g. a
+		// duplicate path+method) and must fail loudly rather than silently
+		// falling back to a direct mux.Handle call.
+		registry := NewHandlerRegistry()
+		if err := registry.Register(HandlerRegistration{
+			Path:          "/v1/" + operatorNamespace + "sys/init",
+			Methods:       []string{"GET", "PUT", "POST"},
+			AuthRequired:  false,
+			FIPSSensitive: false,
+			Handler:       handleSysInit(core),
+		}); err != nil {
+			panic(fmt.Sprintf("handler registry: failed to register sys/init: %v", err))
+		}
+		registry.RegisterHandlers(mux)
+
 		// Handle non-forwarded paths
 		mux.Handle("/v1/"+operatorNamespace+"sys/config/state/", handleLogicalNoForward(core, chrootNamespace))
 		mux.Handle("/v1/"+operatorNamespace+"sys/host-info", handleLogicalNoForward(core, chrootNamespace))
 
-		mux.Handle("/v1/"+operatorNamespace+"sys/init", handleSysInit(core))
 		mux.Handle("/v1/"+operatorNamespace+"sys/seal-status", handleSysSealStatus(core,
 			WithRedactClusterName(props.ListenerConfig.RedactClusterName),
 			WithRedactVersion(props.ListenerConfig.RedactVersion)))

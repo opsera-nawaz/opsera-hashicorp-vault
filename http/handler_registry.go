@@ -121,6 +121,40 @@ func (hr *HandlerRegistry) Register(reg HandlerRegistration) error {
 	return nil
 }
 
+// RegisterHandlers mounts every registered handler onto mux, once per
+// declared method, using Go's method-tagged mux patterns (e.g.
+// "GET /v1/sys/example"). This mirrors the path+method granularity that
+// Register enforces, so two registrations may legitimately share a Path
+// with disjoint Methods without colliding, which a plain path-only
+// mux.Handle call would not allow.
+//
+// RegisterHandlers is the merge point for the incremental migration in
+// http/handler.go: handlerWithSettings creates a HandlerRegistry, migrates
+// individual endpoints onto it via Register, then calls RegisterHandlers to
+// mount those handlers onto the same *http.ServeMux used for the
+// not-yet-migrated direct mux.Handle calls. That shared mux is wrapped in
+// the middleware chain exactly once, so migrated and unmigrated handlers
+// receive identical treatment. Callers that want a fully wrapped, standalone
+// handler for the registry's contents should use Build instead.
+//
+// RegisterHandlers is safe for concurrent use.
+func (hr *HandlerRegistry) RegisterHandlers(mux *http.ServeMux) {
+	hr.mu.RLock()
+	defer hr.mu.RUnlock()
+
+	hr.mountLocked(mux)
+}
+
+// mountLocked mounts every registered handler onto mux. Callers must hold
+// hr.mu (for reading or writing) before calling this.
+func (hr *HandlerRegistry) mountLocked(mux *http.ServeMux) {
+	for _, reg := range hr.registrations {
+		for _, method := range reg.Methods {
+			mux.Handle(method+" "+reg.Path, reg.Handler)
+		}
+	}
+}
+
 // Build constructs an *http.ServeMux from every registered handler and
 // returns it wrapped in the same middleware chain that handlerWithSettings
 // applies in http/handler.go: wrapHelpHandler, wrapCORSHandler,
@@ -145,11 +179,7 @@ func (hr *HandlerRegistry) Build(props *vault.HandlerProperties) http.Handler {
 	defer hr.mu.RUnlock()
 
 	mux := http.NewServeMux()
-	for _, reg := range hr.registrations {
-		for _, method := range reg.Methods {
-			mux.Handle(method+" "+reg.Path, reg.Handler)
-		}
-	}
+	hr.mountLocked(mux)
 
 	core := props.Core
 
