@@ -1599,3 +1599,71 @@ func TestHandlerRegistry_AllEndpoints_ConditionalSettings(t *testing.T) {
 		require.True(t, reg.FIPSSensitive, "%q must be FIPS-sensitive", path)
 	}
 }
+
+// TestHandlerRegistry_PluginDispatch is a WO-037 compatibility verification
+// test. It confirms that the "/v1/" catch-all registered on the
+// HandlerRegistry (see the "/v1/" and "/v1/"+operatorNamespace+"sys/"
+// registrations in handlerWithSettings, http/handler.go) still routes a
+// mounted secrets engine request all the way to the backend's HandleRequest
+// method: HandlerRegistry-built mux -> handleLogical (http/logical.go) ->
+// vault.Core.HandleRequest -> Router.Route (vault/request_handling.go,
+// vault/router.go) -> the KV v2 backend. It exercises the built-in plugin
+// dispatch path with a real HTTP PUT/GET round trip rather than the Go API
+// client, so it verifies the same mux path the HandlerRegistry migration
+// touched.
+func TestHandlerRegistry_PluginDispatch(t *testing.T) {
+	cluster := vault.NewTestCluster(t, &vault.CoreConfig{}, &vault.TestClusterOptions{
+		HandlerFunc: Handler,
+		NumCores:    1,
+	})
+	defer cluster.Cleanup()
+
+	core := cluster.Cores[0]
+	client := core.Client
+
+	err := client.Sys().Mount("secret", &api.MountInput{
+		Type:    "kv",
+		Options: map[string]string{"version": "2"},
+	})
+	require.NoError(t, err)
+
+	httpClient := cleanhttp.DefaultClient()
+	httpClient.Transport = &http.Transport{
+		TLSClientConfig: &tls.Config{
+			RootCAs: cluster.RootCAs,
+		},
+	}
+
+	writeBody, err := json.Marshal(map[string]interface{}{
+		"data": map[string]interface{}{
+			"foo": "bar",
+		},
+	})
+	require.NoError(t, err)
+
+	putReq, err := http.NewRequest(http.MethodPut, client.Address()+"/v1/secret/data/test", bytes.NewReader(writeBody))
+	require.NoError(t, err)
+	putReq.Header.Set(consts.AuthHeaderName, cluster.RootToken)
+
+	putResp, err := httpClient.Do(putReq)
+	require.NoError(t, err)
+	defer putResp.Body.Close()
+	require.Equalf(t, http.StatusOK, putResp.StatusCode, "unexpected status writing through HandlerRegistry-built mux")
+
+	getReq, err := http.NewRequest(http.MethodGet, client.Address()+"/v1/secret/data/test", nil)
+	require.NoError(t, err)
+	getReq.Header.Set(consts.AuthHeaderName, cluster.RootToken)
+
+	getResp, err := httpClient.Do(getReq)
+	require.NoError(t, err)
+	defer getResp.Body.Close()
+	require.Equalf(t, http.StatusOK, getResp.StatusCode, "unexpected status reading through HandlerRegistry-built mux")
+
+	var decoded struct {
+		Data struct {
+			Data map[string]interface{} `json:"data"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.NewDecoder(getResp.Body).Decode(&decoded))
+	require.Equal(t, "bar", decoded.Data.Data["foo"], "secret written through the HandlerRegistry-built mux must reach the KV v2 backend's HandleRequest and be read back unchanged")
+}
