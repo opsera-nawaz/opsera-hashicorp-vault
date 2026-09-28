@@ -15,6 +15,10 @@ module('Unit | Utility | sanitize-path', function () {
     );
     assert.strictEqual(sanitizePath('//foo/bar/baz/'), 'foo/bar/baz', 'removes more than one slash');
     assert.strictEqual(sanitizePath(undefined), '', 'handles falsey values');
+    // sanitizePath's parameter type is `string | null | undefined` (WO-034) to
+    // match real call sites like router.currentURL and formData.get(), both of
+    // which return `null` rather than `undefined` when absent.
+    assert.strictEqual(sanitizePath(null), '', 'handles null, not just undefined');
   });
 
   test('#ensureTrailingSlash', function (assert) {
@@ -42,5 +46,6 @@ module('Unit | Utility | sanitize-path', function () {
       'removes more than one slash from start'
     );
     assert.strictEqual(sanitizeStart(undefined), '', 'handles falsey values');
+    assert.strictEqual(sanitizeStart(null), '', 'handles null, not just undefined');
   });
 });
