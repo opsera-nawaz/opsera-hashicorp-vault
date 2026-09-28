@@ -139,46 +139,6 @@ jobs:
       - run: make protolint
         name: Protobuf lint
 
-  handler-inventory:
-    name: Handler inventory report
-    runs-on: ${{ github.repository == 'hashicorp/vault' && 'ubuntu-latest' || fromJSON('["self-hosted","ubuntu-22.04-x64"]') }}
-    needs: setup
-    permissions:
-      contents: read
-      id-token: write
-    if: |
-      contains(fromJSON(needs.setup.outputs.changed-files).groups, 'go_app') ||
-      contains(fromJSON(needs.setup.outputs.changed-files).groups, 'go_tests')
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - if: needs.setup.outputs.is-ent-branch == 'true'
-        id: vault-auth
-        name: Vault Authenticate
-        run: vault-auth
-      - if: needs.setup.outputs.is-ent-branch == 'true'
-        id: vault-secrets
-        name: Fetch Vault Secrets
-        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
-        with:
-          url: ${{ steps.vault-auth.outputs.addr }}
-          caCertificate: ${{ steps.vault-auth.outputs.ca_certificate }}
-          token: ${{ steps.vault-auth.outputs.token }}
-          secrets: |
-            kv/data/github/${{ github.repository }}/github-token token | ELEVATED_GITHUB_TOKEN;
-      - uses: ./.github/actions/set-up-go
-        with:
-          github-token: ${{ needs.setup.outputs.is-ent-branch != 'true' && secrets.ELEVATED_GITHUB_TOKEN || steps.vault-secrets.outputs.ELEVATED_GITHUB_TOKEN }}
-          no-save: true
-      - name: Generate handler inventory report
-        run: make handler-inventory
-      - name: Validate report is well-formed JSON
-        run: jq . docs/fips/handler-inventory.json > /dev/null
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: handler-inventory.json
-          path: docs/fips/handler-inventory.json
-          if-no-files-found: error
-
   generate-delta:
     name: Protobuf generate delta
     runs-on: ${{ github.repository == 'hashicorp/vault' && 'ubuntu-latest' || fromJSON('["self-hosted","ubuntu-22.04-x64"]') }}
