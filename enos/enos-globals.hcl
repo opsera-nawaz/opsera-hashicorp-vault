@@ -123,6 +123,10 @@ globals {
       ubuntu = global.distro_versions_fyre["s390x"]["ubuntu"][0]
     }
   }
+  # NOTE(FIPS): "ce" has no FIPS-tagged counterpart here -- only
+  # ent.fips1403/ent.hsm.fips1403 define a FIPS build target. This CE-FIPS
+  # edition/build-target gap is tracked as a blocking dependency risk in
+  # docs/fips/risk-register.md (Residual Gaps #1, WO-067).
   editions            = ["ce", "ent", "ent.fips1403", "ent.hsm", "ent.hsm.fips1403"]
   enterprise_editions = [for e in global.editions : e if e != "ce"]
   ip_versions         = ["4", "6"]
