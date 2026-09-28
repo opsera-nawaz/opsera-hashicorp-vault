@@ -60,9 +60,9 @@ export default class PluginCatalogService extends Service {
     try {
       const response = await this.api.sys.pluginsCatalogListPlugins({
         headers: {
-          token: this.auth.currentToken,
+          token: this.auth.currentToken ?? undefined,
           namespace: sanitizePath(this.namespace.path),
-        },
+        } as HeadersInit,
       });
 
       if (response && response.detailed && Array.isArray(response.detailed) && response.detailed.length > 0) {
@@ -112,9 +112,9 @@ export default class PluginCatalogService extends Service {
     try {
       const response = await this.api.sys.pluginsCatalogListPlugins({
         headers: {
-          token: this.auth.currentToken,
+          token: this.auth.currentToken ?? undefined,
           namespace: sanitizePath(this.namespace.path),
-        },
+        } as HeadersInit,
       });
 
       if (response && response.detailed && Array.isArray(response.detailed) && response.detailed.length > 0) {

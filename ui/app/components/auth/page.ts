@@ -8,10 +8,10 @@ import { service } from '@ember/service';
 import { tracked } from '@glimmer/tracking';
 import { action } from '@ember/object';
 
-import type { AuthSuccessResponse } from 'vault/vault/services/auth';
+import type { AuthSuccessResponse } from 'vault/services/auth';
 import type AuthMethodResource from 'vault/resources/auth/method';
 import type { NormalizedAuthData, UnauthMountsByType } from 'vault/vault/auth/form';
-import type AuthService from 'vault/vault/services/auth';
+import type AuthService from 'vault/services/auth';
 import type ClusterModel from 'vault/models/cluster';
 import type CspEventService from 'vault/services/csp-event';
 import type { MfaAuthData } from 'vault/vault/auth/mfa';

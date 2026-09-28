@@ -5,6 +5,8 @@
 
 import Service from '@ember/service';
 
+import type { Task } from 'ember-concurrency';
+
 interface PathsResponse {
   [key: string]: {
     capabilities: string[];
@@ -18,4 +20,5 @@ export default class PermissionsService extends Service {
   chrootNamespace: string | null | undefined;
   hasPermission: (pathName: string, capabilities?: Array<string | null>) => boolean;
   hasNavPermission: (navItem: string, routeParams?: string | string[], requireAll?: boolean) => boolean;
+  getPaths: Task<void, []>;
 }
