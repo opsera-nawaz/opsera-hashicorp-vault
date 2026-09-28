@@ -25,6 +25,10 @@ vault_expected_version="Vault v${EXPECTED_VERSION} (${VAULT_REVISION})"
 
 case "${VAULT_EDITION}" in
   ce) version_expected="${vault_expected_version}${expected_build_date}" ;;
+  # WO-059: ce.fips is still Community Edition, but the "fips" build tag requires cgo (see
+  # helper/constants/fips_cgo_check.go), so `vault version` reports " (cgo)" just like the other
+  # cgo-requiring editions below.
+  ce.fips) version_expected="${vault_expected_version}${expected_build_date} (cgo)" ;;
   ent) version_expected="${vault_expected_version}${expected_build_date}" ;;
   ent.hsm) version_expected="${vault_expected_version}${expected_build_date} (cgo)" ;;
   ent.fips1403) version_expected="${vault_expected_version}${expected_build_date} (cgo)" ;;

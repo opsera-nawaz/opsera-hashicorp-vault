@@ -11,7 +11,7 @@ scenario "k8s" {
   EOF
 
   matrix {
-    edition = ["ce", "ent", "ent.fips1403", "ent.hsm", "ent.hsm.fips1403"]
+    edition = ["ce", "ce.fips", "ent", "ent.fips1403", "ent.hsm", "ent.hsm.fips1403"]
     repo    = ["docker", "ecr", "quay"]
   }
 
@@ -26,8 +26,9 @@ scenario "k8s" {
   locals {
     // For now this works as the vault_version includes metadata. If we ever get to the point that
     // vault_version excludes metadata we'll have to include the matrix.edition here as well.
-    tag_version     = replace(var.vault_version, "+ent", "-ent")
-    tag_version_ubi = "${local.tag_version}-ubi"
+    tag_version      = replace(var.vault_version, "+ent", "-ent")
+    tag_version_ubi  = "${local.tag_version}-ubi"
+    tag_version_fips = "${local.tag_version}-fips"
     // When we load candidate images into our k8s cluster we verify that the archives embedded
     // repository and tag match our expectations. This is the source of truth for what we _expect_
     // various artifacts to have. The source of truth for what we use when building is defined in
@@ -47,6 +48,31 @@ scenario "k8s" {
         }
         quay = {
           // https://catalog.redhat.com/software/containers/hashicorp/vault/5fda55bd2937386820429e0c
+          repo = "quay.io/redhat-isv-containers/5f89bb5e0b94cf64cfeb500a"
+          tag  = local.tag_version_ubi
+        }
+      },
+      // WO-059 FIPS-CONTAINER-001: there is no published docker.io/ECR FIPS-tagged CE image --
+      // .github/actions/containerize/action.yml only defines a "ce" case that targets the
+      // non-FIPS "default" Dockerfile build target. The FIPS-path CE image is instead built and
+      // tagged locally per the Dockerfile `ubi` target's documented instructions
+      // (`docker build --target ubi -t vault:$(cat version/VERSION)-fips .`), so docker/ecr here
+      // reference that local "vault:<version>-fips" tag and are expected to be loaded via
+      // var.container_image_archive rather than pulled from a registry. quay reuses the real
+      // published UBI image: WO-046 made that same "ubi" Dockerfile target FIPS-activated (real
+      // OpenSSL 3.x FIPS provider), so the existing "ce" UBI artifact already IS the FIPS-path
+      // image.
+      "ce.fips" = {
+        docker = {
+          repo = "vault"
+          tag  = local.tag_version_fips
+        }
+        ecr = {
+          repo = "vault"
+          tag  = local.tag_version_fips
+        }
+        quay = {
+          // Same published artifact as "ce".quay -- see comment above.
           repo = "quay.io/redhat-isv-containers/5f89bb5e0b94cf64cfeb500a"
           tag  = local.tag_version_ubi
         }
@@ -127,7 +153,8 @@ scenario "k8s" {
   }
 
   step "read_license" {
-    skip_step = matrix.edition == "ce"
+    // WO-059: ce.fips is still Community Edition and needs no enterprise license, same as ce.
+    skip_step = matrix.edition == "ce" || matrix.edition == "ce.fips"
     module    = module.read_license
 
     variables {
@@ -180,7 +207,40 @@ scenario "k8s" {
       kubeconfig_base64 = step.create_kind_cluster.kubeconfig_base64
       vault_edition     = matrix.edition
       vault_log_level   = var.log_level
-      ent_license       = matrix.edition != "ce" ? step.read_license.license : null
+      // WO-059: ce.fips is still Community Edition and needs no enterprise license, same as ce.
+      ent_license = matrix.edition == "ce" || matrix.edition == "ce.fips" ? null : step.read_license.license
+
+      // WO-059 FIPS-CONTAINER-001: ce.fips always enables node affinity; other editions only
+      // enable it if a caller explicitly overrides var.vault_fips_node_affinity_enabled (default
+      // false), so the existing edition matrix is unaffected.
+      vault_fips_node_affinity_enabled = matrix.edition == "ce.fips" ? true : var.vault_fips_node_affinity_enabled
+      vault_fips_node_selector         = var.vault_fips_node_selector
+      vault_fips_tolerations           = var.vault_fips_tolerations
+    }
+  }
+
+  step "verify_fips_node_scheduling" {
+    description = <<-EOF
+      WO-059 quality gate FIPS-CONTAINER-001: confirms the ce.fips edition's Vault pods are
+      actually scheduled on Kubernetes nodes carrying every var.vault_fips_node_selector label,
+      i.e. that the node affinity/selector/toleration configuration wired into
+      module.k8s_deploy_vault (enos/modules/k8s_deploy_vault) was honored by the scheduler and
+      not just accepted as Helm chart values. Skipped for every edition except ce.fips, since
+      node affinity is opt-in and only ce.fips enables it in this scenario.
+    EOF
+    skip_step   = matrix.edition != "ce.fips"
+    module      = module.verify_fips_node_scheduling
+    depends_on  = [step.deploy_vault]
+
+    verifies = [
+      quality.vault_fips_node_scheduling,
+    ]
+
+    variables {
+      vault_pods         = step.deploy_vault.vault_pods
+      kubeconfig_base64  = step.create_kind_cluster.kubeconfig_base64
+      context_name       = step.create_kind_cluster.context_name
+      fips_node_selector = var.vault_fips_node_selector
     }
   }
 

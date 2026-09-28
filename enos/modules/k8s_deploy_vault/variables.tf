@@ -60,3 +60,30 @@ variable "rollback_test_sla_seconds" {
   description = "WO-052 AC6: the rollback recovery SLA, in seconds, enforced by the rollback test"
   default     = 1800
 }
+
+# WO-059 FIPS-CONTAINER-001: opt-in node affinity/selector/toleration configuration so FIPS-path
+# Vault pods (the ce.fips scenario variant) only schedule onto FIPS-enabled Kubernetes nodes.
+# Disabled by default so existing callers (ce, ent, ent.fips1403, ent.hsm, ent.hsm.fips1403) are
+# unaffected.
+variable "vault_fips_node_affinity_enabled" {
+  type        = bool
+  description = "Enable FIPS node affinity scheduling"
+  default     = false
+}
+
+variable "vault_fips_node_selector" {
+  type        = map(string)
+  description = "Node selector for FIPS-path Vault pods"
+  default     = {}
+}
+
+variable "vault_fips_tolerations" {
+  type = list(object({
+    key      = string
+    operator = string
+    value    = string
+    effect   = string
+  }))
+  description = "Tolerations for FIPS-tainted nodes"
+  default     = []
+}
