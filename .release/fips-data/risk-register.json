@@ -1,0 +1,102 @@
+[
+  {
+    "gate_id": "FIPS-CRYPTO-001",
+    "gate_name": "Cryptographic module identification",
+    "phase": "Phase 1 - Cryptographic Inventory and Discovery",
+    "current_status": "PARTIAL",
+    "evidence_reference": "fips/crypto_inventory.yaml#quality_gates.FIPS-CRYPTO-001, .release/fips-data/crypto-inventory.json, .release/fips-evidence/20260928T025959Z-fips-evidence.json",
+    "owner": "@hashicorp/vault-crypto",
+    "residual_gap": "12 of 262 call sites remain unclassified in fips/crypto_inventory.yaml's unidentified_entries list, all externalized plugin secrets-engine/auth-method call sites (kv, aws, gcp, azure, rabbitmq, ldap, terraform, ad, alicloud, token) with no vendored source in this repo.",
+    "risk_rating": "Low"
+  },
+  {
+    "gate_id": "FIPS-CRYPTO-002",
+    "gate_name": "Approved-algorithm allowlist enforcement",
+    "phase": "Phase 2 - Approved Algorithms",
+    "current_status": "REVIEW",
+    "evidence_reference": ".golangci.yml#fips-crypto-restrictions, tools/semgrep/ci/fips-crypto-imports.yml, docs/fips/residual-crypto-risk-register.md#RR-004",
+    "owner": "@hashicorp/vault-crypto",
+    "residual_gap": "Depguard/semgrep rules are declared but not wired into any GitHub Actions workflow, and do not exclude sdk/helper/keysutil/policy.go, which currently imports both denied packages (chacha20poly1305, ed25519). The rule would fail against policy.go if enabled today.",
+    "risk_rating": "High"
+  },
+  {
+    "gate_id": "FIPS-CRYPTO-003",
+    "gate_name": "Runtime cryptographic provider verification",
+    "phase": "Phase 2 - Approved Algorithms",
+    "current_status": "FAIL",
+    "evidence_reference": "docs/fips/crypto-provider-verification.md#1-crypto-provider-inventory, fips/wo044_crypto_provider_rng_verification.yaml",
+    "owner": "@hashicorp/vault-crypto",
+    "residual_gap": "CE build never sets GOEXPERIMENT=boringcrypto (enterprise-gated test-go-fips CI job only) and pins no FIPS-branded Go toolchain, so every stdlib crypto/* call runs Go's pure-Go implementation with no CMVP validation certificate. Structural, not remediable without an Enterprise-only build path.",
+    "risk_rating": "Medium"
+  },
+  {
+    "gate_id": "FIPS-CRYPTO-004",
+    "gate_name": "RNG/DRBG chain verification",
+    "phase": "Phase 2 - Approved Algorithms",
+    "current_status": "PARTIAL",
+    "evidence_reference": "docs/fips/crypto-provider-verification.md#2-rng-drbg-trace, fips/wo044_crypto_provider_rng_verification.yaml, vault/core.go:695-696,1129-1130",
+    "owner": "@hashicorp/vault-crypto",
+    "residual_gap": "Application code correctly and exclusively uses crypto/rand.Reader (verified by grep audit, zero custom RNG/DRBG found), but whether the underlying kernel DRBG is CMVP-validated depends on host OS FIPS mode at deployment time, outside this source tree. One low-severity non-CSPRNG usage found at vault/cluster.go:256 (math/rand for an X.509 cert serial number, tracked as RG-9).",
+    "risk_rating": "Medium"
+  },
+  {
+    "gate_id": "FIPS-CRYPTO-005",
+    "gate_name": "Key management evaluation",
+    "phase": "Phase 3 - Validated Module Boundary, Container Images, and OS-Level FIPS Mode",
+    "current_status": "PARTIAL",
+    "evidence_reference": "docs/fips/key-management-assessment.md, docs/fips/kms-hsm-seal-cmvp-certificates.md, .release/fips-data/cmvp-certificates.json, docs/fips/residual-crypto-risk-register.md#RR-001",
+    "owner": "@hashicorp/vault-crypto",
+    "residual_gap": "Default (no seal stanza configured) unseal mechanism is Shamir's Secret Sharing, which is not on the NIST SP 800-140C/D Approved mechanism list and runs outside any validated module boundary.",
+    "risk_rating": "Medium"
+  },
+  {
+    "gate_id": "FIPS-TLS-001",
+    "gate_name": "Client API listener (port 8200) Approved-cipher enforcement",
+    "phase": "Phase 2 - Approved Algorithms",
+    "current_status": "REVIEW",
+    "evidence_reference": ".release/linux/package/etc/vault.d/vault.hcl:27-30, api/client.go:270, .release/fips-evidence/20260928T025959Z-fips-evidence.json, tools/pipeline/internal/cmd/generate_fips_evidence.go",
+    "owner": "@hashicorp/vault-crypto",
+    "residual_gap": "Shipped server config template does not explicitly set tls_min_version or tls_cipher_suites on the listener block; the evidence generator flags an unset value as REVIEW rather than assuming the runtime default is Approved.",
+    "risk_rating": "Medium"
+  },
+  {
+    "gate_id": "FIPS-TLS-002",
+    "gate_name": "Cluster/replication listener (port 8201) Approved-cipher enforcement",
+    "phase": "Phase 2 - Approved Algorithms",
+    "current_status": "FAIL",
+    "evidence_reference": "vault/core.go:1292-1310, docs/fips/residual-crypto-risk-register.md#RR-005, fips/crypto_inventory.yaml#residual_gaps.RG-2",
+    "owner": "@hashicorp/vault-crypto",
+    "residual_gap": "Default cluster cipher-suite list (used when cluster_cipher_suites is unset) includes TLS_CHACHA20_POLY1305_SHA256 and TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305, neither FIPS-Approved. No CI gate currently enforces an Approved-only cluster cipher list.",
+    "risk_rating": "High"
+  },
+  {
+    "gate_id": "FIPS-DEP-001",
+    "gate_name": "Cryptographic dependency identification",
+    "phase": "Phase 1 - Cryptographic Inventory and Discovery",
+    "current_status": "PASS",
+    "evidence_reference": "fips/crypto_inventory.yaml#quality_gates.FIPS-DEP-001, .release/fips-data/exceptions.json, .release/security-scan.hcl",
+    "owner": "security-team",
+    "residual_gap": "25/25 module entries fully classified. Open finding is dependency-hygiene only (duplicate go-jose/golang-jwt major versions, RG-7). Eight GO-2026-* boringcrypto-suffix false-positive scanner findings are tracked as EXCEPTION-status entries expiring 2026-12-31.",
+    "risk_rating": "Low"
+  },
+  {
+    "gate_id": "FIPS-CONTAINER-001",
+    "gate_name": "Container and KMS/HSM classification",
+    "phase": "Phase 3 - Validated Module Boundary, Container Images, and OS-Level FIPS Mode",
+    "current_status": "PARTIAL",
+    "evidence_reference": "fips/crypto_inventory.yaml#quality_gates.FIPS-CONTAINER-001, docs/fips/kms-hsm-seal-cmvp-certificates.md, .release/fips-evidence/20260928T025959Z-fips-evidence.json",
+    "owner": "@hashicorp/github-secure-vault-core",
+    "residual_gap": "2 of 3 container images have a definitive CMVP status (ce-ubi10-minimal requires runtime verification); 1 of 6 KMS/HSM providers has a resolved CMVP certificate binding (RG-6). Classification is complete; CMVP validation status is not.",
+    "risk_rating": "Medium"
+  },
+  {
+    "gate_id": "FIPS-RUNTIME-001",
+    "gate_name": "Runtime FIPS evidence generation and exception-registry integration",
+    "phase": "Phase 4 - Evidence Package, CI Enforcement, and Traceability",
+    "current_status": "REVIEW",
+    "evidence_reference": ".release/fips-evidence/20260928T025959Z-fips-evidence.json, tools/pipeline/internal/cmd/generate_fips_evidence.go, .release/scripts/generate-fips-evidence.sh, tools/pipeline/internal/cmd/fips_evidence.go:44,65",
+    "owner": "@hashicorp/team-vault-quality",
+    "residual_gap": "fips_evidence.go:65 defaults the --exceptions flag to .release/fips-data/fips-exceptions.json, which does not exist; the real WO-063 registry is named .release/fips-data/exceptions.json. Default invocation silently reports zero active exceptions unless --exceptions is passed explicitly.",
+    "risk_rating": "Medium"
+  }
+]
