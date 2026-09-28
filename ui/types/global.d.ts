@@ -58,6 +58,10 @@ declare module 'vault/helpers/dasherize' {
 
 // autosize@6.0.1 ships no declaration files and @types/autosize doesn't exist.
 declare module 'autosize' {
-  function autosize(el: HTMLElement | HTMLElement[]): void;
+  function autosize(el: HTMLElement | HTMLElement[]): HTMLElement | HTMLElement[];
+  namespace autosize {
+    function update(el: HTMLElement | HTMLElement[]): HTMLElement | HTMLElement[];
+    function destroy(el: HTMLElement | HTMLElement[]): HTMLElement | HTMLElement[];
+  }
   export default autosize;
 }

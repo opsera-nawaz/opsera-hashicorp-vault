@@ -13,6 +13,36 @@ import { tracked } from '@glimmer/tracking';
 import { addToArray } from 'vault/helpers/add-to-array';
 import { removeFromArray } from 'vault/helpers/remove-from-array';
 
+import type EmberArray from '@ember/array';
+
+interface StringListItem {
+  value: string;
+}
+
+// ArrayProxy.create({...})'s own typing doesn't propagate a usable `this`
+// type into objectAtContent, nor infer a non-`never` element type from an
+// empty `content: []` initializer (same root cause as kv-object-editor.ts's
+// KvObjectInstance) — this component's actual usage is described directly.
+interface StringListArrayProxy {
+  length: number;
+  filter(callback: (item: StringListItem) => boolean): StringListItem[];
+  objectAt(idx: number): StringListItem | undefined;
+  addObjects(items: StringListItem[]): void;
+  pushObject(item: StringListItem): void;
+  removeObject(item: StringListItem | undefined): void;
+  slice(start: number): StringListItem[];
+}
+
+interface StringListArgs {
+  label?: string;
+  onChange: (value: string | string[]) => void;
+  inputValue?: string | string[];
+  helpText?: string;
+  type?: string;
+  attrName?: string;
+  subText?: string;
+}
+
 /**
  * @module StringList
  *
@@ -28,24 +58,27 @@ import { removeFromArray } from 'vault/helpers/remove-from-array';
  * @param {string} subText - Text below the label.
  */
 
-export default class StringList extends Component {
-  @tracked indicesWithComma = [];
+export default class StringList extends Component<StringListArgs> {
+  @tracked indicesWithComma: number[] = [];
 
-  constructor() {
-    super(...arguments);
+  inputList!: StringListArrayProxy;
+  type!: string;
+
+  constructor(owner: unknown, args: StringListArgs) {
+    super(owner, args);
 
     // inputList is type ArrayProxy, so addObject etc are fine here
     this.inputList = ArrayProxy.create({
       // trim the `value` when accessing objects
-      content: [],
-      objectAtContent: function (idx) {
+      content: [] as StringListItem[],
+      objectAtContent: function (this: { content: EmberArray<StringListItem> }, idx: number) {
         const obj = this.content.objectAt(idx);
         if (obj && obj.value) {
           set(obj, 'value', obj.value.trim());
         }
         return obj;
       },
-    });
+    }) as unknown as StringListArrayProxy;
     this.type = this.args.type || 'array';
     this.setType();
     next(() => {
@@ -54,7 +87,7 @@ export default class StringList extends Component {
     });
   }
 
-  setType() {
+  setType(): void {
     const list = this.inputList;
     if (!list) {
       return;
@@ -62,7 +95,7 @@ export default class StringList extends Component {
     this.type = typeof list;
   }
 
-  toList() {
+  toList(): void {
     let input = this.args.inputValue || [];
     const inputList = this.inputList;
     if (typeof input === 'string') {
@@ -71,8 +104,11 @@ export default class StringList extends Component {
     inputList.addObjects(input.map((value) => ({ value })));
   }
 
-  toVal() {
-    const inputs = this.inputList.filter((x) => x.value).map((x) => x.value);
+  toVal(): string | string[] {
+    const inputs = this.inputList
+      .filter((x) => !!x.value)
+      .map((x) => x.value)
+      .filter((v): v is string => v !== undefined);
     if (this.args.type === 'string') {
       return inputs.join(',');
     }
@@ -80,31 +116,34 @@ export default class StringList extends Component {
   }
 
   @action
-  autoSize(element) {
-    autosize(element.querySelector('textarea'));
+  autoSize(element: HTMLElement): void {
+    const textarea = element.querySelector<HTMLElement>('textarea');
+    if (textarea) autosize(textarea);
   }
 
   @action
-  autoSizeUpdate(element) {
-    autosize.update(element.querySelector('textarea'));
+  autoSizeUpdate(element: HTMLElement): void {
+    const textarea = element.querySelector<HTMLElement>('textarea');
+    if (textarea) autosize.update(textarea);
   }
 
   @action
-  inputChanged(idx, event) {
-    if (event.target.value.includes(',') && !this.indicesWithComma.includes(idx)) {
+  inputChanged(idx: number, event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    if (value.includes(',') && !this.indicesWithComma.includes(idx)) {
       this.indicesWithComma = addToArray(this.indicesWithComma, idx);
     }
-    if (!event.target.value.includes(',')) {
+    if (!value.includes(',')) {
       this.indicesWithComma = removeFromArray(this.indicesWithComma, idx);
     }
 
     const inputObj = this.inputList.objectAt(idx);
-    set(inputObj, 'value', event.target.value);
+    set(inputObj as object, 'value', value);
     this.args.onChange(this.toVal());
   }
 
   @action
-  addInput() {
+  addInput(): void {
     const [lastItem] = this.inputList.slice(-1);
     if (lastItem?.value !== '') {
       this.inputList.pushObject({ value: '' });
@@ -112,7 +151,7 @@ export default class StringList extends Component {
   }
 
   @action
-  removeInput(idx) {
+  removeInput(idx: number): void {
     const itemToRemove = this.inputList.objectAt(idx);
     this.inputList.removeObject(itemToRemove);
     this.args.onChange(this.toVal());
