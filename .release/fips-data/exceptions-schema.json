@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://forge.opsera.io/schemas/fips/exceptions.json",
+  "title": "FIPS 140-3 Exception Registry (WO-063)",
+  "description": "Schema for the structured FIPS finding exception registry at .release/fips-data/exceptions.json. Formally tracks REVIEW or FAIL findings from FIPS CI gates (or external vulnerability scanners) that have been explicitly acknowledged as an accepted risk and tracked with EXCEPTION status -- distinct from PASS/FAIL/REVIEW -- so they can be owned, justified, and re-evaluated on expiry rather than narratively documented or silently converted to PASS. Validated by tools/pipeline/internal/cmd/validate_exceptions.go (`pipeline validate-exceptions`).",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "finding_id",
+      "original_status",
+      "exception_status",
+      "owner",
+      "justification",
+      "expiry_date",
+      "jira_reference",
+      "created_at"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "finding_id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The identifier of the finding this exception covers -- either a FIPS quality gate check ID (e.g. FIPS-CRYPTO-002) or an external scanner ID (e.g. a Go vulnerability database ID like GO-2026-6091). A finding_id that does not match a known FIPS quality gate ID is not an error, only a warning, since it may originate from an external scanner."
+      },
+      "original_status": {
+        "type": "string",
+        "enum": ["REVIEW", "FAIL"],
+        "description": "The FIPS finding status this exception is overriding. An exception is only meaningful for a finding that was not already a clean PASS."
+      },
+      "exception_status": {
+        "type": "string",
+        "enum": ["EXCEPTION"],
+        "description": "Always EXCEPTION. An exception entry must never claim PASS (nor FAIL/REVIEW as its own status) -- see the PASS-status invariant enforced by ValidateExceptions."
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The team or individual accountable for re-evaluating this exception before it expires (e.g. security-team)."
+      },
+      "justification": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Why this finding is being tracked as an accepted exception rather than remediated."
+      },
+      "expiry_date": {
+        "type": "string",
+        "format": "date",
+        "description": "ISO 8601 date (YYYY-MM-DD) after which this exception must be re-evaluated. Expiry is exclusive of the date itself: an expiry_date equal to today is not yet expired."
+      },
+      "jira_reference": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The Jira issue tracking remediation or re-evaluation of this exception (e.g. PSP-3913)."
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time",
+        "description": "ISO 8601 timestamp this exception entry was created."
+      }
+    }
+  }
+}
