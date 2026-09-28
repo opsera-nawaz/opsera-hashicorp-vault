@@ -52,6 +52,11 @@ name: build
 
 on:
   workflow_dispatch:
+    inputs:
+      run_rollback_validation:
+        description: 'Also run the optional WO-052 rollback-validation Enos scenario (see docs/rollback-procedures.md). Never runs automatically.'
+        type: boolean
+        default: false
   pull_request:
     types:
       - opened
@@ -894,3 +899,24 @@ jobs:
         run: |
           echo "One or more required build workflows failed: ${{ steps.status.outputs.results }}"
           exit 1
+
+  rollback-validation:
+    # WO-052: optional, non-blocking pre-release rollback validation -- see
+    # docs/rollback-procedures.md and enos/enos-scenario-rollback-validation.hcl. Only runs when
+    # explicitly requested via a workflow_dispatch run with run_rollback_validation checked; it
+    # never runs on pull_request/push/schedule and is not in completed-successfully's needs, so
+    # it can never block a normal build or a PR merge.
+    if: github.event_name == 'workflow_dispatch' && inputs.run_rollback_validation == true
+    needs:
+      - setup
+    uses: ./.github/workflows/test-run-enos-scenario.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      artifact-source: local
+      artifact-type: bundle
+      distro: ubuntu
+      product-version: ${{ needs.setup.outputs.vault-version }}
+      scenario: "rollback_validation artifact_source:local artifact_type:bundle distro:ubuntu edition:ce ip_version:4 seal:shamir arch:amd64"
+    secrets: inherit
