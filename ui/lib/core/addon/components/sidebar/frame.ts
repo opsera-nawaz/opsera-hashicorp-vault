@@ -9,11 +9,16 @@ import { inject as controller } from '@ember/controller';
 import { TOGGLE_WEB_REPL } from 'vault/utils/analytic-events';
 import { FEEDBACK_SURVEY_URL } from 'vault/utils/constants/links';
 
+import type AnalyticsService from 'vault/services/analytics';
+import type CurrentClusterService from 'vault/services/current-cluster';
+import type ConsoleService from 'vault/services/console';
+import type ClusterController from 'vault/controllers/vault/cluster';
+
 export default class SidebarNavComponent extends Component {
-  @service analytics;
-  @service currentCluster;
-  @service console;
-  @controller('vault.cluster') clusterController;
+  @service declare readonly analytics: AnalyticsService;
+  @service declare readonly currentCluster: CurrentClusterService;
+  @service declare readonly console: ConsoleService;
+  @controller('vault.cluster') declare readonly clusterController: ClusterController;
 
   feedbackSurveyUrl = FEEDBACK_SURVEY_URL;
 
@@ -26,7 +31,7 @@ export default class SidebarNavComponent extends Component {
     });
   };
 
-  closeConsole = (event) => {
+  closeConsole = (event: KeyboardEvent) => {
     if (event?.key === 'Escape') {
       this.console.isOpen = false;
     }

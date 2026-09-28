@@ -21,25 +21,32 @@ import Component from '@glimmer/component';
 import { action } from '@ember/object';
 import { tracked } from '@glimmer/tracking';
 
-export default class ToggleComponent extends Component {
+interface ToggleArgs {
+  onChange: (checked: boolean) => void;
+  name: string;
+  checked?: boolean;
+  disabled?: boolean;
+}
+
+export default class ToggleComponent extends Component<ToggleArgs> {
   // tracked because the Input mutates the property and therefor cannot be a getter
   @tracked
   checked = this.args.checked || false;
 
-  get disabled() {
+  get disabled(): boolean {
     return this.args.disabled || false;
   }
 
-  get name() {
+  get name(): string {
     return this.args.name || '';
   }
 
-  get safeId() {
+  get safeId(): string {
     return `toggle-${this.name.replace(/\W/g, '')}`;
   }
 
   @action
-  handleChange(e) {
-    this.args.onChange(e.target.checked);
+  handleChange(e: Event): void {
+    this.args.onChange((e.target as HTMLInputElement).checked);
   }
 }

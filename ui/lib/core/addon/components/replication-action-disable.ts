@@ -9,7 +9,11 @@ export default Actions.extend({
   tagName: '',
 
   actions: {
-    onSubmit(replicationMode, clusterMode, evt) {
+    // `this` is explicitly typed against the base class (rather than left to
+    // infer against this actions-hash object literal, which TS resolves to a
+    // self-referential shape where `this.onSubmit` means "my 3-param sibling
+    // below", not the base class's variadic onSubmit).
+    onSubmit(this: Actions, replicationMode: string, clusterMode: string, evt: Event) {
       // No data is submitted for disable request
       return this.onSubmit(replicationMode, clusterMode, null, evt);
     },
