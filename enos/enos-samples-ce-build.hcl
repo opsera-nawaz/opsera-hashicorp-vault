@@ -225,6 +225,17 @@ sample "build_ce_linux_amd64_zip" {
       edition         = ["ce"]
     }
   }
+
+  # WO-038: required check validating Raft failover/replication health post-modernization.
+  subset "raft_regression" {
+    matrix {
+      arch            = ["amd64"]
+      artifact_type   = ["bundle"]
+      artifact_source = ["crt"]
+      distro          = ["ubuntu"]
+      edition         = ["ce"]
+    }
+  }
 }
 
 sample "build_ce_linux_arm64_zip" {
