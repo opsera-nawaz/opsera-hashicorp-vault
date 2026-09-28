@@ -516,6 +516,35 @@ scenario "benchmark" {
     }
   }
 
+  # run_perf_regression closes WO-053's automated-regression-comparison gap:
+  # it drives enos/k6/perf-regression.js and enos/scripts/measure-unseal-time.sh
+  # against the cluster benchmark_setup just wired k6 and metrics collection
+  # for, then compares the results against enos/benchmarks/baseline.json with
+  # enos/scripts/compare-benchmarks.sh, failing the scenario if p99 latency
+  # regresses more than 5% or unseal time regresses more than 10%.
+  step "run_perf_regression" {
+    module     = module.benchmark_regression_compare
+    depends_on = [step.benchmark_setup]
+
+    providers = {
+      enos = local.enos_provider[matrix.distro]
+    }
+
+    verifies = [
+      quality.vault_api_p99_latency_regression,
+      quality.vault_unseal_time_regression,
+    ]
+
+    variables {
+      k6_host           = step.create_k6_target.hosts[0]
+      leader_addr       = step.get_vault_cluster_ips.leader_private_ip
+      leader_host       = step.get_vault_cluster_ips.leader_host
+      vault_token       = step.create_vault_cluster.root_token
+      vault_unseal_keys = matrix.seal == "shamir" ? step.create_vault_cluster.unseal_keys_b64 : []
+      vault_install_dir = global.vault_install_dir[matrix.artifact_type]
+    }
+  }
+
   output "audit_device_file_path" {
     description = "The file path for the file audit device, if enabled"
     value       = step.create_vault_cluster.audit_device_file_path

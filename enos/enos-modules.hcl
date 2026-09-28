@@ -20,6 +20,13 @@ module "benchmark_config" {
   source = "./modules/benchmark/config"
 }
 
+// WO-053: drives enos/k6/perf-regression.js and
+// enos/scripts/measure-unseal-time.sh against the benchmark scenario's
+// cluster and compares the results against enos/benchmarks/baseline.json.
+module "benchmark_regression_compare" {
+  source = "./modules/benchmark_regression_compare"
+}
+
 module "benchmark_setup" {
   source = "./modules/benchmark/setup"
 }

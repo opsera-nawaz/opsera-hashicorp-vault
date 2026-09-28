@@ -393,6 +393,10 @@ quality "vault_api_sys_version_history_key_info" {
   EOF
 }
 
+quality "vault_api_p99_latency_regression" {
+  description = "API p99 latency degradation is within 5% of baseline"
+}
+
 quality "vault_artifact_bundle" {
   description = "The candidate binary packaged as a zip bundle is used for testing"
 }
@@ -662,6 +666,10 @@ quality "vault_ui_test" {
 
 quality "vault_unseal_ha_leader_election" {
   description = "Vault performs a leader election after it is unsealed"
+}
+
+quality "vault_unseal_time_regression" {
+  description = "Unseal time degradation is within 10% of baseline"
 }
 
 quality "vault_version_build_date" {

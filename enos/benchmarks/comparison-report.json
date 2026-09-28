@@ -1,0 +1,47 @@
+{
+  "baseline_path": "/Users/dilnawazragib/Opsera/opsera-agents/Softwareforge/vault-fips-workorders/wo-053/enos/benchmarks/baseline.json",
+  "latest_path": "/Users/dilnawazragib/Opsera/opsera-agents/Softwareforge/vault-fips-workorders/wo-053/enos/benchmarks/latest.json",
+  "overall_status": "PASS",
+  "metrics": [
+    {
+      "metric": "sys_health_p99",
+      "baseline": 18.02,
+      "current": 16.82,
+      "pct_change": -6.6500,
+      "threshold_multiplier": 1.05,
+      "status": "PASS"
+    },
+    {
+      "metric": "kv_write_p99",
+      "baseline": 2558.9,
+      "current": 2606.58,
+      "pct_change": 1.8600,
+      "threshold_multiplier": 1.05,
+      "status": "PASS"
+    },
+    {
+      "metric": "kv_read_p99",
+      "baseline": 288.58,
+      "current": 299.39,
+      "pct_change": 3.7400,
+      "threshold_multiplier": 1.05,
+      "status": "PASS"
+    },
+    {
+      "metric": "transit_encrypt_p99",
+      "baseline": 20.63,
+      "current": 20.54,
+      "pct_change": -0.4300,
+      "threshold_multiplier": 1.05,
+      "status": "PASS"
+    },
+    {
+      "metric": "unseal_time",
+      "baseline": 0.018,
+      "current": 0.012,
+      "pct_change": -33.3300,
+      "threshold_multiplier": 1.10,
+      "status": "PASS"
+    }
+  ]
+}

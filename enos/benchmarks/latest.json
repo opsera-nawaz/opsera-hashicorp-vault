@@ -1,0 +1,58 @@
+{
+  "metadata": {
+    "captured_at": "2026-09-27T20:33:58Z",
+    "commit_sha": "07129be3235cf60998104b7d0016bcd3f92df211",
+    "vault_version": "2.2.0-beta1",
+    "node_count": 3,
+    "storage_backend": "raft",
+    "seal_type": "shamir",
+    "region": "n/a (local capture, see enos/benchmarks/README.md)",
+    "instance_type": "local-dev-substitute: Apple M4 Pro (arm64), 14 cores -- no AWS credentials or enos CLI available in this sandbox; see enos/benchmarks/README.md for how to recapture on real EC2 infra",
+    "capture_method": "vault.NewTestCluster (real TCP listeners, real HandlerRegistry HTTP handlers, real AES-GCM transit engine) + real k6 binary running enos/k6/perf-regression.js + enos/scripts/measure-unseal-time.sh equivalent (testhelpers.AttemptUnsealCore over the real /v1/sys/unseal HTTP path)",
+    "load_profile": {
+      "sys_health_vus": 20,
+      "kv_write_vus": 10,
+      "kv_read_vus": 10,
+      "transit_encrypt_vus": 10,
+      "duration": "25s",
+      "warmup_seconds": 5
+    },
+    "iterations": 3,
+    "aggregation": "median across 3 iterations (per WO-053 edge_cases: reduces noisy-neighbor false positives)"
+  },
+  "endpoints": {
+    "sys_health": {
+      "method": "GET",
+      "path": "/v1/sys/health",
+      "p50_ms": 0.33,
+      "p95_ms": 5.32,
+      "p99_ms": 16.82,
+      "max_ms": 81.43
+    },
+    "kv_write": {
+      "method": "POST",
+      "path": "/v1/secret/data/perf-test",
+      "p50_ms": 2409.79,
+      "p95_ms": 2576.02,
+      "p99_ms": 2606.58,
+      "max_ms": 2621.55
+    },
+    "kv_read": {
+      "method": "GET",
+      "path": "/v1/secret/data/perf-test",
+      "p50_ms": 242.36,
+      "p95_ms": 275.08,
+      "p99_ms": 299.39,
+      "max_ms": 530.85
+    },
+    "transit_encrypt": {
+      "method": "POST",
+      "path": "/v1/transit/encrypt/perf-key",
+      "p50_ms": 0.39,
+      "p95_ms": 8.28,
+      "p99_ms": 20.54,
+      "max_ms": 205.02
+    }
+  },
+  "unseal_time_seconds": 0.012
+}
