@@ -11,6 +11,28 @@ import { task } from 'ember-concurrency';
 import { waitFor } from '@ember/test-waiters';
 import { getOwner } from '@ember/owner';
 
+import type ApiService from 'vault/services/api';
+import type RouterService from '@ember/routing/router-service';
+
+interface ReplicationModeAttrs {
+  mode?: string;
+  clusterId?: string;
+  replicationDisabled?: boolean;
+}
+
+interface ReplicationPageModel {
+  dr: { mode?: string };
+  performance: { mode?: string };
+  replicationMode: 'dr' | 'performance';
+  replicationAttrs: ReplicationModeAttrs;
+  anyReplicationEnabled: boolean;
+  [key: string]: unknown;
+}
+
+interface ReplicationPageArgs {
+  model: ReplicationPageModel;
+}
+
 /**
  * @module ReplicationPage
  * The `ReplicationPage` component is the parent contextual component that holds the replication-dashboard, and various replication-<name>-card components.
@@ -27,47 +49,56 @@ const MODE = {
   performance: 'Performance',
 };
 
-export default class ReplicationPage extends Component {
-  @service api;
+export default class ReplicationPage extends Component<ReplicationPageArgs> {
+  @service declare readonly api: ApiService;
 
-  @tracked reindexingDetails = null;
+  @tracked reindexingDetails: unknown = null;
 
   // This component renders both within and outside the replication engine so we have to dynamically look up the router
-  get router() {
+  get router(): RouterService {
     const owner = getOwner(this);
-    return owner.lookup('service:router') || owner.lookup('service:app-router');
+    return (owner?.lookup('service:router') ||
+      owner?.lookup('service:app-router')) as unknown as RouterService;
   }
 
-  @action onModeUpdate(evt, replicationMode) {
-    // Called on did-insert and did-update
-    this.getReplicationModeStatus.perform(replicationMode);
+  @action onModeUpdate(_evt: unknown, replicationModeArgs: [string]): void {
+    // Called on did-insert and did-update. did-insert/did-update pass their
+    // positional args ({{did-insert this.onModeUpdate @model.replicationMode}})
+    // as an array, which getReplicationModeStatus's own [replicationMode]
+    // destructuring expects.
+    this.getReplicationModeStatus.perform(replicationModeArgs);
   }
 
-  @task
-  @waitFor
-  *getReplicationModeStatus([replicationMode]) {
-    let resp = {};
-    if (this.isSummaryDashboard) {
-      // the summary dashboard is not mode specific and will error
-      // while running replication/null/status in the replication-mode adapter
-      return;
-    }
-
-    try {
-      // unauthenticated request -- explicitly pass empty token header
-      const headers = this.api.buildHeaders({ token: '' });
-      if (replicationMode === 'dr') {
-        resp = yield this.api.sys.systemReadReplicationDrStatus(headers);
-      } else if (replicationMode === 'performance') {
-        resp = yield this.api.sys.systemReadReplicationPerformanceStatus(headers);
+  getReplicationModeStatus = task(
+    waitFor(function* (
+      this: ReplicationPage,
+      [replicationMode]: [string]
+    ): Generator<unknown, void, unknown> {
+      let resp: { data?: unknown } = {};
+      if (this.isSummaryDashboard) {
+        // the summary dashboard is not mode specific and will error
+        // while running replication/null/status in the replication-mode adapter
+        return;
       }
-    } catch (e) {
-      // do not handle error
-    } finally {
-      this.reindexingDetails = resp.data;
-    }
-  }
-  get isSummaryDashboard() {
+
+      try {
+        // unauthenticated request -- explicitly pass empty token header
+        const headers = this.api.buildHeaders({ token: '' });
+        if (replicationMode === 'dr') {
+          resp = (yield this.api.sys.systemReadReplicationDrStatus(headers)) as { data?: unknown };
+        } else if (replicationMode === 'performance') {
+          resp = (yield this.api.sys.systemReadReplicationPerformanceStatus(headers)) as {
+            data?: unknown;
+          };
+        }
+      } catch {
+        // do not handle error
+      } finally {
+        this.reindexingDetails = resp.data;
+      }
+    })
+  );
+  get isSummaryDashboard(): boolean | string {
     const currentRoute = this.router.currentRouteName;
 
     // we only show the summary dashboard in the replication index route
@@ -78,7 +109,7 @@ export default class ReplicationPage extends Component {
     }
     return '';
   }
-  get formattedReplicationMode() {
+  get formattedReplicationMode(): string {
     // dr or performance 🤯
     if (this.isSummaryDashboard) {
       return 'Disaster recovery and performance';
@@ -86,7 +117,7 @@ export default class ReplicationPage extends Component {
     const mode = this.args.model.replicationMode;
     return MODE[mode];
   }
-  get clusterMode() {
+  get clusterMode(): string | undefined {
     // primary or secondary
     if (this.isSummaryDashboard) {
       // replicationAttrs does not exist when summaryDashboard
@@ -94,7 +125,7 @@ export default class ReplicationPage extends Component {
     }
     return this.args.model.replicationAttrs.mode;
   }
-  get isLoadingData() {
+  get isLoadingData(): boolean {
     if (this.isSummaryDashboard) {
       return false;
     }
@@ -106,19 +137,19 @@ export default class ReplicationPage extends Component {
     }
     return false;
   }
-  get isSecondary() {
+  get isSecondary(): boolean {
     return this.clusterMode === 'secondary';
   }
-  get replicationDetailsSummary() {
+  get replicationDetailsSummary(): { dr?: unknown; performance?: unknown } {
     if (this.isSummaryDashboard) {
-      const combinedObject = {};
+      const combinedObject: { dr?: unknown; performance?: unknown } = {};
       combinedObject.dr = this.args.model['dr'];
       combinedObject.performance = this.args.model['performance'];
       return combinedObject;
     }
     return {};
   }
-  get replicationDetails() {
+  get replicationDetails(): { mode?: string; [key: string]: unknown } {
     if (this.isSummaryDashboard) {
       // Cannot return null
       return {};
@@ -126,13 +157,13 @@ export default class ReplicationPage extends Component {
     const { replicationMode } = this.args.model;
     return this.args.model[replicationMode];
   }
-  get isDisabled() {
+  get isDisabled(): boolean {
     if (this.replicationDetails.mode === 'disabled' || this.replicationDetails.mode === 'primary') {
       return true;
     }
     return false;
   }
-  get message() {
+  get message(): string {
     let msg;
     if (this.args.model.anyReplicationEnabled) {
       msg = `This ${this.formattedReplicationMode} secondary has not been enabled.  You can do so from the ${this.formattedReplicationMode} Primary.`;
