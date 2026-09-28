@@ -57,6 +57,7 @@ func newRootCmd() *cobra.Command {
 
 	rootCmd.AddCommand(newConfigCmd())
 	rootCmd.AddCommand(newEbomCmd())
+	rootCmd.AddCommand(newFipsOverclaimCheckCmd())
 	rootCmd.AddCommand(newGenerateCmd())
 	rootCmd.AddCommand(newGitCmd())
 	rootCmd.AddCommand(newGithubCmd())

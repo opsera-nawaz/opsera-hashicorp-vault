@@ -1,0 +1,3 @@
+```release-note:improvement
+core: Vault is now FIPS validated for all Community Edition builds.
+```
