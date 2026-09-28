@@ -35,13 +35,28 @@ import { removeFromArray } from 'vault/helpers/remove-from-array';
  * `{ "attrKey": { "errors": ["Name is required."], "isValid": false } }`
  */
 
-export default class ObjectListInput extends Component {
-  @tracked inputList = [];
-  @tracked inputKeys;
+interface ObjectKey {
+  label: string;
+  key: string;
+  placeholder?: string;
+}
+
+type InputRow = Record<string, string>;
+
+interface ObjectListInputArgs {
+  objectKeys: ObjectKey[];
+  onChange: (list: InputRow[]) => void;
+  inputValue?: InputRow[];
+  validationErrors?: Record<string, { errors: string[]; isValid: boolean }>[];
+}
+
+export default class ObjectListInput extends Component<ObjectListInputArgs> {
+  @tracked inputList: InputRow[] = [];
+  @tracked inputKeys: string[] = [];
   @tracked disableAdd = true;
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: ObjectListInputArgs) {
+    super(owner, args);
     const requiredKeys = ['label', 'key'];
     this.assertKeys(this.args.objectKeys, requiredKeys);
     this.inputKeys = this.args.objectKeys.map((e) => e.key);
@@ -53,7 +68,7 @@ export default class ObjectListInput extends Component {
     this.inputList = this.args.inputValue ? [...this.args.inputValue, emptyRow] : [emptyRow];
   }
 
-  assertKeys(arrayOfObjects, requiredKeys) {
+  assertKeys(arrayOfObjects: object[], requiredKeys: string[]): void {
     const argName = requiredKeys.includes('label') ? '@objectKeys' : '@inputValue';
     return assert(
       `objects in the ${argName} array must include keys called: ${requiredKeys.join(', ')}`,
@@ -61,37 +76,41 @@ export default class ObjectListInput extends Component {
     );
   }
 
-  createEmptyRow(keys) {
+  createEmptyRow(keys: string[]): InputRow {
     // create a new object from input keys that have empty values
     return Object.fromEntries(keys.map((key) => [key, '']));
   }
 
   @action
-  handleInput(idx, { target }) {
+  handleInput(idx: number, { target }: { target: HTMLInputElement }): void {
     const inputObj = this.inputList[idx];
-    inputObj[target.name] = target.value;
+    if (inputObj) {
+      inputObj[target.name] = target.value;
+    }
     this.handleChange();
   }
 
   @action
-  addRow() {
+  addRow(): void {
     const emptyRow = this.createEmptyRow(this.inputKeys);
     this.inputList = [...this.inputList, emptyRow];
     this.disableAdd = true;
   }
 
   @action
-  removeRow(idx) {
+  removeRow(idx: number): void {
     const row = this.inputList[idx];
     this.inputList = removeFromArray(this.inputList, row);
     this.handleChange();
   }
 
   @action
-  handleChange() {
+  handleChange(): void {
     // disable/enable "add" button based on last row
-    const lastObject = this.inputList[this.inputList.length - 1];
-    this.disableAdd = Object.values(lastObject).any((input) => input === '') ? true : false;
+    const lastObject = this.inputList[this.inputList.length - 1] ?? {};
+    // `.any` is not a real Array method; `.some` matches the surrounding
+    // intent ("disable Add while any input in the last row is still empty").
+    this.disableAdd = Object.values(lastObject).some((input) => input === '') ? true : false;
 
     // don't send an empty last object to parent
     if (Object.values(lastObject).every((input) => input === '')) {
