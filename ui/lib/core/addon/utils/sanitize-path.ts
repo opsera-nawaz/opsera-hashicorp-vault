@@ -3,19 +3,19 @@
  * SPDX-License-Identifier: BUSL-1.1
  */
 
-export function sanitizePath(path) {
+export function sanitizePath(path: string | null | undefined): string {
   if (!path) return '';
   //remove whitespace + remove trailing and leading slashes
   return path.trim().replace(/^\/+|\/+$/g, '');
 }
 
-export function sanitizeStart(path) {
+export function sanitizeStart(path: string | null | undefined): string {
   if (!path) return '';
   //remove leading slashes
   return path.trim().replace(/^\/+/, '');
 }
 
-export function ensureTrailingSlash(path) {
+export function ensureTrailingSlash(path: string): string {
   return path.replace(/(\w+[^/]$)/g, '$1/');
 }
 
@@ -26,7 +26,7 @@ export function ensureTrailingSlash(path) {
  * @param {string} rootPath eg apps/prod
  * @returns the leftover segment, eg app_1/test
  */
-export function getRelativePath(fullPath = '', rootPath = '') {
+export function getRelativePath(fullPath = '', rootPath = ''): string {
   const root = sanitizePath(rootPath);
   const full = sanitizePath(fullPath);
 
