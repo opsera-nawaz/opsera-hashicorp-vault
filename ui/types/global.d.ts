@@ -55,3 +55,9 @@ declare module 'vault/helpers/dasherize' {
   const helper: unknown;
   export default helper;
 }
+
+// autosize@6.0.1 ships no declaration files and @types/autosize doesn't exist.
+declare module 'autosize' {
+  function autosize(el: HTMLElement | HTMLElement[]): void;
+  export default autosize;
+}

@@ -10,6 +10,10 @@ import errorMessage from 'vault/utils/error-message';
 import timestamp from 'vault/utils/timestamp';
 import { tracked } from '@glimmer/tracking';
 import { assert } from '@ember/debug';
+
+import type DownloadService from 'vault/services/download';
+import type { Extensions } from 'vault/services/download';
+import type FlashMessageService from 'vault/services/flash-messages';
 /**
  * @module DownloadButton
  * DownloadButton wraps an Hds::Button to perform a download action. [Docs for HDS args](https://helios.hashicorp.design/components/button?tab=code)
@@ -32,37 +36,51 @@ import { assert } from '@ember/debug';
  * @param {boolean} [isIconOnly] - button only renders an icon, no text
  */
 
-export default class DownloadButton extends Component {
-  @service download;
-  @service flashMessages;
-  @tracked fetchedData;
+interface DownloadButtonArgs {
+  filename?: string;
+  data?: string;
+  fetchData?: () => Promise<string> | string;
+  extension?: keyof Extensions;
+  stringify?: boolean;
+  onSuccess?: () => void;
+  hideIcon?: boolean;
+  text?: string;
+  color?: string;
+  iconPosition?: string;
+  isIconOnly?: boolean;
+}
 
-  constructor() {
-    super(...arguments);
+export default class DownloadButton extends Component<DownloadButtonArgs> {
+  @service declare readonly download: DownloadService;
+  @service declare readonly flashMessages: FlashMessageService;
+  @tracked fetchedData?: string;
+
+  constructor(owner: unknown, args: DownloadButtonArgs) {
+    super(owner, args);
     const hasConflictingArgs = this.args.data && this.args.fetchData;
     assert(
       'Only pass either @data or @fetchData, passing both means @data will be overwritten by the return value of @fetchData',
       !hasConflictingArgs
     );
   }
-  get filename() {
+  get filename(): string {
     const ts = timestamp.now().toISOString();
     return this.args.filename ? this.args.filename + '-' + ts : ts;
   }
 
-  get content() {
+  get content(): string {
     if (this.args.stringify) {
       return JSON.stringify(this.args.data, null, 2);
     }
-    return this.fetchedData || this.args.data;
+    return this.fetchedData || this.args.data || '';
   }
 
-  get extension() {
+  get extension(): keyof Extensions {
     return this.args.extension || 'txt';
   }
 
   @action
-  async handleDownload() {
+  async handleDownload(): Promise<void> {
     if (this.args.fetchData) {
       this.fetchedData = await this.args.fetchData();
     }

@@ -26,52 +26,63 @@ import autosize from 'autosize';
  * @param {boolean} [displayOnly=false]  - Whether or not to display the value as a display only `pre` element or as an input.
  *
  */
-export default class MaskedInputComponent extends Component {
+interface MaskedInputArgs {
+  value?: unknown;
+  name?: string;
+  onChange?: (value: string) => void;
+  onKeyUp?: (name: string | undefined, value: string) => void;
+  onToggle?: () => void;
+  allowCopy?: boolean;
+  allowDownload?: boolean;
+  displayOnly?: boolean;
+}
+
+export default class MaskedInputComponent extends Component<MaskedInputArgs> {
   @tracked showValue = false;
   @tracked modalOpen = false;
   @tracked stringifyDownload = false;
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: MaskedInputArgs) {
+    super(owner, args);
     if (!this.args.onChange && !this.args.displayOnly) {
       debug('onChange is required for editable Masked Input!');
     }
   }
 
-  updateSize(element) {
+  updateSize(element: HTMLElement): void {
     autosize(element);
   }
 
-  @action onChange(evt) {
-    const value = evt.target.value;
+  @action onChange(evt: Event): void {
+    const value = (evt.target as HTMLTextAreaElement).value;
     if (this.args.onChange) {
       this.args.onChange(value);
     }
   }
 
-  @action handleKeyUp(name, evt) {
-    const { value } = evt.target;
+  @action handleKeyUp(name: string | undefined, evt: Event): void {
+    const { value } = evt.target as HTMLTextAreaElement;
     if (this.args.onKeyUp) {
       this.args.onKeyUp(name, value);
     }
   }
 
-  @action toggleMask() {
+  @action toggleMask(): void {
     if (this.args.onToggle) {
       this.args.onToggle();
     }
     this.showValue = !this.showValue;
   }
 
-  @action toggleStringifyDownload(event) {
-    this.stringifyDownload = event.target.checked;
+  @action toggleStringifyDownload(event: Event): void {
+    this.stringifyDownload = (event.target as HTMLInputElement).checked;
   }
 
-  get copyValue() {
+  get copyValue(): string | unknown {
     // Value must be a string to be copied
     const { value } = this.args;
     if (!value || typeof value === 'string') return value;
     if (typeof value === 'object') return JSON.stringify(value);
-    return value.toString();
+    return (value as { toString(): string }).toString();
   }
 }
