@@ -1495,3 +1495,164 @@ func TestLockManager_CryptoBarrierInjection_DelegatesEncryptDecrypt(t *testing.T
 	require.NoError(t, err)
 	require.Equal(t, []byte("transit-plaintext"), decoded)
 }
+
+// --- FIPS enforcement (WO-027) ---
+//
+// isFIPSMode() resolves to false here (fips.go) or true in a binary built
+// with -tags fips (fips_enabled.go). Splitting the assertions along that
+// same build tag -- rather than mocking IsFIPSApproved()/isFIPSMode() at
+// runtime -- is deliberate: it proves the gate in RotateInMemoryWithAlgorithm
+// behaves correctly for an actual FIPS build, not just for a test double.
+// This file (no build tag, so it always compiles) covers IsFIPSApproved()
+// itself, the shared pre-existing-key fixtures used by both this file and
+// policy_fips_test.go, and the "FIPS mode off" half of the matrix. The
+// "FIPS mode on" half lives in policy_fips_test.go (//go:build fips).
+
+// TestKeyType_IsFIPSApproved verifies IsFIPSApproved() returns false only
+// for the two non-Approved algorithms (ChaCha20-Poly1305, Ed25519) and true
+// for every other key type, including enterprise-only and managed types.
+func TestKeyType_IsFIPSApproved(t *testing.T) {
+	t.Parallel()
+
+	nonApproved := map[KeyType]bool{
+		KeyType_ChaCha20_Poly1305: true,
+		KeyType_ED25519:           true,
+	}
+
+	for _, kt := range allTestKeyTypes {
+		want := !nonApproved[kt]
+		require.Equal(t, want, kt.IsFIPSApproved(), "unexpected IsFIPSApproved() for %s", kt)
+	}
+}
+
+// newExistingChaCha20Fixture returns a Policy with one already-generated
+// ChaCha20-Poly1305 key version, simulating a key created before FIPS mode
+// was enabled (or on a non-FIPS build). It deliberately does not go through
+// Rotate/RotateInMemoryWithAlgorithm, so the fixture itself is unaffected by
+// the FIPS-mode gate under test; its purpose is to exercise the
+// backward-compatible read path for a non-Approved key type that must keep
+// working even when isFIPSMode() returns true (AC9).
+func newExistingChaCha20Fixture(t *testing.T) *Policy {
+	t.Helper()
+
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	hmacKey := make([]byte, 32)
+	_, err = rand.Read(hmacKey)
+	require.NoError(t, err)
+
+	algo := KeyType(KeyType_ChaCha20_Poly1305)
+	return &Policy{
+		Name:                 "existing-chacha20-key",
+		Type:                 KeyType_ChaCha20_Poly1305,
+		LatestVersion:        1,
+		MinDecryptionVersion: 1,
+		Keys: keyEntryMap{
+			"1": KeyEntry{
+				Key:          key,
+				HMACKey:      hmacKey,
+				Algorithm:    &algo,
+				CreationTime: time.Now(),
+			},
+		},
+	}
+}
+
+// newExistingEd25519Fixture returns a Policy with one already-generated
+// Ed25519 key version, simulating a key created before FIPS mode was
+// enabled. See newExistingChaCha20Fixture for why it bypasses Rotate (AC9).
+func newExistingEd25519Fixture(t *testing.T) *Policy {
+	t.Helper()
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	hmacKey := make([]byte, 32)
+	_, err = rand.Read(hmacKey)
+	require.NoError(t, err)
+
+	algo := KeyType(KeyType_ED25519)
+	return &Policy{
+		Name:                 "existing-ed25519-key",
+		Type:                 KeyType_ED25519,
+		LatestVersion:        1,
+		MinDecryptionVersion: 1,
+		Keys: keyEntryMap{
+			"1": KeyEntry{
+				Key:                priv,
+				FormattedPublicKey: base64.StdEncoding.EncodeToString(pub),
+				HMACKey:            hmacKey,
+				Algorithm:          &algo,
+				CreationTime:       time.Now(),
+			},
+		},
+	}
+}
+
+// TestPolicy_NonFIPSMode_NonApprovedKeyTypesFullyFunctional proves that on a
+// non-FIPS build (isFIPSMode() == false, the default for every existing
+// deployment), ChaCha20-Poly1305 and Ed25519 continue to support the full
+// key lifecycle -- creation, rotation, encrypt/decrypt, sign/verify --
+// exactly as before this story (AC7).
+func TestPolicy_NonFIPSMode_NonApprovedKeyTypesFullyFunctional(t *testing.T) {
+	if isFIPSMode() {
+		t.Skip("this test asserts default (non-FIPS build) behavior; see policy_fips_test.go for the FIPS-mode-on assertions")
+	}
+	t.Parallel()
+
+	ctx := context.Background()
+
+	t.Run("chacha20-poly1305", func(t *testing.T) {
+		lm, err := NewLockManager(true, 0)
+		require.NoError(t, err)
+		storage := &logical.InmemStorage{}
+
+		p, _, err := lm.GetPolicy(ctx, PolicyRequest{
+			Name:    "chacha20-lifecycle",
+			KeyType: KeyType_ChaCha20_Poly1305,
+			Storage: storage,
+			Upsert:  true,
+		}, rand.Reader)
+		require.NoError(t, err, "new chacha20-poly1305 key creation must succeed outside FIPS mode")
+		defer p.Unlock()
+		require.Equal(t, 1, p.LatestVersion)
+
+		err = p.Rotate(ctx, storage, rand.Reader)
+		require.NoError(t, err, "rotating a chacha20-poly1305 key must succeed outside FIPS mode")
+		require.Equal(t, 2, p.LatestVersion)
+
+		ct, err := p.Encrypt(0, nil, nil, base64.StdEncoding.EncodeToString([]byte("hello")))
+		require.NoError(t, err)
+		pt, err := p.Decrypt(nil, nil, ct)
+		require.NoError(t, err)
+		decoded, err := base64.StdEncoding.DecodeString(pt)
+		require.NoError(t, err)
+		require.Equal(t, []byte("hello"), decoded)
+	})
+
+	t.Run("ed25519", func(t *testing.T) {
+		lm, err := NewLockManager(true, 0)
+		require.NoError(t, err)
+		storage := &logical.InmemStorage{}
+
+		p, _, err := lm.GetPolicy(ctx, PolicyRequest{
+			Name:    "ed25519-lifecycle",
+			KeyType: KeyType_ED25519,
+			Storage: storage,
+			Upsert:  true,
+		}, rand.Reader)
+		require.NoError(t, err, "new ed25519 key creation must succeed outside FIPS mode")
+		defer p.Unlock()
+		require.Equal(t, 1, p.LatestVersion)
+
+		err = p.Rotate(ctx, storage, rand.Reader)
+		require.NoError(t, err, "rotating an ed25519 key must succeed outside FIPS mode")
+		require.Equal(t, 2, p.LatestVersion)
+
+		sig, err := p.Sign(0, nil, []byte("hello"), HashTypeNone, "", MarshalingTypeASN1)
+		require.NoError(t, err)
+		verified, err := p.VerifySignature(nil, []byte("hello"), HashTypeNone, "", MarshalingTypeASN1, sig.Signature)
+		require.NoError(t, err)
+		require.True(t, verified)
+	})
+}
