@@ -1,0 +1,205 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "bom-ref": "pkg:golang/std@go1.27.1?type=module",
+      "name": "std",
+      "purl": "pkg:golang/std@go1.27.1?goarch=arm64\u0026goos=darwin\u0026type=module",
+      "scope": "required",
+      "type": "library",
+      "version": "go1.27.1"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/crypto@v0.57.0?type=module",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "dd95428dff06833ef39de47f107455c7af02b5ffb6a6620c3f6505861f5c0ba3"
+        }
+      ],
+      "name": "golang.org/x/crypto",
+      "purl": "pkg:golang/golang.org/x/crypto@v0.57.0?goarch=arm64\u0026goos=darwin\u0026type=module",
+      "scope": "required",
+      "type": "library",
+      "version": "v0.57.0"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/tink-crypto/tink-go/v2@v2.7.0?type=module",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/tink-crypto/tink-go"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "93b4275172757110e9be8cbfe65d458a666a30002b45f7fcbe352ace2e4dd38a"
+        }
+      ],
+      "name": "github.com/tink-crypto/tink-go/v2",
+      "purl": "pkg:golang/github.com/tink-crypto/tink-go/v2@v2.7.0?goarch=arm64\u0026goos=darwin\u0026type=module",
+      "scope": "required",
+      "type": "library",
+      "version": "v2.7.0"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/hashicorp/go-hclog@v1.6.3?type=module",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/hashicorp/go-hclog"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "42bda417e7955a34e262653b637d6d6253f5874abf5f7365ded3c675a075d7f9"
+        }
+      ],
+      "name": "github.com/hashicorp/go-hclog",
+      "purl": "pkg:golang/github.com/hashicorp/go-hclog@v1.6.3?goarch=arm64\u0026goos=darwin\u0026type=module",
+      "scope": "required",
+      "type": "library",
+      "version": "v1.6.3"
+    }
+  ],
+  "crypto_annotations": [
+    {
+      "package_name": "crypto/aes",
+      "package_version": "go1.27.1",
+      "algorithms_used": [
+        "AES-128-GCM",
+        "AES-256-GCM"
+      ],
+      "fips_approved": true,
+      "security_relevant": true,
+      "found_in_sbom": true
+    },
+    {
+      "package_name": "crypto/ecdsa",
+      "package_version": "go1.27.1",
+      "algorithms_used": [
+        "ECDSA-P256",
+        "ECDSA-P384",
+        "ECDSA-P521"
+      ],
+      "fips_approved": true,
+      "security_relevant": true,
+      "found_in_sbom": true
+    },
+    {
+      "package_name": "crypto/ed25519",
+      "package_version": "go1.27.1",
+      "algorithms_used": [
+        "Ed25519"
+      ],
+      "fips_approved": false,
+      "security_relevant": true,
+      "found_in_sbom": true
+    },
+    {
+      "package_name": "crypto/hmac",
+      "package_version": "go1.27.1",
+      "algorithms_used": [
+        "HMAC-SHA256"
+      ],
+      "fips_approved": true,
+      "security_relevant": true,
+      "found_in_sbom": true
+    },
+    {
+      "package_name": "crypto/rand",
+      "package_version": "go1.27.1",
+      "algorithms_used": [
+        "DRBG (OS CSPRNG)"
+      ],
+      "fips_approved": true,
+      "security_relevant": true,
+      "found_in_sbom": true
+    },
+    {
+      "package_name": "crypto/rsa",
+      "package_version": "go1.27.1",
+      "algorithms_used": [
+        "RSA-2048",
+        "RSA-OAEP",
+        "RSA-PSS"
+      ],
+      "fips_approved": true,
+      "security_relevant": true,
+      "found_in_sbom": true
+    },
+    {
+      "package_name": "crypto/sha256",
+      "package_version": "go1.27.1",
+      "algorithms_used": [
+        "SHA-256"
+      ],
+      "fips_approved": true,
+      "security_relevant": true,
+      "found_in_sbom": true
+    },
+    {
+      "package_name": "golang.org/x/crypto/chacha20poly1305",
+      "package_version": "v0.57.0",
+      "algorithms_used": [
+        "ChaCha20-Poly1305"
+      ],
+      "fips_approved": false,
+      "security_relevant": true,
+      "found_in_sbom": true
+    },
+    {
+      "package_name": "golang.org/x/crypto/ed25519",
+      "package_version": "v0.57.0",
+      "algorithms_used": [
+        "Ed25519"
+      ],
+      "fips_approved": false,
+      "security_relevant": true,
+      "found_in_sbom": true
+    },
+    {
+      "package_name": "golang.org/x/crypto/hkdf",
+      "package_version": "v0.57.0",
+      "algorithms_used": [
+        "HKDF-SHA256"
+      ],
+      "fips_approved": true,
+      "security_relevant": true,
+      "found_in_sbom": true
+    },
+    {
+      "package_name": "github.com/tink-crypto/tink-go/v2",
+      "package_version": "v2.7.0",
+      "algorithms_used": [
+        "AES-KWP (NIST SP 800-38F)"
+      ],
+      "fips_approved": true,
+      "security_relevant": true,
+      "found_in_sbom": true
+    },
+    {
+      "package_name": "github.com/example/not-in-base-sbom",
+      "package_version": "v0.0.1",
+      "algorithms_used": [
+        "Example-Algorithm"
+      ],
+      "fips_approved": false,
+      "security_relevant": true,
+      "found_in_sbom": false
+    }
+  ],
+  "metadata": {
+    "component": {
+      "name": "github.com/hashicorp/vault",
+      "type": "application",
+      "version": "2.2.0-beta1"
+    },
+    "timestamp": "2026-09-27T00:00:00Z"
+  },
+  "serialNumber": "urn:uuid:00000000-0000-0000-0000-000000000001",
+  "specVersion": "1.6",
+  "version": 1
+}

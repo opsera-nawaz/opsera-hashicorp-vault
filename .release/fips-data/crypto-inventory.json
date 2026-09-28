@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "generated_from": [
+    "fips/crypto_inventory.yaml (WO-019 consolidated inventory)",
+    "fips/inventory/crypto_dependencies.yaml (WO-009 dependency classification)",
+    "fips/inventory/builtin_logical_crypto_sites.yaml (WO-007 call sites)",
+    "fips/inventory/builtin_credential_crypto_sites.yaml (WO-007 call sites)"
+  ],
+  "entries": [
+    {
+      "package_name": "crypto/aes",
+      "package_version": "go1.27.1",
+      "algorithms": ["AES-128-GCM", "AES-256-GCM", "AES-CBC"],
+      "fips_approved": true,
+      "security_relevant": true,
+      "source_work_order": "WO-007"
+    },
+    {
+      "package_name": "crypto/ecdsa",
+      "package_version": "go1.27.1",
+      "algorithms": ["ECDSA-P256", "ECDSA-P384", "ECDSA-P521"],
+      "fips_approved": true,
+      "security_relevant": true,
+      "source_work_order": "WO-007"
+    },
+    {
+      "package_name": "crypto/ed25519",
+      "package_version": "go1.27.1",
+      "algorithms": ["Ed25519"],
+      "fips_approved": false,
+      "security_relevant": true,
+      "source_work_order": "WO-007"
+    },
+    {
+      "package_name": "crypto/hmac",
+      "package_version": "go1.27.1",
+      "algorithms": ["HMAC-SHA256"],
+      "fips_approved": true,
+      "security_relevant": true,
+      "source_work_order": "WO-007"
+    },
+    {
+      "package_name": "crypto/rand",
+      "package_version": "go1.27.1",
+      "algorithms": ["DRBG (OS CSPRNG)"],
+      "fips_approved": true,
+      "security_relevant": true,
+      "source_work_order": "WO-007"
+    },
+    {
+      "package_name": "crypto/rsa",
+      "package_version": "go1.27.1",
+      "algorithms": ["RSA-2048", "RSA-3072", "RSA-4096", "RSA-OAEP", "RSA-PSS"],
+      "fips_approved": true,
+      "security_relevant": true,
+      "source_work_order": "WO-007"
+    },
+    {
+      "package_name": "crypto/sha256",
+      "package_version": "go1.27.1",
+      "algorithms": ["SHA-256"],
+      "fips_approved": true,
+      "security_relevant": true,
+      "source_work_order": "WO-007"
+    },
+    {
+      "package_name": "golang.org/x/crypto/chacha20poly1305",
+      "package_version": "v0.57.0",
+      "algorithms": ["ChaCha20-Poly1305"],
+      "fips_approved": false,
+      "security_relevant": true,
+      "source_work_order": "WO-009"
+    },
+    {
+      "package_name": "golang.org/x/crypto/ed25519",
+      "package_version": "v0.57.0",
+      "algorithms": ["Ed25519"],
+      "fips_approved": false,
+      "security_relevant": true,
+      "source_work_order": "WO-009"
+    },
+    {
+      "package_name": "golang.org/x/crypto/hkdf",
+      "package_version": "v0.57.0",
+      "algorithms": ["HKDF-SHA256"],
+      "fips_approved": true,
+      "security_relevant": true,
+      "source_work_order": "WO-009"
+    },
+    {
+      "package_name": "github.com/tink-crypto/tink-go/v2",
+      "package_version": "v2.7.0",
+      "algorithms": ["AES-KWP (NIST SP 800-38F)"],
+      "fips_approved": true,
+      "security_relevant": true,
+      "source_work_order": "WO-009"
+    }
+  ]
+}

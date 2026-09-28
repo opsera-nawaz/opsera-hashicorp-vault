@@ -1,0 +1,26 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "subject": [
+    {
+      "name": "vault",
+      "digest": {
+        "sha256": "UNAVAILABLE"
+      }
+    }
+  ],
+  "predicate": {
+    "source_commit_sha": "c26b19898b62e11d488eb7c63ca34f407b1202ed",
+    "source_repo": "github.com/opsera-nawaz/opsera-hashicorp-vault",
+    "go_toolchain_version": "1.27.1",
+    "build_flags": [
+      "-X github.com/hashicorp/vault/version.Version=2.2.0-beta1",
+      "-X github.com/hashicorp/vault/version.GitCommit=c26b19898b62e11d488eb7c63ca34f407b1202ed"
+    ],
+    "binary_artifact_sha256": "UNAVAILABLE",
+    "build_timestamp": "2026-09-28T01:35:49Z",
+    "builder_id": "local-manual-build",
+    "warning": "repository is a shallow clone; source_commit_sha reflects the available ref rather than a fully verified history",
+    "error_detail": "opening \"dist/vault\": open dist/vault: no such file or directory"
+  }
+}

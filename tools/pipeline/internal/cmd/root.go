@@ -64,6 +64,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd.AddCommand(newHCPCmd())
 	rootCmd.AddCommand(newReleasesCmd())
 	rootCmd.AddCommand(newSarifCmd())
+	rootCmd.AddCommand(newSbomCmd())
 	rootCmd.AddCommand(newSlackCmd())
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {

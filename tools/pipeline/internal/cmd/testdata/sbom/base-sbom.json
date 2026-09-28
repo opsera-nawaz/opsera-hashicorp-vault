@@ -1,0 +1,78 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:00000000-0000-0000-0000-000000000001",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-09-27T00:00:00Z",
+    "component": {
+      "type": "application",
+      "name": "github.com/hashicorp/vault",
+      "version": "2.2.0-beta1"
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:golang/std@go1.27.1?type=module",
+      "type": "library",
+      "name": "std",
+      "version": "go1.27.1",
+      "scope": "required",
+      "purl": "pkg:golang/std@go1.27.1?goarch=arm64&goos=darwin&type=module"
+    },
+    {
+      "bom-ref": "pkg:golang/golang.org/x/crypto@v0.57.0?type=module",
+      "type": "library",
+      "name": "golang.org/x/crypto",
+      "version": "v0.57.0",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "dd95428dff06833ef39de47f107455c7af02b5ffb6a6620c3f6505861f5c0ba3"
+        }
+      ],
+      "purl": "pkg:golang/golang.org/x/crypto@v0.57.0?goarch=arm64&goos=darwin&type=module"
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/tink-crypto/tink-go/v2@v2.7.0?type=module",
+      "type": "library",
+      "name": "github.com/tink-crypto/tink-go/v2",
+      "version": "v2.7.0",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "93b4275172757110e9be8cbfe65d458a666a30002b45f7fcbe352ace2e4dd38a"
+        }
+      ],
+      "purl": "pkg:golang/github.com/tink-crypto/tink-go/v2@v2.7.0?goarch=arm64&goos=darwin&type=module",
+      "externalReferences": [
+        {
+          "url": "https://github.com/tink-crypto/tink-go",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/hashicorp/go-hclog@v1.6.3?type=module",
+      "type": "library",
+      "name": "github.com/hashicorp/go-hclog",
+      "version": "v1.6.3",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "42bda417e7955a34e262653b637d6d6253f5874abf5f7365ded3c675a075d7f9"
+        }
+      ],
+      "purl": "pkg:golang/github.com/hashicorp/go-hclog@v1.6.3?goarch=arm64&goos=darwin&type=module",
+      "externalReferences": [
+        {
+          "url": "https://github.com/hashicorp/go-hclog",
+          "type": "vcs"
+        }
+      ]
+    }
+  ]
+}

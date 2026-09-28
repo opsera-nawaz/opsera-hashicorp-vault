@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://forge.opsera.io/schemas/fips/sbom-crypto-inventory.json",
+  "title": "FIPS 140-3 Phase 1 Crypto Inventory Input for SBOM Annotation (WO-032)",
+  "description": "Schema for the flattened, package-level cryptographic inventory artifact consumed by `pipeline sbom annotate` (tools/pipeline/internal/cmd/annotate_sbom.go). This is intentionally a much narrower shape than fips/schemas/consolidated_inventory.json (the WO-019 capstone artifact) -- it is derived FROM that artifact and from fips/inventory/crypto_dependencies.yaml (WO-009), collapsing per-call-site and per-module records down to one entry per crypto-relevant package/module so the SBOM annotator can do a simple package-name lookup against the base SBOM's components.",
+  "type": "object",
+  "required": ["schema_version", "generated_from", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "description": "Schema version of this inventory-input document, independent of consolidated_inventory.json's own inventory_schema_version."
+    },
+    "generated_from": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Phase 1 source artifacts this file was derived from, for traceability back to WO-009/WO-019.",
+      "items": { "type": "string" }
+    },
+    "entries": {
+      "type": "array",
+      "description": "One entry per crypto-relevant Go package or module.",
+      "items": {
+        "type": "object",
+        "required": ["package_name", "package_version", "algorithms", "fips_approved", "security_relevant"],
+        "additionalProperties": false,
+        "properties": {
+          "package_name": {
+            "type": "string",
+            "description": "Go standard library import path (e.g. crypto/aes) or module/sub-package path (e.g. golang.org/x/crypto/chacha20poly1305)."
+          },
+          "package_version": {
+            "type": "string",
+            "description": "Resolved module version (from go.mod), or the Go toolchain version string for standard-library packages."
+          },
+          "algorithms": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" },
+            "description": "Cryptographic algorithm(s) implemented or exposed by this package, as identified in the Phase 1 call-site inventory."
+          },
+          "fips_approved": {
+            "type": "boolean",
+            "description": "Whether the algorithm(s) are on the FIPS 140-3 Approved Algorithms list, per the classification rule set documented in fips/inventory/crypto_dependencies.yaml."
+          },
+          "security_relevant": {
+            "type": "boolean",
+            "description": "Whether this package performs a security-relevant cryptographic operation (vs. e.g. ASN.1/byte-string parsing helpers)."
+          },
+          "source_work_order": {
+            "type": "string",
+            "description": "The Forge work order that originally classified this package (e.g. WO-005, WO-009)."
+          }
+        }
+      }
+    }
+  }
+}

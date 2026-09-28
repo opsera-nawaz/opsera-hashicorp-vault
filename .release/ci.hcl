@@ -117,3 +117,27 @@ event "crt-generate-sbom" {
 	on = "fail"
   }
 }
+
+# fips-annotate-sbom is a post-processing step that runs after
+# crt-generate-sbom. It annotates the generated SBOM with FIPS 140-3
+# cryptographic dependency metadata (.release/fips-data/crypto-inventory.json,
+# sourced from the Phase 1 crypto inventory) and produces a build provenance
+# attestation, via .release/scripts/annotate-sbom.sh (which shells out to the
+# `pipeline sbom annotate` / `pipeline sbom provenance` commands implemented
+# in tools/pipeline/internal/cmd/annotate_sbom.go and generate_provenance.go).
+#
+# The underlying GitHub Actions workflow this action delegates to is owned by
+# the CI-enforcement work (FIPS Phase 4 CI gates) and is intentionally out of
+# scope for this story -- see the epic's CI enforcement stories.
+event "fips-annotate-sbom" {
+  depends = ["crt-generate-sbom"]
+  action "fips-annotate-sbom" {
+	organization = "hashicorp"
+	repository = "vault"
+	workflow = "fips-annotate-sbom"
+  }
+
+  notification {
+	on = "fail"
+  }
+}
