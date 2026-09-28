@@ -18,14 +18,23 @@ import {
   NAV_BILLING_METRICS,
   NAV_RAFT_STORAGE,
 } from 'vault/utils/analytic-events';
+import type { AnalyticsEventName } from 'vault/utils/analytic-events';
+
+import type AnalyticsService from 'vault/services/analytics';
+import type CurrentClusterService from 'vault/services/current-cluster';
+import type FlagsService from 'vault/services/flags';
+import type VersionService from 'vault/services/version';
+import type NamespaceService from 'vault/services/namespace';
+import type PermissionsService from 'vault/services/permissions';
+import type ClusterModel from 'vault/models/cluster';
 
 export default class SidebarNavClusterComponent extends Component {
-  @service analytics;
-  @service currentCluster;
-  @service flags;
-  @service version;
-  @service namespace;
-  @service permissions;
+  @service declare readonly analytics: AnalyticsService;
+  @service declare readonly currentCluster: CurrentClusterService;
+  @service declare readonly flags: FlagsService;
+  @service declare readonly version: VersionService;
+  @service declare readonly namespace: NamespaceService;
+  @service declare readonly permissions: PermissionsService;
 
   // Event name constants for template access
   navEvents = {
@@ -51,8 +60,8 @@ export default class SidebarNavClusterComponent extends Component {
     billingDashboard: RouteName.BILLING_DASHBOARD,
   };
 
-  get cluster() {
-    return this.currentCluster.cluster;
+  get cluster(): ClusterModel | null {
+    return this.currentCluster.cluster as ClusterModel | null;
   }
 
   get hasChrootNamespace() {
@@ -87,7 +96,8 @@ export default class SidebarNavClusterComponent extends Component {
     }
 
     if (this.permissions.hasNavPermission('access')) {
-      return this.permissions.navPathParams('access').route;
+      // non-null: hasNavPermission('access') being true guarantees a matching path exists
+      return this.permissions.navPathParams('access')!.route;
     }
 
     return null;
@@ -105,12 +115,12 @@ export default class SidebarNavClusterComponent extends Component {
     return null;
   }
 
-  routeParamsFor(routeName) {
+  routeParamsFor(routeName: string) {
     return this.permissions.navPathParams(routeName);
   }
 
   @action
-  trackNavClick(eventName, elementId, cta) {
+  trackNavClick(eventName: AnalyticsEventName, elementId: string, cta: string): void {
     this.analytics.trackEvent(eventName, {
       namespace: 'nav',
       action: 'clicked',

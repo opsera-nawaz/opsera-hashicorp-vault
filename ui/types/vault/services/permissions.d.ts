@@ -18,4 +18,5 @@ export default class PermissionsService extends Service {
   chrootNamespace: string | null | undefined;
   hasPermission: (pathName: string, capabilities?: Array<string | null>) => boolean;
   hasNavPermission: (navItem: string, routeParams?: string | string[], requireAll?: boolean) => boolean;
+  navPathParams: (navItem: string) => { route?: string; models: (string | undefined)[] } | undefined;
 }
