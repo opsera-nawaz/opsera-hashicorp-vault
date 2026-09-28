@@ -556,6 +556,14 @@ quality "vault_raft_voters" {
   description = global.description.verify_raft_cluster_all_nodes_are_voters
 }
 
+quality "vault_raft_modernization_no_unplanned_elections" {
+  description = "No unplanned leader elections occur during rolling restart"
+}
+
+quality "vault_raft_modernization_voter_stability" {
+  description = "All Raft voters rejoin cluster after rolling restart"
+}
+
 quality "vault_raft_removed_after_restart" {
   description = "A removed raft node will continue reporting as removed after the process is restarted"
 }
