@@ -46,6 +46,7 @@ import (
 	"github.com/hashicorp/vault/audit"
 	"github.com/hashicorp/vault/helper/activationflags"
 	"github.com/hashicorp/vault/helper/cache"
+	"github.com/hashicorp/vault/helper/constants"
 	"github.com/hashicorp/vault/helper/identity/mfa"
 	"github.com/hashicorp/vault/helper/locking"
 	server "github.com/hashicorp/vault/helper/serverconfig"
@@ -1249,6 +1250,19 @@ func CreateCore(conf *CoreConfig) (*Core, error) {
 		denySlashInTemplatedPolicyPaths: conf.DenySlashInTemplatedPolicyPaths,
 		certCountConsumerJobInterval:    conf.CertCountConsumerJobInterval,
 		synctest:                        conf.Synctest,
+	}
+
+	// FIPS 140-3 Phase 3 (WO-055, quality gates FIPS-RUNTIME-001 and
+	// FIPS-CONTAINER-001): on FIPS-tagged builds, refuse to start unless the
+	// host OS has FIPS mode enabled and the OpenSSL FIPS provider is active.
+	// A FIPS-capable binary/container running on a non-FIPS host does not
+	// constitute FIPS-aligned operation -- see
+	// docs/fips/crypto-provider-verification.md. This must run before seal
+	// and barrier setup below, and is a no-op on non-FIPS builds.
+	if constants.IsFIPS() {
+		if err := verifyFIPSMode(defaultFIPSChecker{}, c.logger); err != nil {
+			return nil, err
+		}
 	}
 
 	c.certCountManager = cert_count.InitCertificateCountManager(c.logger, c.certCountConsumerJobInterval)

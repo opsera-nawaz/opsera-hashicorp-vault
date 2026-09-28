@@ -466,6 +466,10 @@ module "vault_wait_for_seal_rewrap" {
   vault_install_dir = var.vault_install_dir
 }
 
+module "verify_fips_startup" {
+  source = "./modules/verify_fips_startup"
+}
+
 module "verify_log_secrets" {
   source = "./modules/verify_log_secrets"
 
