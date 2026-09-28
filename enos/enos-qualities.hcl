@@ -709,3 +709,15 @@ quality "vault_billing_start_date" {
 quality "vault_license_update_ibm" {
   description = "Vault updates the cluster license to an IBM PAO license and it is in effect"
 }
+
+quality "vault_fips_os_mode_enabled" {
+  description = "The FIPS-provisioned host's /proc/sys/crypto/fips_enabled reports 1"
+}
+
+quality "vault_fips_openssl_provider_active" {
+  description = "The FIPS-provisioned host's OpenSSL FIPS provider is active"
+}
+
+quality "vault_fips_tls_negotiation_approved" {
+  description = "The Vault listener only negotiates Approved-list TLS cipher suites"
+}

@@ -53,6 +53,14 @@ scenario "smoke_sdk" {
       artifact_type   = ["package"]
     }
 
+    // ce.fips (WO-060) is only exercised by enos-scenario-fips.hcl, which
+    // provisions the FIPS-enabled infrastructure and locally-built
+    // BoringCrypto image it requires; it isn't a valid variant of this
+    // scenario's artifactory/package-based matrix.
+    exclude {
+      edition = ["ce.fips"]
+    }
+
     // PKCS#11 can only be used on ent.hsm and ent.hsm.fips1403.
     exclude {
       seal    = ["pkcs11"]
