@@ -5,11 +5,13 @@
 
 import buildRoutes from 'ember-engines/routes';
 
-export default buildRoutes(function () {
+import type { DSL } from '@ember/routing/lib/dsl';
+
+function kubernetesRouteMap(this: DSL): void {
   this.route('overview');
-  this.route('roles', function () {
+  this.route('roles', function (this: DSL) {
     this.route('create');
-    this.route('role', { path: '/:name' }, function () {
+    this.route('role', { path: '/:name' }, function (this: DSL) {
       this.route('details');
       this.route('edit');
       this.route('credentials');
@@ -17,4 +19,6 @@ export default buildRoutes(function () {
   });
   this.route('configure');
   this.route('configuration');
-});
+}
+
+export default buildRoutes(kubernetesRouteMap);

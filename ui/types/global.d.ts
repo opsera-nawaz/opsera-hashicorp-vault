@@ -56,6 +56,16 @@ declare module 'vault/helpers/dasherize' {
   export default helper;
 }
 
+// ember-engines' `addon/routes.js` is merged into the browser module graph
+// only by Ember CLI's classic addon build (as `ember-engines/routes`), which
+// isn't a Node/TS-resolvable path — there's no `main`/`exports` field for it
+// and no @types package. It just tags the route-map callback it's given.
+declare module 'ember-engines/routes' {
+  import type { DSLCallback } from '@ember/routing/lib/dsl';
+
+  export default function buildRoutes(callback: DSLCallback): DSLCallback;
+}
+
 // autosize@6.0.1 ships no declaration files and @types/autosize doesn't exist.
 declare module 'autosize' {
   function autosize(el: HTMLElement | HTMLElement[]): HTMLElement | HTMLElement[];
