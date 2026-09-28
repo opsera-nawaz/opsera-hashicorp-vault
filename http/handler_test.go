@@ -1231,3 +1231,48 @@ func TestHandler_JSONLimitQuotaWrappers(t *testing.T) {
 		})
 	}
 }
+
+// TestHandlerRegistry_SysInit verifies that sys/init, once migrated onto the
+// HandlerRegistry (see handlerWithSettings in http/handler.go), continues to
+// serve the init status response when routed entirely through the registry:
+// Register the endpoint, Build the mux, and confirm a GET against an
+// uninitialized core reports initialized=false through the full wrapping
+// chain, exactly like the direct mux.Handle registration did before the
+// migration (mirrors the pre-init assertion in TestSysInit_get).
+func TestHandlerRegistry_SysInit(t *testing.T) {
+	core := vault.TestCore(t)
+	props := &vault.HandlerProperties{
+		Core:           core,
+		ListenerConfig: &configutil.Listener{},
+	}
+
+	hr := NewHandlerRegistry()
+	require.NoError(t, hr.Register(HandlerRegistration{
+		Path:          "/v1/sys/init",
+		Methods:       []string{"GET", "PUT", "POST"},
+		AuthRequired:  false,
+		FIPSSensitive: false,
+		Handler:       handleSysInit(core),
+	}))
+
+	inventory := hr.Inventory()
+	require.Len(t, inventory, 1)
+	require.Equal(t, "/v1/sys/init", inventory[0].Path)
+	require.False(t, inventory[0].AuthRequired, "sys/init must be reported as intentionally unauthenticated")
+
+	built := hr.Build(props)
+	require.NotNil(t, built)
+
+	srv := httptest.NewServer(built)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/v1/sys/init")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var actual InitStatusResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&actual))
+	require.False(t, actual.Initialized, "uninitialized vault must report initialized=false")
+}
