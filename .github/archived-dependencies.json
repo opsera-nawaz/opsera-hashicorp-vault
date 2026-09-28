@@ -1,0 +1,10 @@
+{
+  "$comment": "Blocklist of archived/deprecated Go dependencies, enforced in CI by .github/scripts/check-archived-deps.sh (see .github/workflows/dependency-audit.yml). To add an entry, append an object to 'blocked' with: 'package' (the module path exactly as it appears in a go.mod require line), 'replacement' (the recommended replacement module path, or 'none' if there isn't one), and 'reason' (why it is blocked, ideally with a date and/or link to the advisory or archival notice). No workflow changes are required to extend this list -- it is read at CI runtime. See EPIC-05 / FIPS-DEP-001 for the archived-dependency quality gate this file supports.",
+  "blocked": [
+    {
+      "package": "github.com/denisenkom/go-mssqldb",
+      "replacement": "github.com/microsoft/go-mssqldb",
+      "reason": "Repository archived since 2022, no security patches. See EPIC-05."
+    }
+  ]
+}
