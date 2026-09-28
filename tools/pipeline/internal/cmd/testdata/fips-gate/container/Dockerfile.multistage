@@ -1,0 +1,5 @@
+FROM alpine:3 AS builder
+RUN echo build
+
+FROM some-registry.example.com/musl-base:1.0 AS ubi-hsm-fips
+COPY --from=builder /bin/app /bin/app

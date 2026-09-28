@@ -1,0 +1,5 @@
+FROM ubuntu:focal AS builder
+RUN echo build
+
+FROM alpine:3 AS fips
+COPY --from=builder /bin/app /bin/app

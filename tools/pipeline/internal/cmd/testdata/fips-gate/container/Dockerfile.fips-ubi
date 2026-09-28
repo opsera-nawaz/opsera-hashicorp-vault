@@ -1,0 +1,5 @@
+FROM ubuntu:focal AS builder
+RUN echo build
+
+FROM registry.access.redhat.com/ubi10/ubi-minimal AS fips
+COPY --from=builder /bin/app /bin/app
