@@ -1,0 +1,23 @@
+{
+  "os_fips_enabled": 1,
+  "crypto_provider": "boringcrypto",
+  "tls_config": {
+    "min_version": 771,
+    "max_version": 772,
+    "cipher_suites": [
+      4865,
+      4866,
+      49195,
+      49196
+    ],
+    "cipher_suite_names": [
+      "TLS_AES_128_GCM_SHA256",
+      "TLS_AES_256_GCM_SHA384",
+      "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+      "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+    ]
+  },
+  "build_tag_fips": true,
+  "timestamp": "2026-09-28T00:00:00Z",
+  "vault_version": "1.20.0"
+}
