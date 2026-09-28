@@ -450,13 +450,27 @@ func (c *ServerCommand) parseConfig() (*server.Config, []configutil.ConfigError,
 		}
 	}
 
+	c.applyFIPSEntropyOverride(config)
+	entCheckRequestLimiter(c, config)
+
+	return config, configErrors, nil
+}
+
+// applyFIPSEntropyOverride disables Entropy Augmentation whenever this binary
+// is running in FIPS 140-3 Inside mode (constants.IsFIPS() == true).
+// Entropy Augmentation lets an operator mix in bytes from an external seal
+// device alongside crypto/rand.Reader; FIPS 140-3 Inside requires every
+// consumer of randomness to draw exclusively from the validated CSPRNG
+// boundary (see docs/fips/crypto-provider-verification.md, FIPS-CRYPTO-004),
+// so an augmented entropy source must never be honored in that mode. This is
+// split out of parseConfig so the guard itself — not just the surrounding
+// config-loading plumbing — can be exercised directly by a unit test (see
+// TestParseConfig_EntropyAugmentation_FIPSOverride in server_test.go).
+func (c *ServerCommand) applyFIPSEntropyOverride(config *server.Config) {
 	if config != nil && config.Entropy != nil && config.Entropy.Mode == configutil.EntropyAugmentation && constants.IsFIPS() {
 		c.UI.Warn("WARNING: Entropy Augmentation is not supported in FIPS 140-3 Inside mode; disabling from server configuration!\n")
 		config.Entropy = nil
 	}
-	entCheckRequestLimiter(c, config)
-
-	return config, configErrors, nil
 }
 
 func (c *ServerCommand) runRecoveryMode() int {

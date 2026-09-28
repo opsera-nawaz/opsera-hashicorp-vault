@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/vault/helper/constants"
 	server "github.com/hashicorp/vault/helper/serverconfig"
 	"github.com/hashicorp/vault/helper/testhelpers/corehelpers"
 	"github.com/hashicorp/vault/internalshared/configutil"
@@ -657,5 +658,73 @@ func TestSIGHUP_ServiceRegistrationConfigReload(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestParseConfig_EntropyAugmentation_FIPSOverride exercises
+// (*ServerCommand).applyFIPSEntropyOverride — the guard, factored out of
+// parseConfig, that disables Entropy Augmentation whenever
+// constants.IsFIPS() reports FIPS 140-3 Inside mode. See
+// docs/fips/crypto-provider-verification.md (FIPS-CRYPTO-004) for the full
+// rationale.
+//
+// constants.IsFIPS() is a compile-time constant selected by the `fips`
+// build tag (helper/constants/fips.go / fips_enabled.go), not a runtime
+// value, so it cannot be mocked here. Instead this test asserts the
+// behavior that must hold for whichever value IsFIPS() actually has in the
+// binary that runs it:
+//   - default build (no `fips` tag, the only configuration this CE
+//     repository can compile): IsFIPS() == false, so the override must be a
+//     documented no-op and no warning is emitted.
+//   - `go test -tags fips,fips_140_3 ./command/...`: IsFIPS() == true, so
+//     the override must clear config.Entropy and emit the FIPS warning.
+//
+// Both branches call the exact same production method, so compiling this
+// test under -tags fips,fips_140_3 genuinely exercises the true branch
+// rather than mocking it.
+func TestParseConfig_EntropyAugmentation_FIPSOverride(t *testing.T) {
+	ui, c := testServerCommand(t)
+
+	cfg := &server.Config{
+		SharedConfig: &configutil.SharedConfig{
+			Entropy: &configutil.Entropy{Mode: configutil.EntropyAugmentation},
+		},
+	}
+
+	c.applyFIPSEntropyOverride(cfg)
+
+	if constants.IsFIPS() {
+		if cfg.Entropy != nil {
+			t.Fatalf("expected Entropy to be cleared under FIPS 140-3 Inside mode, got %#v", cfg.Entropy)
+		}
+		if !strings.Contains(ui.ErrorWriter.String(), "Entropy Augmentation is not supported in FIPS 140-3 Inside mode") {
+			t.Fatalf("expected FIPS entropy-augmentation warning on stderr, got: %q", ui.ErrorWriter.String())
+		}
+	} else {
+		if cfg.Entropy == nil {
+			t.Fatal("expected Entropy to be left untouched outside FIPS mode, got nil")
+		}
+		if ui.ErrorWriter.String() != "" {
+			t.Fatalf("expected no warning outside FIPS mode, got: %q", ui.ErrorWriter.String())
+		}
+	}
+}
+
+// TestParseConfig_EntropyAugmentation_FIPSOverride_NoEntropyConfigured
+// verifies applyFIPSEntropyOverride is a true no-op — no warning, no panic
+// on a nil Entropy — for the common case where no entropy stanza is
+// configured at all (the only case reachable via HCL in this CE build: see
+// docs/fips/crypto-provider-verification.md's note that
+// internalshared/configutil.ParseEntropy is a `//go:build !enterprise`
+// no-op, so config.Entropy is always nil after a real CE parseConfig()
+// call regardless of what an operator writes in an `entropy` stanza).
+func TestParseConfig_EntropyAugmentation_FIPSOverride_NoEntropyConfigured(t *testing.T) {
+	_, c := testServerCommand(t)
+
+	cfg := &server.Config{SharedConfig: &configutil.SharedConfig{}}
+	c.applyFIPSEntropyOverride(cfg)
+
+	if cfg.Entropy != nil {
+		t.Fatalf("expected Entropy to remain nil, got %#v", cfg.Entropy)
 	}
 }
