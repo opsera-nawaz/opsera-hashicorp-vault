@@ -59,13 +59,13 @@ func TestHandlerRegistry_Register(t *testing.T) {
 			},
 		},
 		{
-			name: "missing /v1/ prefix",
+			name: "relative path",
 			reg: HandlerRegistration{
 				Path:    "sys/test-registry-invalid",
 				Methods: []string{http.MethodGet},
 				Handler: noopHandler(),
 			},
-			wantErr: "must start with /v1/",
+			wantErr: "must be absolute",
 		},
 		{
 			name: "empty path",
@@ -74,7 +74,16 @@ func TestHandlerRegistry_Register(t *testing.T) {
 				Methods: []string{http.MethodGet},
 				Handler: noopHandler(),
 			},
-			wantErr: "must start with /v1/",
+			wantErr: "must be absolute",
+		},
+		{
+			name: "non-/v1/ absolute path is accepted (e.g. UI routes)",
+			reg: HandlerRegistration{
+				Path:         "/ui/",
+				Methods:      []string{http.MethodGet},
+				AuthRequired: false,
+				Handler:      noopHandler(),
+			},
 		},
 		{
 			name: "empty methods",

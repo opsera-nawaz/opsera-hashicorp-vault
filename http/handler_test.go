@@ -1395,3 +1395,207 @@ func TestHandlerRegistry_SealEndpoints(t *testing.T) {
 		"/v1/sys/unseal":              {authRequired: false, fipsSensitive: true},
 	}, got)
 }
+
+// buildAllEndpointsRegistrations returns every HandlerRegistration that
+// handlerWithSettings' default case (http/handler.go) registers for the
+// given settings, with default (non-unauth) values for every listener-config
+// gated branch (metrics/pprof/in-flight-req authenticated, UI enabled and
+// built in). It exists so TestHandlerRegistry_AllEndpoints and the
+// conditional-registration tests below can assert on the registry's
+// Inventory() without re-deriving handlerWithSettings' registration set by
+// hand in more than one place. Handler is always noopHandler(): these tests
+// verify the declarative metadata every registration carries (Path, Methods,
+// AuthRequired, FIPSSensitive), not handler wiring, which is already covered
+// end-to-end by TestHandlerRegistry_SysInit, TestHandlerRegistry_SealEndpoints,
+// and the rest of this package's tests running through the real
+// handlerWithSettings.
+func buildAllEndpointsRegistrations(settings handlerSettings) []HandlerRegistration {
+	regs := []HandlerRegistration{
+		{Path: "/v1/sys/init", Methods: []string{"GET", "PUT", "POST"}, AuthRequired: false, FIPSSensitive: false, Handler: noopHandler()},
+		{Path: "/v1/sys/config/state/", Methods: fullLogicalMethods, AuthRequired: true, FIPSSensitive: false, Handler: noopHandler()},
+		{Path: "/v1/sys/host-info", Methods: fullLogicalMethods, AuthRequired: true, FIPSSensitive: false, Handler: noopHandler()},
+		{Path: "/v1/sys/seal-status", Methods: []string{http.MethodGet}, AuthRequired: false, FIPSSensitive: false, Handler: noopHandler()},
+		{Path: "/v1/sys/seal-backend-status", Methods: []string{http.MethodGet}, AuthRequired: false, FIPSSensitive: false, Handler: noopHandler()},
+		{Path: "/v1/sys/seal", Methods: []string{http.MethodPut, http.MethodPost}, AuthRequired: true, FIPSSensitive: true, Handler: noopHandler()},
+		{Path: "/v1/sys/step-down", Methods: []string{http.MethodPut, http.MethodPost}, AuthRequired: true, FIPSSensitive: false, Handler: noopHandler()},
+		{Path: "/v1/sys/unseal", Methods: []string{http.MethodPut, http.MethodPost}, AuthRequired: false, FIPSSensitive: true, Handler: noopHandler()},
+		{Path: "/v1/sys/leader", Methods: []string{http.MethodGet}, AuthRequired: false, FIPSSensitive: false, Handler: noopHandler()},
+		{Path: "/v1/sys/health", Methods: []string{http.MethodGet, http.MethodHead}, AuthRequired: false, FIPSSensitive: false, Handler: noopHandler()},
+		{Path: "/v1/sys/monitor", Methods: fullLogicalMethods, AuthRequired: true, FIPSSensitive: false, Handler: noopHandler()},
+	}
+
+	if settings.unauthGenerateRoot {
+		regs = append(regs,
+			HandlerRegistration{Path: "/v1/sys/generate-root/attempt", Methods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete}, AuthRequired: false, FIPSSensitive: true, Handler: noopHandler()},
+			HandlerRegistration{Path: "/v1/sys/generate-root/update", Methods: []string{http.MethodPut, http.MethodPost}, AuthRequired: false, FIPSSensitive: true, Handler: noopHandler()},
+		)
+	}
+
+	if settings.unauthRekey {
+		regs = append(regs,
+			HandlerRegistration{Path: "/v1/sys/rekey/init", Methods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete}, AuthRequired: false, FIPSSensitive: true, Handler: noopHandler()},
+			HandlerRegistration{Path: "/v1/sys/rekey/update", Methods: []string{http.MethodPut, http.MethodPost}, AuthRequired: false, FIPSSensitive: true, Handler: noopHandler()},
+			HandlerRegistration{Path: "/v1/sys/rekey/verify", Methods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete}, AuthRequired: false, FIPSSensitive: true, Handler: noopHandler()},
+			HandlerRegistration{Path: "/v1/sys/rekey-recovery-key/init", Methods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete}, AuthRequired: false, FIPSSensitive: true, Handler: noopHandler()},
+			HandlerRegistration{Path: "/v1/sys/rekey-recovery-key/update", Methods: []string{http.MethodPut, http.MethodPost}, AuthRequired: false, FIPSSensitive: true, Handler: noopHandler()},
+			HandlerRegistration{Path: "/v1/sys/rekey-recovery-key/verify", Methods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete}, AuthRequired: false, FIPSSensitive: true, Handler: noopHandler()},
+		)
+	}
+
+	regs = append(regs,
+		HandlerRegistration{Path: "/v1/sys/storage/raft/bootstrap", Methods: []string{http.MethodPut, http.MethodPost}, AuthRequired: true, FIPSSensitive: false, Handler: noopHandler()},
+		HandlerRegistration{Path: "/v1/sys/storage/raft/join", Methods: []string{http.MethodPut, http.MethodPost}, AuthRequired: true, FIPSSensitive: false, Handler: noopHandler()},
+		HandlerRegistration{Path: "/v1/sys/internal/ui/feature-flags", Methods: []string{http.MethodGet}, AuthRequired: false, FIPSSensitive: false, Handler: noopHandler()},
+	)
+
+	for _, route := range injectDataIntoTopRoutes {
+		regs = append(regs, HandlerRegistration{
+			Path:          route.path,
+			Methods:       []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete, "LIST"},
+			AuthRequired:  true,
+			FIPSSensitive: route.fipsSensitive,
+			Handler:       noopHandler(),
+		})
+	}
+
+	regs = append(regs,
+		HandlerRegistration{Path: "/v1/sys/", Methods: fullLogicalMethods, AuthRequired: true, FIPSSensitive: false, Handler: noopHandler()},
+		HandlerRegistration{Path: "/v1/", Methods: fullLogicalMethods, AuthRequired: true, FIPSSensitive: false, Handler: noopHandler()},
+		HandlerRegistration{Path: "/ui/", Methods: []string{http.MethodGet, http.MethodHead}, AuthRequired: false, FIPSSensitive: false, Handler: noopHandler()},
+		HandlerRegistration{Path: "/robots.txt", Methods: []string{http.MethodGet, http.MethodHead}, AuthRequired: false, FIPSSensitive: false, Handler: noopHandler()},
+		HandlerRegistration{Path: "/ui", Methods: []string{http.MethodGet}, AuthRequired: false, FIPSSensitive: false, Handler: noopHandler()},
+		HandlerRegistration{Path: "/", Methods: []string{http.MethodGet}, AuthRequired: false, FIPSSensitive: false, Handler: noopHandler()},
+		HandlerRegistration{Path: "/v1/sys/metrics", Methods: fullLogicalMethods, AuthRequired: true, FIPSSensitive: false, Handler: noopHandler()},
+		HandlerRegistration{Path: "/v1/sys/pprof/", Methods: fullLogicalMethods, AuthRequired: true, FIPSSensitive: false, Handler: noopHandler()},
+		HandlerRegistration{Path: "/v1/sys/in-flight-req", Methods: fullLogicalMethods, AuthRequired: true, FIPSSensitive: false, Handler: noopHandler()},
+	)
+
+	return regs
+}
+
+// TestHandlerRegistry_AllEndpoints verifies that, once every remaining
+// mux.Handle call in handlerWithSettings' default case has been migrated
+// (see http/handler.go), a HandlerRegistry built from that same
+// registration set reports the expected count via Inventory() and that the
+// declared AuthRequired/FIPSSensitive metadata matches the intended
+// authorization boundary for a representative sample spanning every
+// migrated batch: the injectDataIntoTopRoutes loop (both a FIPS-sensitive
+// and a non-sensitive path), the two catch-all handlers, the raft storage
+// endpoints, and the UI routes.
+func TestHandlerRegistry_AllEndpoints(t *testing.T) {
+	settings := handlerSettings{unauthRekey: false, unauthGenerateRoot: false, unauthDROperationToken: false}
+	registrations := buildAllEndpointsRegistrations(settings)
+
+	registry := NewHandlerRegistry()
+	for _, reg := range registrations {
+		require.NoError(t, registry.Register(reg))
+	}
+
+	inventory := registry.Inventory()
+	require.Len(t, inventory, len(registrations), "Inventory() must report every registration handlerWithSettings' default case makes for these settings")
+	require.GreaterOrEqual(t, len(inventory), 40, "the full default-settings registry should cover 40+ endpoints once every mux.Handle call is migrated")
+
+	byPath := make(map[string]HandlerRegistration, len(inventory))
+	for _, reg := range inventory {
+		byPath[reg.Path] = reg
+	}
+
+	type wantMeta struct {
+		authRequired  bool
+		fipsSensitive bool
+	}
+	for path, want := range map[string]wantMeta{
+		// injectDataIntoTopRoutes: a FIPS-sensitive entry (barrier key
+		// rotation) and an ordinary one (audit device config), both
+		// AuthRequired=true per implementation_steps.
+		"/v1/sys/rotate":        {authRequired: true, fipsSensitive: true},
+		"/v1/sys/audit":         {authRequired: true, fipsSensitive: false},
+		"/v1/sys/wrapping/wrap": {authRequired: true, fipsSensitive: true},
+		// The catch-all handlers must require auth.
+		"/v1/sys/": {authRequired: true, fipsSensitive: false},
+		"/v1/":     {authRequired: true, fipsSensitive: false},
+		// Raft storage endpoints per implementation_steps step 5.
+		"/v1/sys/storage/raft/bootstrap": {authRequired: true, fipsSensitive: false},
+		"/v1/sys/storage/raft/join":      {authRequired: true, fipsSensitive: false},
+		// UI routes are unauthenticated.
+		"/ui/":        {authRequired: false, fipsSensitive: false},
+		"/robots.txt": {authRequired: false, fipsSensitive: false},
+		// health/leader are unauthenticated per implementation_steps step 4.
+		"/v1/sys/health": {authRequired: false, fipsSensitive: false},
+		"/v1/sys/leader": {authRequired: false, fipsSensitive: false},
+	} {
+		got, ok := byPath[path]
+		require.True(t, ok, "expected registration for %q", path)
+		require.Equal(t, want.authRequired, got.AuthRequired, "AuthRequired mismatch for %q", path)
+		require.Equal(t, want.fipsSensitive, got.FIPSSensitive, "FIPSSensitive mismatch for %q", path)
+		require.NotEmpty(t, got.Methods, "%q must declare explicit methods", path)
+	}
+
+	// Conditional endpoints must be absent entirely when their setting is
+	// off, not merely marked unauthenticated.
+	for _, path := range []string{
+		"/v1/sys/rekey/init", "/v1/sys/rekey/update", "/v1/sys/rekey/verify",
+		"/v1/sys/rekey-recovery-key/init", "/v1/sys/rekey-recovery-key/update", "/v1/sys/rekey-recovery-key/verify",
+		"/v1/sys/generate-root/attempt", "/v1/sys/generate-root/update",
+	} {
+		_, ok := byPath[path]
+		require.False(t, ok, "%q must not be registered when its enabling setting is false", path)
+	}
+}
+
+// TestHandlerRegistry_AllEndpoints_ConditionalSettings verifies the
+// conditional registration blocks required by acceptance criterion 3:
+// unauthRekey and unauthGenerateRoot must each add their endpoints to the
+// registry, unauthenticated (AuthRequired=false), only when the
+// corresponding setting is true, and those endpoints must be entirely
+// absent from Inventory() when it is false.
+func TestHandlerRegistry_AllEndpoints_ConditionalSettings(t *testing.T) {
+	rekeyPaths := []string{
+		"/v1/sys/rekey/init", "/v1/sys/rekey/update", "/v1/sys/rekey/verify",
+		"/v1/sys/rekey-recovery-key/init", "/v1/sys/rekey-recovery-key/update", "/v1/sys/rekey-recovery-key/verify",
+	}
+	generateRootPaths := []string{"/v1/sys/generate-root/attempt", "/v1/sys/generate-root/update"}
+
+	baseline := buildAllEndpointsRegistrations(handlerSettings{})
+	withRekey := buildAllEndpointsRegistrations(handlerSettings{unauthRekey: true})
+	withGenerateRoot := buildAllEndpointsRegistrations(handlerSettings{unauthGenerateRoot: true})
+
+	require.Len(t, withRekey, len(baseline)+len(rekeyPaths))
+	require.Len(t, withGenerateRoot, len(baseline)+len(generateRootPaths))
+
+	inventoryPaths := func(regs []HandlerRegistration) map[string]HandlerRegistration {
+		hr := NewHandlerRegistry()
+		for _, reg := range regs {
+			require.NoError(t, hr.Register(reg))
+		}
+		out := make(map[string]HandlerRegistration)
+		for _, reg := range hr.Inventory() {
+			out[reg.Path] = reg
+		}
+		return out
+	}
+
+	baselineInv := inventoryPaths(baseline)
+	rekeyInv := inventoryPaths(withRekey)
+	generateRootInv := inventoryPaths(withGenerateRoot)
+
+	for _, path := range rekeyPaths {
+		_, ok := baselineInv[path]
+		require.False(t, ok, "%q must be absent when unauthRekey is false", path)
+
+		reg, ok := rekeyInv[path]
+		require.True(t, ok, "%q must be present when unauthRekey is true", path)
+		require.False(t, reg.AuthRequired, "%q must be unauthenticated when unauthRekey is true", path)
+		require.True(t, reg.FIPSSensitive, "%q touches key-share material and must be FIPS-sensitive", path)
+	}
+
+	for _, path := range generateRootPaths {
+		_, ok := baselineInv[path]
+		require.False(t, ok, "%q must be absent when unauthGenerateRoot is false", path)
+
+		reg, ok := generateRootInv[path]
+		require.True(t, ok, "%q must be present when unauthGenerateRoot is true", path)
+		require.False(t, reg.AuthRequired, "%q must be unauthenticated when unauthGenerateRoot is true", path)
+		require.True(t, reg.FIPSSensitive, "%q must be FIPS-sensitive", path)
+	}
+}

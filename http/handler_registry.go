@@ -20,8 +20,11 @@ import (
 // sensitivity live at the registration site instead of being buried in the
 // handler implementation.
 type HandlerRegistration struct {
-	// Path is the mux pattern the handler is registered under. Must begin
-	// with "/v1/".
+	// Path is the mux pattern the handler is registered under. Must be an
+	// absolute path (begin with "/"). Most registrations live under
+	// "/v1/", Vault's logical API namespace, but the registry also hosts
+	// the small set of non-API paths handlerWithSettings serves directly:
+	// the UI ("/ui/", "/ui"), "/robots.txt", and the UI redirect at "/".
 	Path string
 
 	// Methods lists the HTTP methods this registration serves. It must be
@@ -79,15 +82,15 @@ func NewHandlerRegistry() *HandlerRegistry {
 
 // Register validates and records a handler registration. It returns a
 // descriptive error if:
-//   - Path does not start with "/v1/"
+//   - Path is not an absolute path (does not start with "/")
 //   - Methods is empty
 //   - Handler is nil
 //   - any Path+Method combination has already been registered
 //
 // Register is safe for concurrent use.
 func (hr *HandlerRegistry) Register(reg HandlerRegistration) error {
-	if !strings.HasPrefix(reg.Path, "/v1/") {
-		return fmt.Errorf("handler registry: invalid path %q: path must start with /v1/", reg.Path)
+	if !strings.HasPrefix(reg.Path, "/") {
+		return fmt.Errorf("handler registry: invalid path %q: path must be absolute (start with /)", reg.Path)
 	}
 	if len(reg.Methods) == 0 {
 		return fmt.Errorf("handler registry: path %q must declare at least one explicit HTTP method", reg.Path)

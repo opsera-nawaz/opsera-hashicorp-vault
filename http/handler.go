@@ -163,29 +163,36 @@ var (
 	perMethodAlwaysRedirectPaths  = map[string]*pathmanager.PathManager{}
 	websocketPaths                = pathmanager.New()
 
-	injectDataIntoTopRoutes = []string{
-		"/v1/sys/audit",
-		"/v1/sys/audit/",
-		"/v1/sys/audit-hash/",
-		"/v1/sys/auth",
-		"/v1/sys/auth/",
-		"/v1/sys/config/cors",
-		"/v1/sys/config/auditing/request-headers/",
-		"/v1/sys/config/auditing/request-headers",
-		"/v1/sys/capabilities",
-		"/v1/sys/capabilities-accessor",
-		"/v1/sys/capabilities-self",
-		"/v1/sys/ha-status",
-		"/v1/sys/key-status",
-		"/v1/sys/mounts",
-		"/v1/sys/mounts/",
-		"/v1/sys/policy",
-		"/v1/sys/policy/",
-		"/v1/sys/rekey/backup",
-		"/v1/sys/rekey/recovery-key-backup",
-		"/v1/sys/remount",
-		"/v1/sys/rotate",
-		"/v1/sys/wrapping/wrap",
+	// injectDataIntoTopRoutes lists the /v1/sys/* paths that are forwarded
+	// through handleLogicalWithInjector and registered on the
+	// HandlerRegistry with AuthRequired=true. fipsSensitive marks the
+	// subset that expose or perform operations subject to the FIPS 140-3
+	// module boundary (barrier key rotation, response wrapping, key-share
+	// backup, audit hashing), so Inventory() can report that distinction
+	// instead of one blanket value for the whole batch.
+	injectDataIntoTopRoutes = []topLevelRoute{
+		{path: "/v1/sys/audit"},
+		{path: "/v1/sys/audit/"},
+		{path: "/v1/sys/audit-hash/", fipsSensitive: true},
+		{path: "/v1/sys/auth"},
+		{path: "/v1/sys/auth/"},
+		{path: "/v1/sys/config/cors"},
+		{path: "/v1/sys/config/auditing/request-headers/"},
+		{path: "/v1/sys/config/auditing/request-headers"},
+		{path: "/v1/sys/capabilities"},
+		{path: "/v1/sys/capabilities-accessor"},
+		{path: "/v1/sys/capabilities-self"},
+		{path: "/v1/sys/ha-status"},
+		{path: "/v1/sys/key-status", fipsSensitive: true},
+		{path: "/v1/sys/mounts"},
+		{path: "/v1/sys/mounts/"},
+		{path: "/v1/sys/policy"},
+		{path: "/v1/sys/policy/"},
+		{path: "/v1/sys/rekey/backup", fipsSensitive: true},
+		{path: "/v1/sys/rekey/recovery-key-backup", fipsSensitive: true},
+		{path: "/v1/sys/remount"},
+		{path: "/v1/sys/rotate", fipsSensitive: true},
+		{path: "/v1/sys/wrapping/wrap", fipsSensitive: true},
 	}
 	websocketRawPaths = []string{
 		"sys/events/subscribe",
@@ -195,7 +202,42 @@ var (
 		http.MethodPut:  {"sys/storage/raft/snapshot-load"},
 	}
 	oidcProtectedPathRegex = regexp.MustCompile(`^identity/oidc/provider/\w(([\w-.]+)?\w)?/userinfo$`)
+
+	// fullLogicalMethods lists every HTTP method - including Vault's
+	// non-standard LIST and RECOVER verbs - that the method switch in
+	// buildLogicalRequestNoAuth (http/logical.go) accepts. HandlerRegistry
+	// registrations that forward to a generic logical dispatch handler
+	// (handleLogical, handleLogicalWithInjector, handleLogicalNoForward)
+	// use this set so the registry's per-method mux patterns don't narrow
+	// the methods those handlers already support.
+	//
+	// http.MethodHead is deliberately not listed: net/http's ServeMux
+	// already dispatches HEAD requests to a registered GET pattern when no
+	// more specific HEAD pattern exists for that exact path (the request's
+	// r.Method is untouched, so handleLogicalInternal's own "HEAD" case
+	// still runs). Adding an explicit HEAD entry here as well would create
+	// a pattern that is simultaneously more specific in method and more
+	// general in path than the narrower GET-bearing registrations nested
+	// under it (e.g. sys/config/state/ vs. the sys/ catch-all), which
+	// net/http's registration-time conflict check rejects with a panic.
+	fullLogicalMethods = []string{
+		http.MethodGet,
+		http.MethodPut,
+		http.MethodPost,
+		http.MethodDelete,
+		http.MethodPatch,
+		http.MethodOptions,
+		"LIST",
+		"RECOVER",
+	}
 )
+
+// topLevelRoute describes one entry in injectDataIntoTopRoutes. See that
+// var's doc comment for what fipsSensitive means.
+type topLevelRoute struct {
+	path          string
+	fipsSensitive bool
+}
 
 // TokenHeaderMaxBytes returns the http.Server.MaxHeaderBytes value for the
 // given listener configuration. A negative CustomMaxTokenHeaderSize disables
@@ -317,14 +359,16 @@ func handlerWithSettings(props *vault.HandlerProperties, settings handlerSetting
 		mux.Handle("/v1/sys/generate-recovery-token/attempt", handleSysGenerateRootAttempt(core, strategy))
 		mux.Handle("/v1/sys/generate-recovery-token/update", handleSysGenerateRootUpdate(core, strategy))
 	default:
-		// Endpoints migrated onto the HandlerRegistry are declared here, with
-		// their authorization metadata explicit at the registration site,
-		// then mounted onto mux via RegisterHandlers so they flow through the
-		// same wrapping chain as the not-yet-migrated mux.Handle calls below.
-		// Subsequent stories migrate additional endpoints onto this same
-		// registry. A Register error here is a programmer error (e.g. a
-		// duplicate path+method) and must fail loudly rather than silently
-		// falling back to a direct mux.Handle call.
+		// Every endpoint below is declared on this single HandlerRegistry,
+		// with its authorization metadata explicit at the registration
+		// site, then mounted onto mux with one RegisterHandlers call at
+		// the end of this case so every migrated endpoint flows through
+		// an identical wrapping chain. A Register error here is a
+		// programmer error (e.g. a duplicate path+method) and must fail
+		// loudly rather than silently falling back to a direct
+		// mux.Handle call. Recovery mode (the other switch case) keeps
+		// its own direct mux.Handle calls: it has a separate, much
+		// smaller handler set and is not part of this registry.
 		registry := NewHandlerRegistry()
 		if err := registry.Register(HandlerRegistration{
 			Path:          "/v1/" + operatorNamespace + "sys/init",
@@ -337,8 +381,26 @@ func handlerWithSettings(props *vault.HandlerProperties, settings handlerSetting
 		}
 
 		// Handle non-forwarded paths
-		mux.Handle("/v1/"+operatorNamespace+"sys/config/state/", handleLogicalNoForward(core, chrootNamespace))
-		mux.Handle("/v1/"+operatorNamespace+"sys/host-info", handleLogicalNoForward(core, chrootNamespace))
+		for _, reg := range []HandlerRegistration{
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/config/state/",
+				Methods:       fullLogicalMethods,
+				AuthRequired:  true,
+				FIPSSensitive: false,
+				Handler:       handleLogicalNoForward(core, chrootNamespace),
+			},
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/host-info",
+				Methods:       fullLogicalMethods,
+				AuthRequired:  true,
+				FIPSSensitive: false,
+				Handler:       handleLogicalNoForward(core, chrootNamespace),
+			},
+		} {
+			if err := registry.Register(reg); err != nil {
+				panic(fmt.Sprintf("handler registry: failed to register %q: %v", reg.Path, err))
+			}
+		}
 
 		// The seal lifecycle endpoints are the highest-risk trust-boundary
 		// surface Vault exposes: they gate the barrier's sealed/unsealed
@@ -397,81 +459,352 @@ func handlerWithSettings(props *vault.HandlerProperties, settings handlerSetting
 				panic(fmt.Sprintf("http: invalid seal-lifecycle handler registration for %q: %v", reg.Path, err))
 			}
 		}
-		registry.RegisterHandlers(mux)
 
-		mux.Handle("/v1/"+operatorNamespace+"sys/leader", handleSysLeader(core,
-			WithRedactAddresses(props.ListenerConfig.RedactAddresses)))
-		mux.Handle("/v1/"+operatorNamespace+"sys/health", handleSysHealth(core,
-			WithRedactClusterName(props.ListenerConfig.RedactClusterName),
-			WithRedactVersion(props.ListenerConfig.RedactVersion)))
-		mux.Handle("/v1/"+operatorNamespace+"sys/monitor", handleLogicalNoForward(core, chrootNamespace))
+		for _, reg := range []HandlerRegistration{
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/leader",
+				Methods:       []string{http.MethodGet},
+				AuthRequired:  false,
+				FIPSSensitive: false,
+				Handler:       handleSysLeader(core, WithRedactAddresses(props.ListenerConfig.RedactAddresses)),
+			},
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/health",
+				Methods:       []string{http.MethodGet, http.MethodHead},
+				AuthRequired:  false,
+				FIPSSensitive: false,
+				Handler: handleSysHealth(core,
+					WithRedactClusterName(props.ListenerConfig.RedactClusterName),
+					WithRedactVersion(props.ListenerConfig.RedactVersion)),
+			},
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/monitor",
+				Methods:       fullLogicalMethods,
+				AuthRequired:  true,
+				FIPSSensitive: false,
+				Handler:       handleLogicalNoForward(core, chrootNamespace),
+			},
+		} {
+			if err := registry.Register(reg); err != nil {
+				panic(fmt.Sprintf("handler registry: failed to register %q: %v", reg.Path, err))
+			}
+		}
 
 		// Register generate-root endpoints as unauthenticated handlers only if unauthGenerateRoot is true.
 		// When false, these endpoints will be handled by the sys backend as authenticated endpoints.
 		if settings.unauthGenerateRoot {
-			mux.Handle("/v1/"+operatorNamespace+"sys/generate-root/attempt", handleRequestForwarding(core,
-				handleAuditNonLogical(core, handleSysGenerateRootAttempt(core, vault.GenerateStandardRootTokenStrategy))))
-			mux.Handle("/v1/"+operatorNamespace+"sys/generate-root/update", handleRequestForwarding(core,
-				handleAuditNonLogical(core, handleSysGenerateRootUpdate(core, vault.GenerateStandardRootTokenStrategy))))
+			for _, reg := range []HandlerRegistration{
+				{
+					Path:          "/v1/" + operatorNamespace + "sys/generate-root/attempt",
+					Methods:       []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
+					AuthRequired:  false,
+					FIPSSensitive: true,
+					Handler: handleRequestForwarding(core,
+						handleAuditNonLogical(core, handleSysGenerateRootAttempt(core, vault.GenerateStandardRootTokenStrategy))),
+				},
+				{
+					Path:          "/v1/" + operatorNamespace + "sys/generate-root/update",
+					Methods:       []string{http.MethodPut, http.MethodPost},
+					AuthRequired:  false,
+					FIPSSensitive: true,
+					Handler: handleRequestForwarding(core,
+						handleAuditNonLogical(core, handleSysGenerateRootUpdate(core, vault.GenerateStandardRootTokenStrategy))),
+				},
+			} {
+				if err := registry.Register(reg); err != nil {
+					panic(fmt.Sprintf("handler registry: invalid unauth-generate-root handler registration for %q: %v", reg.Path, err))
+				}
+			}
 		}
 
 		// Register rekey endpoints as unauthenticated handlers only if unauthRekey is true.
 		// When false (the default), these endpoints will be handled by the sys backend as authenticated endpoints.
 		if settings.unauthRekey {
-			mux.Handle("/v1/"+operatorNamespace+"sys/rekey/init", handleRequestForwarding(core, handleSysRekeyInit(core, false)))
-			mux.Handle("/v1/"+operatorNamespace+"sys/rekey/update", handleRequestForwarding(core, handleSysRekeyUpdate(core, false)))
-			mux.Handle("/v1/"+operatorNamespace+"sys/rekey/verify", handleRequestForwarding(core, handleSysRekeyVerify(core, false)))
-			mux.Handle("/v1/"+operatorNamespace+"sys/rekey-recovery-key/init", handleRequestForwarding(core, handleSysRekeyInit(core, true)))
-			mux.Handle("/v1/"+operatorNamespace+"sys/rekey-recovery-key/update", handleRequestForwarding(core, handleSysRekeyUpdate(core, true)))
-			mux.Handle("/v1/"+operatorNamespace+"sys/rekey-recovery-key/verify", handleRequestForwarding(core, handleSysRekeyVerify(core, true)))
+			for _, reg := range []HandlerRegistration{
+				{
+					Path:          "/v1/" + operatorNamespace + "sys/rekey/init",
+					Methods:       []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
+					AuthRequired:  false,
+					FIPSSensitive: true,
+					Handler:       handleRequestForwarding(core, handleSysRekeyInit(core, false)),
+				},
+				{
+					Path:          "/v1/" + operatorNamespace + "sys/rekey/update",
+					Methods:       []string{http.MethodPut, http.MethodPost},
+					AuthRequired:  false,
+					FIPSSensitive: true,
+					Handler:       handleRequestForwarding(core, handleSysRekeyUpdate(core, false)),
+				},
+				{
+					Path:          "/v1/" + operatorNamespace + "sys/rekey/verify",
+					Methods:       []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
+					AuthRequired:  false,
+					FIPSSensitive: true,
+					Handler:       handleRequestForwarding(core, handleSysRekeyVerify(core, false)),
+				},
+				{
+					Path:          "/v1/" + operatorNamespace + "sys/rekey-recovery-key/init",
+					Methods:       []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
+					AuthRequired:  false,
+					FIPSSensitive: true,
+					Handler:       handleRequestForwarding(core, handleSysRekeyInit(core, true)),
+				},
+				{
+					Path:          "/v1/" + operatorNamespace + "sys/rekey-recovery-key/update",
+					Methods:       []string{http.MethodPut, http.MethodPost},
+					AuthRequired:  false,
+					FIPSSensitive: true,
+					Handler:       handleRequestForwarding(core, handleSysRekeyUpdate(core, true)),
+				},
+				{
+					Path:          "/v1/" + operatorNamespace + "sys/rekey-recovery-key/verify",
+					Methods:       []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
+					AuthRequired:  false,
+					FIPSSensitive: true,
+					Handler:       handleRequestForwarding(core, handleSysRekeyVerify(core, true)),
+				},
+			} {
+				if err := registry.Register(reg); err != nil {
+					panic(fmt.Sprintf("handler registry: invalid unauth-rekey handler registration for %q: %v", reg.Path, err))
+				}
+			}
 		}
 
-		mux.Handle("/v1/"+operatorNamespace+"sys/storage/raft/bootstrap", handleSysRaftBootstrap(core))
-		mux.Handle("/v1/"+operatorNamespace+"sys/storage/raft/join", handleSysRaftJoin(core))
-		mux.Handle("/v1/"+operatorNamespace+"sys/internal/ui/feature-flags", handleSysInternalFeatureFlags(core))
-
-		for _, path := range injectDataIntoTopRoutes {
-			mux.Handle(path, handleRequestForwarding(core, handleLogicalWithInjector(core, chrootNamespace)))
+		for _, reg := range []HandlerRegistration{
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/storage/raft/bootstrap",
+				Methods:       []string{http.MethodPut, http.MethodPost},
+				AuthRequired:  true,
+				FIPSSensitive: false,
+				Handler:       handleSysRaftBootstrap(core),
+			},
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/storage/raft/join",
+				Methods:       []string{http.MethodPut, http.MethodPost},
+				AuthRequired:  true,
+				FIPSSensitive: false,
+				Handler:       handleSysRaftJoin(core),
+			},
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/internal/ui/feature-flags",
+				Methods:       []string{http.MethodGet},
+				AuthRequired:  false,
+				FIPSSensitive: false,
+				Handler:       handleSysInternalFeatureFlags(core),
+			},
+		} {
+			if err := registry.Register(reg); err != nil {
+				panic(fmt.Sprintf("handler registry: failed to register %q: %v", reg.Path, err))
+			}
 		}
-		mux.Handle("/v1/"+operatorNamespace+"sys/", handleRequestForwarding(core, handleLogical(core, chrootNamespace)))
-		mux.Handle("/v1/", handleRequestForwarding(core, handleLogical(core, chrootNamespace)))
+
+		for _, route := range injectDataIntoTopRoutes {
+			if err := registry.Register(HandlerRegistration{
+				Path:          route.path,
+				Methods:       []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete, "LIST"},
+				AuthRequired:  true,
+				FIPSSensitive: route.fipsSensitive,
+				Handler:       handleRequestForwarding(core, handleLogicalWithInjector(core, chrootNamespace)),
+			}); err != nil {
+				panic(fmt.Sprintf("handler registry: failed to register top-level route %q: %v", route.path, err))
+			}
+		}
+
+		// The catch-all handlers are registered last: http.ServeMux
+		// resolves the most specific matching pattern regardless of
+		// registration order, so every more-specific path registered
+		// above (sys/seal, the injectDataIntoTopRoutes batch, etc.)
+		// continues to win over these two even though they are added to
+		// the registry at the end.
+		for _, reg := range []HandlerRegistration{
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/",
+				Methods:       fullLogicalMethods,
+				AuthRequired:  true,
+				FIPSSensitive: false,
+				Handler:       handleRequestForwarding(core, handleLogical(core, chrootNamespace)),
+			},
+			{
+				Path:          "/v1/",
+				Methods:       fullLogicalMethods,
+				AuthRequired:  true,
+				FIPSSensitive: false,
+				Handler:       handleRequestForwarding(core, handleLogical(core, chrootNamespace)),
+			},
+		} {
+			if err := registry.Register(reg); err != nil {
+				panic(fmt.Sprintf("handler registry: failed to register catch-all %q: %v", reg.Path, err))
+			}
+		}
+
 		if core.UIEnabled() {
 			if uiBuiltIn {
-				mux.Handle("/ui/", http.StripPrefix("/ui/", gziphandler.GzipHandler(handleUIHeaders(core, handleUI(http.FileServer(&UIAssetWrapper{FileSystem: assetFS()}))))))
-				mux.Handle("/robots.txt", gziphandler.GzipHandler(handleUIHeaders(core, handleUI(http.FileServer(&UIAssetWrapper{FileSystem: assetFS()})))))
+				if err := registry.Register(HandlerRegistration{
+					Path:          "/ui/",
+					Methods:       []string{http.MethodGet, http.MethodHead},
+					AuthRequired:  false,
+					FIPSSensitive: false,
+					Handler:       http.StripPrefix("/ui/", gziphandler.GzipHandler(handleUIHeaders(core, handleUI(http.FileServer(&UIAssetWrapper{FileSystem: assetFS()}))))),
+				}); err != nil {
+					panic(fmt.Sprintf("handler registry: failed to register /ui/: %v", err))
+				}
+				if err := registry.Register(HandlerRegistration{
+					Path:          "/robots.txt",
+					Methods:       []string{http.MethodGet, http.MethodHead},
+					AuthRequired:  false,
+					FIPSSensitive: false,
+					Handler:       gziphandler.GzipHandler(handleUIHeaders(core, handleUI(http.FileServer(&UIAssetWrapper{FileSystem: assetFS()})))),
+				}); err != nil {
+					panic(fmt.Sprintf("handler registry: failed to register /robots.txt: %v", err))
+				}
 			} else {
-				mux.Handle("/ui/", handleUIHeaders(core, handleUIStub()))
+				if err := registry.Register(HandlerRegistration{
+					Path:          "/ui/",
+					Methods:       []string{http.MethodGet, http.MethodHead},
+					AuthRequired:  false,
+					FIPSSensitive: false,
+					Handler:       handleUIHeaders(core, handleUIStub()),
+				}); err != nil {
+					panic(fmt.Sprintf("handler registry: failed to register /ui/ stub: %v", err))
+				}
 			}
-			mux.Handle("/ui", handleUIRedirect())
-			mux.Handle("/", handleUIRedirect())
-
+			for _, reg := range []HandlerRegistration{
+				{
+					Path:          "/ui",
+					Methods:       []string{http.MethodGet},
+					AuthRequired:  false,
+					FIPSSensitive: false,
+					Handler:       handleUIRedirect(),
+				},
+				{
+					Path:          "/",
+					Methods:       []string{http.MethodGet},
+					AuthRequired:  false,
+					FIPSSensitive: false,
+					Handler:       handleUIRedirect(),
+				},
+			} {
+				if err := registry.Register(reg); err != nil {
+					panic(fmt.Sprintf("handler registry: failed to register %q: %v", reg.Path, err))
+				}
+			}
 		}
 
 		// Register metrics path without authentication if enabled
 		if props.ListenerConfig != nil && props.ListenerConfig.Telemetry.UnauthenticatedMetricsAccess {
-			mux.Handle("/v1/sys/metrics", handleMetricsUnauthenticated(core))
+			if err := registry.Register(HandlerRegistration{
+				Path:          "/v1/sys/metrics",
+				Methods:       []string{http.MethodGet},
+				AuthRequired:  false,
+				FIPSSensitive: false,
+				Handler:       handleMetricsUnauthenticated(core),
+			}); err != nil {
+				panic(fmt.Sprintf("handler registry: failed to register unauthenticated sys/metrics: %v", err))
+			}
 		} else {
-			mux.Handle("/v1/sys/metrics", handleLogicalNoForward(core, chrootNamespace))
+			if err := registry.Register(HandlerRegistration{
+				Path:          "/v1/sys/metrics",
+				Methods:       fullLogicalMethods,
+				AuthRequired:  true,
+				FIPSSensitive: false,
+				Handler:       handleLogicalNoForward(core, chrootNamespace),
+			}); err != nil {
+				panic(fmt.Sprintf("handler registry: failed to register sys/metrics: %v", err))
+			}
 		}
 
 		if props.ListenerConfig != nil && props.ListenerConfig.Profiling.UnauthenticatedPProfAccess {
 			for _, name := range []string{"goroutine", "threadcreate", "heap", "allocs", "block", "mutex"} {
-				mux.Handle("/v1/sys/pprof/"+name, pprof.Handler(name))
+				if err := registry.Register(HandlerRegistration{
+					Path:          "/v1/sys/pprof/" + name,
+					Methods:       []string{http.MethodGet},
+					AuthRequired:  false,
+					FIPSSensitive: false,
+					Handler:       pprof.Handler(name),
+				}); err != nil {
+					panic(fmt.Sprintf("handler registry: failed to register sys/pprof/%s: %v", name, err))
+				}
 			}
-			mux.Handle("/v1/sys/pprof/", http.HandlerFunc(pprof.Index))
-			mux.Handle("/v1/sys/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
-			mux.Handle("/v1/sys/pprof/profile", http.HandlerFunc(pprof.Profile))
-			mux.Handle("/v1/sys/pprof/symbol", http.HandlerFunc(pprof.Symbol))
-			mux.Handle("/v1/sys/pprof/trace", http.HandlerFunc(pprof.Trace))
+			for _, reg := range []HandlerRegistration{
+				{
+					Path:          "/v1/sys/pprof/",
+					Methods:       []string{http.MethodGet},
+					AuthRequired:  false,
+					FIPSSensitive: false,
+					Handler:       http.HandlerFunc(pprof.Index),
+				},
+				{
+					Path:          "/v1/sys/pprof/cmdline",
+					Methods:       []string{http.MethodGet},
+					AuthRequired:  false,
+					FIPSSensitive: false,
+					Handler:       http.HandlerFunc(pprof.Cmdline),
+				},
+				{
+					Path:          "/v1/sys/pprof/profile",
+					Methods:       []string{http.MethodGet},
+					AuthRequired:  false,
+					FIPSSensitive: false,
+					Handler:       http.HandlerFunc(pprof.Profile),
+				},
+				{
+					// pprof.Symbol reads its lookup list from either a GET
+					// query string or a POST body, so both methods must
+					// reach it.
+					Path:          "/v1/sys/pprof/symbol",
+					Methods:       []string{http.MethodGet, http.MethodPost},
+					AuthRequired:  false,
+					FIPSSensitive: false,
+					Handler:       http.HandlerFunc(pprof.Symbol),
+				},
+				{
+					Path:          "/v1/sys/pprof/trace",
+					Methods:       []string{http.MethodGet},
+					AuthRequired:  false,
+					FIPSSensitive: false,
+					Handler:       http.HandlerFunc(pprof.Trace),
+				},
+			} {
+				if err := registry.Register(reg); err != nil {
+					panic(fmt.Sprintf("handler registry: failed to register %q: %v", reg.Path, err))
+				}
+			}
 		} else {
-			mux.Handle("/v1/sys/pprof/", handleLogicalNoForward(core, chrootNamespace))
+			if err := registry.Register(HandlerRegistration{
+				Path:          "/v1/sys/pprof/",
+				Methods:       fullLogicalMethods,
+				AuthRequired:  true,
+				FIPSSensitive: false,
+				Handler:       handleLogicalNoForward(core, chrootNamespace),
+			}); err != nil {
+				panic(fmt.Sprintf("handler registry: failed to register sys/pprof/: %v", err))
+			}
 		}
 
 		if props.ListenerConfig != nil && props.ListenerConfig.InFlightRequestLogging.UnauthenticatedInFlightAccess {
-			mux.Handle("/v1/sys/in-flight-req", handleUnAuthenticatedInFlightRequest(core))
+			if err := registry.Register(HandlerRegistration{
+				Path:          "/v1/sys/in-flight-req",
+				Methods:       []string{http.MethodGet},
+				AuthRequired:  false,
+				FIPSSensitive: false,
+				Handler:       handleUnAuthenticatedInFlightRequest(core),
+			}); err != nil {
+				panic(fmt.Sprintf("handler registry: failed to register unauthenticated sys/in-flight-req: %v", err))
+			}
 		} else {
-			mux.Handle("/v1/sys/in-flight-req", handleLogicalNoForward(core, chrootNamespace))
+			if err := registry.Register(HandlerRegistration{
+				Path:          "/v1/sys/in-flight-req",
+				Methods:       fullLogicalMethods,
+				AuthRequired:  true,
+				FIPSSensitive: false,
+				Handler:       handleLogicalNoForward(core, chrootNamespace),
+			}); err != nil {
+				panic(fmt.Sprintf("handler registry: failed to register sys/in-flight-req: %v", err))
+			}
 		}
+
+		registry.RegisterHandlers(mux)
+
 		if settings.unauthDROperationToken {
 			entDROperationRoutes(mux, core)
 		}
