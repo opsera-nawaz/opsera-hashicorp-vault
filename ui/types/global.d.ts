@@ -56,14 +56,6 @@ declare module 'vault/helpers/dasherize' {
   export default helper;
 }
 
-// ember-engines ships no declaration files. buildRoutes returns a thin wrapper Ember Engines
-// resolves at build time into the engine's route map; RouteDSL callback shapes are declared
-// locally by each engine's routes.ts since ember-engines doesn't export one.
-declare module 'ember-engines/routes' {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped upstream DSL builder
-  export default function buildRoutes(callback: (this: any) => void): unknown;
-}
-
 // autosize@6.0.1 ships no declaration files and @types/autosize doesn't exist.
 declare module 'autosize' {
   function autosize(el: HTMLElement | HTMLElement[]): HTMLElement | HTMLElement[];
