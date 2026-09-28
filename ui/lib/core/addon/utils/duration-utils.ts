@@ -22,8 +22,8 @@ export const secondsMap: SecondsMap = {
   h: 3600,
   d: 86400,
 };
-export const convertToSeconds = (time: number, unit: string) => {
-  return time * (secondsMap[unit] || 1);
+export const convertToSeconds = (time: number | string, unit: string) => {
+  return Number(time) * (secondsMap[unit] || 1);
 };
 export const convertFromSeconds = (seconds: number, unit: string) => {
   return seconds / (secondsMap[unit] || 1);

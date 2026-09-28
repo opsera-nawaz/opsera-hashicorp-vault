@@ -40,10 +40,31 @@ import {
   goSafeConvertFromSeconds,
   largestUnitFromSeconds,
 } from 'core/utils/duration-utils';
-export default class TtlPickerComponent extends Component {
+
+interface TtlObject {
+  enabled: boolean;
+  seconds: number;
+  timeString: string;
+  goSafeTimeString: string;
+}
+
+interface TtlPickerArgs {
+  onChange: (ttl: TtlObject) => void;
+  initialEnabled?: boolean;
+  label?: string;
+  labelDisabled?: string;
+  helperTextEnabled?: string;
+  helperTextDisabled?: string;
+  initialValue?: string | number | null;
+  changeOnInit?: boolean;
+  hideToggle?: boolean;
+  emptyMeansZero?: boolean;
+}
+
+export default class TtlPickerComponent extends Component<TtlPickerArgs> {
   @tracked enableTTL = false;
   @tracked recalculateSeconds = false;
-  @tracked time = ''; // if defaultValue is NOT set, then do not display a defaultValue.
+  @tracked time: string | number = ''; // if defaultValue is NOT set, then do not display a defaultValue.
   @tracked unit = 's';
   @tracked errorMessage = '';
 
@@ -51,20 +72,20 @@ export default class TtlPickerComponent extends Component {
   recalculationTimeout = 5000;
   elementId = 'ttl-' + guidFor(this);
 
-  get label() {
+  get label(): string {
     if (this.args.label && this.args.labelDisabled) {
       return this.enableTTL ? this.args.label : this.args.labelDisabled;
     }
     return this.args.label || 'Time to live (TTL)';
   }
-  get helperText() {
+  get helperText(): string | undefined {
     return this.enableTTL || this.args.hideToggle
       ? this.args.helperTextEnabled
       : this.args.helperTextDisabled;
   }
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: TtlPickerArgs) {
+    super(owner, args);
     const enable = this.args.initialEnabled;
 
     let setEnable = !!this.args.hideToggle;
@@ -77,7 +98,7 @@ export default class TtlPickerComponent extends Component {
     this.initializeTtl();
   }
 
-  initializeTtl() {
+  initializeTtl(): void {
     const initialValue = this.args.initialValue;
 
     let seconds = 0;
@@ -86,7 +107,7 @@ export default class TtlPickerComponent extends Component {
       // if the passed value is a number, assume unit is seconds
       seconds = initialValue;
     } else {
-      const parseDuration = durationToSeconds(initialValue);
+      const parseDuration = durationToSeconds(initialValue ?? '');
       // if parsing fails leave it empty
       if (parseDuration === null) return;
       seconds = parseDuration;
@@ -101,7 +122,7 @@ export default class TtlPickerComponent extends Component {
     }
   }
 
-  get seconds() {
+  get seconds(): number {
     return convertToSeconds(this.time, this.unit);
   }
   get unitOptions() {
@@ -113,7 +134,7 @@ export default class TtlPickerComponent extends Component {
     ];
   }
 
-  keepSecondsRecalculate(newUnit) {
+  keepSecondsRecalculate(newUnit: string): void {
     const newTime = convertFromSeconds(this.seconds, newUnit);
     if (Number.isInteger(newTime)) {
       // Only recalculate if time is whole number
@@ -122,25 +143,29 @@ export default class TtlPickerComponent extends Component {
     this.unit = newUnit;
   }
 
-  handleChange() {
+  handleChange(): void {
     const { time, unit, seconds, enableTTL } = this;
     const ttl = {
-      enabled: this.args.hideToggle || enableTTL,
+      enabled: !!(this.args.hideToggle || enableTTL),
       seconds,
-      timeString: time + unit,
+      timeString: `${time}${unit}`,
       goSafeTimeString: goSafeConvertFromSeconds(seconds, unit),
     };
     this.args.onChange(ttl);
   }
 
   @action
-  toggleEnabled() {
+  toggleEnabled(): void {
     this.enableTTL = !this.enableTTL;
     this.handleChange();
   }
 
-  @restartableTask
-  *updateTime(newTime) {
+  // restartableTask()'s standalone (non-decorator) form only accepts async
+  // arrow functions, not generator functions (see the mixin/task() usages
+  // elsewhere in this story, which use plain `task()`'s TaskFunction overload
+  // instead); the arrow function's `this` resolves lexically to this class
+  // instance since it's a class field initializer.
+  updateTime = restartableTask(async (newTime: string) => {
     this.errorMessage = '';
     const parsedTime = parseInt(newTime, 10);
     if (!newTime) {
@@ -162,12 +187,12 @@ export default class TtlPickerComponent extends Component {
       return;
     }
     this.recalculateSeconds = true;
-    yield timeout(this.recalculationTimeout);
+    await timeout(this.recalculationTimeout);
     this.recalculateSeconds = false;
-  }
+  });
 
   @action
-  updateUnit(newUnit) {
+  updateUnit(newUnit: string): void {
     if (this.recalculateSeconds) {
       this.unit = newUnit;
     } else {
