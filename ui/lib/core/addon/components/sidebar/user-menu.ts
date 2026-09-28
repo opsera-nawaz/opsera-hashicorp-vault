@@ -42,7 +42,7 @@ export default class SidebarUserMenuComponent extends Component {
   renewToken() {
     this.fakeRenew = true;
     later(() => {
-      this.auth.renew().then(() => {
+      this.auth.renew()?.then(() => {
         this.fakeRenew = this.auth.isRenewing;
       });
     }, 200);
