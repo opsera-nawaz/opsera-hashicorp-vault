@@ -335,19 +335,70 @@ func handlerWithSettings(props *vault.HandlerProperties, settings handlerSetting
 		}); err != nil {
 			panic(fmt.Sprintf("handler registry: failed to register sys/init: %v", err))
 		}
-		registry.RegisterHandlers(mux)
 
 		// Handle non-forwarded paths
 		mux.Handle("/v1/"+operatorNamespace+"sys/config/state/", handleLogicalNoForward(core, chrootNamespace))
 		mux.Handle("/v1/"+operatorNamespace+"sys/host-info", handleLogicalNoForward(core, chrootNamespace))
 
-		mux.Handle("/v1/"+operatorNamespace+"sys/seal-status", handleSysSealStatus(core,
-			WithRedactClusterName(props.ListenerConfig.RedactClusterName),
-			WithRedactVersion(props.ListenerConfig.RedactVersion)))
-		mux.Handle("/v1/"+operatorNamespace+"sys/seal-backend-status", handleSysSealBackendStatus(core))
-		mux.Handle("/v1/"+operatorNamespace+"sys/seal", handleSysSeal(core))
-		mux.Handle("/v1/"+operatorNamespace+"sys/step-down", handleRequestForwarding(core, handleSysStepDown(core)))
-		mux.Handle("/v1/"+operatorNamespace+"sys/unseal", handleSysUnseal(core))
+		// The seal lifecycle endpoints are the highest-risk trust-boundary
+		// surface Vault exposes: they gate the barrier's sealed/unsealed
+		// state. Route them through the HandlerRegistry instead of bare
+		// mux.Handle calls so the authorization intent for each path -
+		// including the fact that sys/unseal is intentionally
+		// unauthenticated, since a sealed vault has no token store to
+		// validate against - is declared and auditable at the
+		// registration site rather than left implicit inside the handler.
+		for _, reg := range []HandlerRegistration{
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/seal-status",
+				Methods:       []string{http.MethodGet},
+				AuthRequired:  false,
+				FIPSSensitive: false,
+				Handler: handleSysSealStatus(core,
+					WithRedactClusterName(props.ListenerConfig.RedactClusterName),
+					WithRedactVersion(props.ListenerConfig.RedactVersion)),
+			},
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/seal-backend-status",
+				Methods:       []string{http.MethodGet},
+				AuthRequired:  false,
+				FIPSSensitive: false,
+				Handler:       handleSysSealBackendStatus(core),
+			},
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/seal",
+				Methods:       []string{http.MethodPut, http.MethodPost},
+				AuthRequired:  true,
+				FIPSSensitive: true,
+				Handler:       handleSysSeal(core),
+			},
+			{
+				Path:          "/v1/" + operatorNamespace + "sys/step-down",
+				Methods:       []string{http.MethodPut, http.MethodPost},
+				AuthRequired:  true,
+				FIPSSensitive: false,
+				Handler:       handleRequestForwarding(core, handleSysStepDown(core)),
+			},
+			{
+				// AuthRequired is false by design: the vault is sealed when
+				// this endpoint is called, so there is no unsealed token
+				// store to validate a token against.
+				Path:          "/v1/" + operatorNamespace + "sys/unseal",
+				Methods:       []string{http.MethodPut, http.MethodPost},
+				AuthRequired:  false,
+				FIPSSensitive: true,
+				Handler:       handleSysUnseal(core),
+			},
+		} {
+			if err := registry.Register(reg); err != nil {
+				// These registrations are static and mutually exclusive by
+				// path, so an error here can only mean a programming
+				// mistake in this file, not a runtime condition.
+				panic(fmt.Sprintf("http: invalid seal-lifecycle handler registration for %q: %v", reg.Path, err))
+			}
+		}
+		registry.RegisterHandlers(mux)
+
 		mux.Handle("/v1/"+operatorNamespace+"sys/leader", handleSysLeader(core,
 			WithRedactAddresses(props.ListenerConfig.RedactAddresses)))
 		mux.Handle("/v1/"+operatorNamespace+"sys/health", handleSysHealth(core,
