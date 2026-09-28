@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "generated_by": "tools/layer_violations (go run ./tools/layer_violations, or `make layer-violations`)",
+  "methodology": "Counts non-comment, non-test-file call sites matching `mux.Handle(` or `mux.HandleFunc(` across the repository (vendor/, .git/, node_modules/, ui/ excluded), per the architecture artifact's definition of a handler-layer violation: a config-layer handler registered outside the HandlerRegistry, bypassing the HandleRequest -\u003e CheckToken authorization pipeline.",
+  "historical_baseline": {
+    "count": 1191,
+    "note": "Pre-refactor figure from the project architecture artifact (Trust Boundaries ForgeScore section), measured before WO-002/013/014/024 introduced and migrated handlers onto HandlerRegistry. It is recorded here for traceability only; WO-024 already landed on main in this worktree (see `git log --oneline` for the WO-024 and WO-025 merge commits), so re-running this tool's methodology against the current tree does not reproduce 1,191. CurrentBaseline below is the real, reproducible floor for this worktree's monotonic-decrease check."
+  },
+  "current_baseline": 13,
+  "current_by_file": [
+    {
+      "file": "command/agent.go",
+      "count": 4
+    },
+    {
+      "file": "command/proxy.go",
+      "count": 4
+    },
+    {
+      "file": "http/handler.go",
+      "count": 3
+    },
+    {
+      "file": "http/testing.go",
+      "count": 2
+    }
+  ],
+  "violations": [
+    {
+      "file": "command/agent.go",
+      "line": 722,
+      "text": "mux.Handle(consts.AgentPathMetrics, c.handleMetrics())"
+    },
+    {
+      "file": "command/agent.go",
+      "line": 724,
+      "text": "mux.Handle(consts.AgentPathCacheClear, leaseCache.HandleCacheClear(ctx))"
+    },
+    {
+      "file": "command/agent.go",
+      "line": 725,
+      "text": "mux.Handle(consts.AgentPathQuit, c.handleQuit(quitEnabled))"
+    },
+    {
+      "file": "command/agent.go",
+      "line": 726,
+      "text": "mux.Handle(\"/\", muxHandler)"
+    },
+    {
+      "file": "command/proxy.go",
+      "line": 658,
+      "text": "mux.Handle(consts.ProxyPathMetrics, c.handleMetrics())"
+    },
+    {
+      "file": "command/proxy.go",
+      "line": 660,
+      "text": "mux.Handle(consts.ProxyPathCacheClear, leaseCache.HandleCacheClear(ctx))"
+    },
+    {
+      "file": "command/proxy.go",
+      "line": 661,
+      "text": "mux.Handle(consts.ProxyPathQuit, c.handleQuit(quitEnabled))"
+    },
+    {
+      "file": "command/proxy.go",
+      "line": 662,
+      "text": "mux.Handle(\"/\", muxHandler)"
+    },
+    {
+      "file": "http/handler.go",
+      "line": 358,
+      "text": "mux.Handle(\"/v1/sys/raw/\", handleLogicalRecovery(raw, props.RecoveryToken))"
+    },
+    {
+      "file": "http/handler.go",
+      "line": 359,
+      "text": "mux.Handle(\"/v1/sys/generate-recovery-token/attempt\", handleSysGenerateRootAttempt(core, strategy))"
+    },
+    {
+      "file": "http/handler.go",
+      "line": 360,
+      "text": "mux.Handle(\"/v1/sys/generate-recovery-token/update\", handleSysGenerateRootUpdate(core, strategy))"
+    },
+    {
+      "file": "http/testing.go",
+      "line": 36,
+      "text": "mux.Handle(\"/_test/auth\", http.HandlerFunc(testHandleAuth))"
+    },
+    {
+      "file": "http/testing.go",
+      "line": 37,
+      "text": "mux.Handle(\"/\", Handler.Handler(props))"
+    }
+  ],
+  "exclusions": [
+    {
+      "file": "http/handler_registry.go",
+      "reason": "HandlerRegistry.mountLocked's own mux.Handle call is the registry's internal mounting mechanism, not a call that bypasses it - every registration it mounts already carries explicit AuthRequired/AuditRequired/FIPSSensitive metadata and flows through the same middleware chain Build() applies."
+    }
+  ],
+  "monotonic_constraint": "CurrentBaseline must not increase in any subsequent PR touching http/, vault/, or command/ (Vault Agent/Proxy also register their own mux directly). Regenerate via `make layer-violations` and diff CurrentBaseline against this committed file's value; fail CI if the new value is greater."
+}
