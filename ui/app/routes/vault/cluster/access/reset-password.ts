@@ -6,7 +6,7 @@
 import Route from '@ember/routing/route';
 import { service } from '@ember/service';
 
-import type AuthService from 'vault/vault/services/auth';
+import type AuthService from 'vault/services/auth';
 import type CapabilitiesService from 'vault/services/capabilities';
 
 const ERROR_UNAVAILABLE = 'Password reset is not available for the current user.';
@@ -18,7 +18,11 @@ export default class VaultClusterAccessResetPasswordRoute extends Route {
   @service declare readonly capabilities: CapabilitiesService;
 
   async model() {
-    const { authMethodType, authMountPath, displayName } = this.auth.authData;
+    const authData = this.auth.authData;
+    if (!authData) {
+      throw new Error(ERROR_UNAVAILABLE);
+    }
+    const { authMethodType, authMountPath, displayName } = authData;
     // Password reset is only available on userpass type auth mounts
     if (authMethodType !== 'userpass') {
       throw new Error(ERROR_UNAVAILABLE);

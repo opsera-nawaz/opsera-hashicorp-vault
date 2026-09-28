@@ -14,10 +14,10 @@ import { waitFor } from '@ember/test-waiters';
 import errorMessage from 'vault/utils/error-message';
 import MfaConstraint from 'vault/resources/mfa/constraint';
 
-import type AuthService from 'vault/vault/services/auth';
+import type AuthService from 'vault/services/auth';
 import type Store from '@ember-data/store';
 import type VersionService from 'vault/services/version';
-import type { AuthSuccessResponse } from 'vault/vault/services/auth';
+import type { AuthSuccessResponse } from 'vault/services/auth';
 import type { Task } from 'ember-concurrency';
 import type { MfaAuthData } from 'vault/vault/auth/mfa';
 
