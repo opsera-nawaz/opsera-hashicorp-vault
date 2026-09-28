@@ -270,6 +270,18 @@ go-mod-tidy:
 protofmt:
 	buf format -w
 
+# handler-inventory generates an auditable JSON report of every HTTP
+# endpoint registered on Vault's HandlerRegistry, with each endpoint's
+# AuthRequired/FIPSSensitive metadata, and writes it to
+# docs/fips/handler-inventory.json. Run this after changing handler
+# registrations in http/handler.go and commit the result so the diff shows
+# exactly which endpoints, or which endpoints' authorization metadata,
+# changed. See tools/handler-inventory and http/handler_inventory.go.
+.PHONY: handler-inventory
+handler-inventory:
+	@echo "==> Generating handler inventory report..."
+	@$(GO_CMD) run ./tools/handler-inventory -out docs/fips/handler-inventory.json
+
 semgrep:
 	semgrep --include '*.go' --exclude 'vendor' -a -f tools/semgrep .
 
