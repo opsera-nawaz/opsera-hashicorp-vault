@@ -59,7 +59,11 @@ export default class PkiRoleEditRoute extends Route {
       { label: 'Secrets engines', route: 'secrets', linkExternal: true },
       { label: this.secretMountPath.currentPath, route: 'overview', model: this.secretMountPath.currentPath },
       { label: 'Roles', route: 'roles.index', model: this.secretMountPath.currentPath },
-      { label: name, route: 'roles.role.details', models: [this.secretMountPath.currentPath, name as string] },
+      {
+        label: name,
+        route: 'roles.role.details',
+        models: [this.secretMountPath.currentPath, name],
+      },
       { label: 'Edit' },
     ];
   }

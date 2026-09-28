@@ -148,7 +148,7 @@ export default class PkiIssuerCrossSign extends Component<Args> {
         this.intermediateIssuers[intermediateMount] = issuers;
         this.validationErrors = addToArray(this.validationErrors, {
           newCrossSignedIssuer: this.nameValidation(newCrossSignedIssuer, issuers),
-        });
+        }) as ValidationRow[];
       }
       if (this.validationErrors.some((row) => !row.newCrossSignedIssuer.isValid)) {
         return;
@@ -165,15 +165,18 @@ export default class PkiIssuerCrossSign extends Component<Args> {
             intermediateIssuer,
             newCrossSignedIssuer
           );
-          this.signedIssuers = addToArray(this.signedIssuers, { ...data, hasError: false });
+          this.signedIssuers = addToArray(this.signedIssuers, {
+            ...data,
+            hasError: false,
+          }) as SignedIssuerRow[];
         } catch (error) {
           const { message } = await this.api.parseError(error);
-          const cause = (error as ErrorWithCause)?.cause as Error[] | undefined;
+          const cause = (error as ErrorWithCause).cause as Error[] | undefined;
           this.signedIssuers = addToArray(this.signedIssuers, {
             ...formRow,
             hasError: message,
             hasUnsupportedParams: cause ? cause.map((e) => e.message).join(', ') : null,
-          });
+          }) as SignedIssuerRow[];
         }
       }
     })

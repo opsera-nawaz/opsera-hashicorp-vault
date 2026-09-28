@@ -35,7 +35,7 @@ export default class PkiTidyIndexController extends Controller {
       try {
         const tidyStatusResponse = yield this.fetchTidyStatus();
         this.tidyStatus = tidyStatusResponse as TidyStatus;
-      } catch (e) {
+      } catch {
         // we want to keep polling here
       }
     }

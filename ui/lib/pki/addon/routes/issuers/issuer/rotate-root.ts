@@ -41,7 +41,7 @@ export default class PkiIssuerRotateRootRoute extends Route {
       certData,
       parsingErrors,
       backend: this.secretMountPath.currentPath,
-    }) as Promise<RotateRootRouteModel>;
+    });
   }
 
   setupController(controller: RouteController, resolvedModel: RotateRootRouteModel) {

@@ -121,21 +121,21 @@ module('Unit | Lib | pki/types/pki-types', function () {
   });
 
   test('PkiAcmeOrder models the order lifecycle as a state machine union', function (assert) {
-    // Edge case: ACME orders progress through pending/processing/valid/invalid/revoked states.
+    // Edge case: ACME orders progress through new/submitted/.../completed/revoked/expired/error states.
     const pendingOrder: PkiAcmeOrder = {
       orderId: 'order-1',
-      status: 'pending',
+      status: 'submitted',
       identifiers: ['example.com'],
     };
-    const validOrder: PkiAcmeOrder = {
+    const completedOrder: PkiAcmeOrder = {
       orderId: 'order-2',
-      status: 'valid',
+      status: 'completed',
       identifiers: ['example.com'],
       certificate: '-----BEGIN CERTIFICATE-----',
     };
 
-    assert.strictEqual(pendingOrder.status, 'pending', 'orders start in a pending-like state');
-    assert.strictEqual(validOrder.status, 'valid', 'orders resolve to a terminal state');
+    assert.strictEqual(pendingOrder.status, 'submitted', 'orders start in a pending-like state');
+    assert.strictEqual(completedOrder.status, 'completed', 'orders resolve to a terminal state');
 
     const invalidStatus = () => {
       // @ts-expect-error 'unknown-status' is not part of the OrderStatusName union

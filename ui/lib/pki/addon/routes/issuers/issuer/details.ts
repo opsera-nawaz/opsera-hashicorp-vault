@@ -101,8 +101,10 @@ export default class PkiIssuerDetailsRoute extends Route {
       const path = `/${this.secretMountPath.currentPath}/issuer/${issuerId}/${format}`;
       const response = await this.api.request.get(path);
       const body = format === 'der' ? 'blob' : 'text';
-      return response[body]();
-    } catch (e) {
+      // awaited (rather than returned directly) so a rejection here is caught below instead of
+      // becoming an unhandled rejection after this function has already returned
+      return await response[body]();
+    } catch {
       return null;
     }
   }

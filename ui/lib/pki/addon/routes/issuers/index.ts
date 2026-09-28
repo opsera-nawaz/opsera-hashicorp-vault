@@ -46,7 +46,7 @@ export default class PkiIssuersListRoute extends Route {
       const isRoot = await verifyCertificates(issuer.certificate as string, issuer.certificate as string);
       const parsedCertificate = parseCertificate(issuer.certificate as string);
       return { ...keyInfoEntry, ...issuer, isRoot, parsedCertificate };
-    } catch (e) {
+    } catch {
       return { ...keyInfoEntry };
     }
   }

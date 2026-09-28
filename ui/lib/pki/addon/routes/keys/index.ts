@@ -127,7 +127,10 @@ export default class PkiKeysIndexRoute extends Route implements WithConfig {
     );
   }
 
-  keyCapabilitiesById(keyPathsById: Record<string, string>, perms: CapabilitiesMap): Record<string, Capabilities> {
+  keyCapabilitiesById(
+    keyPathsById: Record<string, string>,
+    perms: CapabilitiesMap
+  ): Record<string, Capabilities> {
     // Iterate over key ids and return an object with Capabilities as their value
     return Object.fromEntries(
       Object.entries(keyPathsById)

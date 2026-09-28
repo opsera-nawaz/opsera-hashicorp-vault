@@ -76,6 +76,6 @@ export default class PkiConfigurationRoute extends Route {
       urls: this.api.secrets.pkiReadUrlsConfiguration(currentPath).catch(errorHandler),
       crl: this.api.secrets.pkiReadCrlConfiguration(currentPath).catch(errorHandler),
       capabilities: this.fetchCapabilities(currentPath),
-    }) as Promise<ConfigurationRouteModel>;
+    });
   }
 }

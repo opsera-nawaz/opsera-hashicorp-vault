@@ -17,8 +17,8 @@ import type Transition from '@ember/routing/transition';
  * decorate the necessary routes to perform the check in the beforeModel hook since that may change what is returned for the model
  */
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- TS requires
-// mixin-factory base constructors to accept `any[]`, see TS's own mixin pattern docs
+// TS requires mixin-factory base constructors to accept `any[]`, see TS's own mixin pattern docs.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RouteConstructor = new (...args: any[]) => Route;
 
 export interface WithConfig {
@@ -51,11 +51,11 @@ export function withConfig() {
             SecretsApiPkiListIssuersListEnum.TRUE
           );
           this.pkiMountHasConfig = true;
-        } catch (e) {
+        } catch {
           this.pkiMountHasConfig = false;
         }
       }
     }
-    return CheckConfig as unknown as T;
+    return CheckConfig;
   };
 }

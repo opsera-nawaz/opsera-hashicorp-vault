@@ -61,7 +61,9 @@ export type PkiKeyType = 'rsa' | 'ec' | 'ed25519';
  * Discriminated union flagging Ed25519 keys as non-Approved under FIPS 140-3 while keeping
  * them representable for existing/legacy keys the UI must still display.
  */
-export type PkiKeyTypeInfo = { keyType: 'rsa' | 'ec'; approved: true } | { keyType: 'ed25519'; approved: false };
+export type PkiKeyTypeInfo =
+  | { keyType: 'rsa' | 'ec'; approved: true }
+  | { keyType: 'ed25519'; approved: false };
 
 /** Narrows a key type string to its FIPS-Approved status. */
 export function isApprovedKeyType(keyType: string): keyType is 'rsa' | 'ec' {
