@@ -1,5 +1,5 @@
 /**
- * Copyright IBM Corp. 2016, 2025
+ * Copyright IBM Corp. 2016, 2026
  * SPDX-License-Identifier: BUSL-1.1
  */
 
@@ -10,6 +10,7 @@ import { keyParamsByType } from 'pki/utils/action-params';
 
 import PkiConfigGenerateForm from 'vault/forms/secrets/pki/config/generate';
 import type { ModelValidations } from 'vault/vault/app-types';
+import type { PkiActionType } from 'pki/utils/action-params';
 
 interface Args {
   form: PkiConfigGenerateForm;
@@ -24,7 +25,7 @@ export default class PkiGenerateToggleGroupsComponent extends Component<Args> {
   get keyParamFields() {
     const { form } = this.args;
     if (form.data.type) {
-      const fields = keyParamsByType(form.data.type);
+      const fields = keyParamsByType(form.data.type as PkiActionType);
       return fields.map((fieldName) => {
         return form.formFields.find((field) => field.name === fieldName);
       });
