@@ -36,3 +36,22 @@ declare class TextDecoderLite {
   constructor(encoding?: string);
   decode(input: Uint8Array): string;
 }
+
+// ember-cli-string-helpers merges these into the app's own `vault/helpers/*`
+// namespace via Ember CLI's classic addon app-tree merging at build time, a
+// mechanism `tsconfig.json`'s `paths` mapping (real files only) can't see.
+declare module 'vault/helpers/capitalize' {
+  export function capitalize(params: [string]): string;
+  const helper: unknown;
+  export default helper;
+}
+declare module 'vault/helpers/humanize' {
+  export function humanize(params: [string]): string;
+  const helper: unknown;
+  export default helper;
+}
+declare module 'vault/helpers/dasherize' {
+  export function dasherize(params: [string]): string;
+  const helper: unknown;
+  export default helper;
+}

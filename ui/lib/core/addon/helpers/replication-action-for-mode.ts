@@ -5,6 +5,7 @@
 
 import { helper as buildHelper } from '@ember/component/helper';
 import { get } from '@ember/object';
+
 const ACTIONS = {
   performance: {
     primary: ['disable', 'demote', 'recover', 'reindex'],
@@ -19,8 +20,10 @@ const ACTIONS = {
   },
 };
 
-export function replicationActionForMode([replicationMode, clusterMode] /*, hash*/) {
-  return get(ACTIONS, `${replicationMode}.${clusterMode}`);
+export function replicationActionForMode([replicationMode, clusterMode]: [string, string]):
+  | string[]
+  | undefined {
+  return get(ACTIONS as Record<string, unknown>, `${replicationMode}.${clusterMode}`) as string[] | undefined;
 }
 
 export default buildHelper(replicationActionForMode);

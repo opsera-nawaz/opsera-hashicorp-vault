@@ -8,11 +8,11 @@ import { debug } from '@ember/debug';
 import { htmlSafe } from '@ember/template';
 import { sanitize } from 'dompurify';
 
-export default helper(function sanitizedHtml([htmlString]) {
+export default helper(function sanitizedHtml([htmlString]: [string]) {
   try {
     return htmlSafe(sanitize(htmlString));
   } catch (e) {
-    debug('Error sanitizing string', e);
+    debug(`Error sanitizing string ${String(e)}`);
     // I couldn't get this to actually fail but as a fallback render the value as-is
     return htmlString;
   }

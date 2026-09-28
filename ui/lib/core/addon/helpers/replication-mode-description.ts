@@ -11,8 +11,8 @@ const REPLICATION_MODE_DESCRIPTIONS = {
     'Performance Replication scales workloads horizontally across clusters to make requests faster. Local secondaries handle read requests but forward writes to the primary to be handled.',
 };
 
-function replicationModeDescription([mode]) {
-  return REPLICATION_MODE_DESCRIPTIONS[mode];
+function replicationModeDescription([mode]: [string]): string | undefined {
+  return REPLICATION_MODE_DESCRIPTIONS[mode as keyof typeof REPLICATION_MODE_DESCRIPTIONS];
 }
 
 export default buildHelper(replicationModeDescription);

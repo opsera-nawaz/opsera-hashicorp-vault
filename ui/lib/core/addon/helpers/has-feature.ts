@@ -9,6 +9,8 @@ import { assert } from '@ember/debug';
 import Helper from '@ember/component/helper';
 import { observer } from '@ember/object';
 
+import type VersionService from 'vault/services/version';
+
 const POSSIBLE_FEATURES = [
   'HSM',
   'Performance Replication',
@@ -23,7 +25,7 @@ const POSSIBLE_FEATURES = [
   'Key Management Secrets Engine',
 ];
 
-export function hasFeature(featureName, features) {
+export function hasFeature(featureName: string, features: string[] | null | undefined): boolean {
   if (!POSSIBLE_FEATURES.includes(featureName)) {
     assert(`${featureName} is not one of the available values for Vault Enterprise features.`, false);
     return false;
@@ -31,12 +33,14 @@ export function hasFeature(featureName, features) {
   return features ? features.includes(featureName) : false;
 }
 
-export default Helper.extend({
-  version: service(),
-  onFeaturesChange: observer('version.features.[]', function () {
+export default class HasFeatureHelper extends Helper {
+  @service declare readonly version: VersionService;
+
+  onFeaturesChange = observer('version.features.[]', function (this: HasFeatureHelper) {
     this.recompute();
-  }),
-  compute([featureName]) {
+  });
+
+  compute([featureName]: [string]): boolean {
     return hasFeature(featureName, this.version.features);
-  },
-});
+  }
+}

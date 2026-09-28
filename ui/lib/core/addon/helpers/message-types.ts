@@ -39,11 +39,11 @@ export const MESSAGE_TYPES = {
   },
 };
 
-export function messageTypes([type]) {
+export function messageTypes([type]: [string]): (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES] {
   if (!(type in MESSAGE_TYPES)) {
     assert('type is not a valid message type.');
   }
-  return MESSAGE_TYPES[type];
+  return MESSAGE_TYPES[type as keyof typeof MESSAGE_TYPES];
 }
 
 export default buildHelper(messageTypes);

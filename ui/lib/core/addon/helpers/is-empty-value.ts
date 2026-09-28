@@ -5,7 +5,7 @@
 
 import { helper } from '@ember/component/helper';
 
-export function isEmptyValue(value, hasDefault = false) {
+export function isEmptyValue(value: unknown, hasDefault: unknown = false): boolean {
   if (hasDefault) {
     value = hasDefault;
   }
@@ -15,6 +15,6 @@ export function isEmptyValue(value, hasDefault = false) {
   return value == null || value === '';
 }
 
-export default helper(function ([value], { hasDefault = false }) {
+export default helper(function ([value]: [unknown], { hasDefault = false }: { hasDefault?: unknown }) {
   return isEmptyValue(value, hasDefault);
 });

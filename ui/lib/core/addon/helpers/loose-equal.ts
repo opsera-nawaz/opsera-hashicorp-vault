@@ -11,7 +11,7 @@ import { helper } from '@ember/component/helper';
   strict equal (===) will fail if the API param is a number
   <option selected={{loose-equal model.someAttr someOption)}} value={{someOption}}>
 */
-export function looseEqual([a, b]) {
+export function looseEqual([a, b]: [unknown, unknown]): boolean {
   // loose equal 0 == '' returns true, we don't want that
   if ((a === 0 && b === '') || (a === '' && b === 0)) {
     return false;

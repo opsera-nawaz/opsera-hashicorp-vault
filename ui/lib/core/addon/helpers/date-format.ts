@@ -6,35 +6,35 @@
 import { helper } from '@ember/component/helper';
 import { format, parseISO } from 'date-fns';
 
-function checkType(value) {
+function checkType(value: unknown): string {
   if (typeof value === 'string') {
     // if it's a number when multiplied by 1, it's just a number in quotes
-    return isNaN(value * 1) ? 'string' : 'number';
+    return isNaN(Number(value)) ? 'string' : 'number';
   }
-  if (typeof value === 'object') {
+  if (typeof value === 'object' && value !== null) {
     // Dates are technically an object
     try {
-      value.toUTCString();
+      (value as Date).toUTCString();
       return 'date';
-    } catch (e) {
+    } catch {
       return 'object';
     }
   }
   return typeof value;
 }
 
-function dateFromNumber(number) {
+function dateFromNumber(number: string | number): Date {
   if (number.toString().length === 10) {
     // is seconds, convert to millis
-    return new Date(number * 1000);
+    return new Date(Number(number) * 1000);
   }
   // Multiply by 1 in case it's a number in quotes
-  return new Date(number * 1);
+  return new Date(Number(number) * 1);
 }
 
-function dateFromString(str) {
+function dateFromString(str: string): Date | null {
   // Check ISO format first
-  let val = parseISO(str);
+  let val: Date = parseISO(str);
   if (val.toString() !== 'Invalid Date') return val;
 
   val = new Date(str);
@@ -43,18 +43,21 @@ function dateFromString(str) {
   return null;
 }
 
-export function dateFormat([value, style = 'MMM d yyyy, h:mm:ss aa'], { withTimeZone = false }) {
+export function dateFormat(
+  [value, style = 'MMM d yyyy, h:mm:ss aa']: [unknown, string?],
+  { withTimeZone = false }: { withTimeZone?: boolean }
+): string {
   // see format breaking in upgrade to date-fns 2.x https://github.com/date-fns/date-fns/blob/master/CHANGELOG.md#changed-5
-  let date;
+  let date: Date | null = null;
   switch (checkType(value)) {
     case 'string':
-      date = dateFromString(value);
+      date = dateFromString(value as string);
       break;
     case 'number':
-      date = dateFromNumber(value);
+      date = dateFromNumber(value as string);
       break;
     case 'date':
-      date = value;
+      date = value as Date;
       break;
     default:
       // date is not a recognized format
@@ -63,7 +66,7 @@ export function dateFormat([value, style = 'MMM d yyyy, h:mm:ss aa'], { withTime
 
   // at this point, date is either falsey or a Date object
   if (!date) {
-    return value || '';
+    return (value as string) || '';
   }
 
   const zone = withTimeZone ? formatTimeZone(date) : '';
@@ -71,12 +74,12 @@ export function dateFormat([value, style = 'MMM d yyyy, h:mm:ss aa'], { withTime
 }
 
 // separate function for testing
-export function formatTimeZone(date) {
-  let zone; // local timezone ex: 'PST'
+export function formatTimeZone(date: Date): string {
+  let zone: string; // local timezone ex: 'PST'
   try {
     // passing undefined means default to the browser's locale
-    zone = date.toLocaleTimeString(undefined, { timeZoneName: 'short' }).split(' ')[2];
-  } catch (e) {
+    zone = date.toLocaleTimeString(undefined, { timeZoneName: 'short' }).split(' ')[2] ?? '';
+  } catch {
     zone = '';
   }
 

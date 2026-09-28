@@ -7,7 +7,7 @@ import { helper as buildHelper } from '@ember/component/helper';
 
 const TOOLS_ACTIONS = ['wrap', 'lookup', 'unwrap', 'rewrap', 'random', 'hash'];
 
-export function toolsActions() {
+export function toolsActions(): string[] {
   return TOOLS_ACTIONS;
 }
 

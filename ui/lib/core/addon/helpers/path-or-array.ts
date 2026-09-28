@@ -5,7 +5,7 @@
 
 import { helper as buildHelper } from '@ember/component/helper';
 
-export function pathOrArray([maybeArray, target]) {
+export function pathOrArray([maybeArray, target]: [string | unknown[], Record<string, unknown>]): unknown {
   if (Array.isArray(maybeArray)) {
     return maybeArray;
   }

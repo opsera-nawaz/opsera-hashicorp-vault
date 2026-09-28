@@ -157,11 +157,14 @@ const SECRET_BACKENDS = {
   },
 };
 
-export function optionsForBackend(backend, tab) {
-  const selected = SECRET_BACKENDS[backend];
-  let backendOptions;
+export function optionsForBackend(backend: string, tab?: string): Record<string, unknown> {
+  const selected = SECRET_BACKENDS[backend as keyof typeof SECRET_BACKENDS] as
+    | (Record<string, unknown> & { tabs?: Record<string, unknown>[] })
+    | undefined;
+  let backendOptions: Record<string, unknown>;
   if (selected && selected.tabs) {
-    const tabData = selected.tabs.find((t) => t.name === tab || t.modelPrefix === tab) || selected.tabs[0];
+    const tabData =
+      selected.tabs.find((t) => t['name'] === tab || t['modelPrefix'] === tab) || selected.tabs[0];
     backendOptions = { ...selected, ...tabData };
   } else if (selected) {
     backendOptions = selected;
@@ -171,6 +174,6 @@ export function optionsForBackend(backend, tab) {
   return backendOptions;
 }
 
-export default buildHelper(function ([backend, tab]) {
+export default buildHelper(function ([backend, tab]: [string, string?]) {
   return optionsForBackend(backend, tab);
 });

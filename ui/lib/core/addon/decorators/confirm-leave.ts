@@ -7,6 +7,22 @@ import { action } from '@ember/object';
 import Route from '@ember/routing/route';
 import Ember from 'ember';
 
+import type Transition from '@ember/routing/transition';
+
+// Loose EmberData-Model-like shape: `modelPath`/`silentCleanupPaths` are
+// dynamic property paths, so the concrete model type can't be known statically.
+interface DirtyTrackingModel {
+  hasDirtyAttributes?: boolean;
+  isSaving?: boolean;
+  isNew?: boolean;
+  unloadRecord(): void;
+  rollbackAttributes(): void;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- TS requires
+// mixin-factory base constructors to accept `any[]`, see TS's own mixin pattern docs
+type RouteConstructor = new (...args: any[]) => Route;
+
 /**
  * Confirm that the user wants to discard unsaved changes before leaving the page. This decorator hooks into
  * the willTransition action. If you override setupController, be sure to set 'model' on the controller to
@@ -40,8 +56,8 @@ import Ember from 'ember';
  * }
  *
  */
-export function withConfirmLeave(modelPath = 'model', silentCleanupPaths) {
-  return function decorator(SuperClass) {
+export function withConfirmLeave(modelPath = 'model', silentCleanupPaths?: string[]) {
+  return function decorator<T extends RouteConstructor>(SuperClass: T): T {
     if (!Object.prototype.isPrototypeOf.call(Route, SuperClass)) {
       // eslint-disable-next-line
       console.error(
@@ -49,9 +65,9 @@ export function withConfirmLeave(modelPath = 'model', silentCleanupPaths) {
       );
       return SuperClass;
     }
-    return class ConfirmLeave extends SuperClass {
-      _rollbackModel(modelPath) {
-        const model = this.controller.get(modelPath);
+    class ConfirmLeave extends SuperClass {
+      _rollbackModel(modelPath: string): void {
+        const model = this.controller.get(modelPath) as DirtyTrackingModel | undefined;
         // we only want to complete rollback if the model is dirty and not saving
         if (model && model.hasDirtyAttributes && !model.isSaving) {
           const method = model.isNew ? 'unloadRecord' : 'rollbackAttributes';
@@ -60,14 +76,15 @@ export function withConfirmLeave(modelPath = 'model', silentCleanupPaths) {
       }
 
       @action
-      willTransition(transition) {
+      willTransition(transition: Transition): boolean {
         try {
-          super.willTransition(...arguments);
-        } catch (e) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+          (super.willTransition as (t: Transition) => void)?.(transition);
+        } catch {
           // if the SuperClass doesn't have willTransition
           // defined calling it will throw an error.
         }
-        const model = this.controller.get(modelPath);
+        const model = this.controller.get(modelPath) as DirtyTrackingModel | undefined;
 
         if (model && model.hasDirtyAttributes && !model.isSaving) {
           if (
@@ -87,6 +104,7 @@ export function withConfirmLeave(modelPath = 'model', silentCleanupPaths) {
         });
         return true;
       }
-    };
+    }
+    return ConfirmLeave as unknown as T;
   };
 }

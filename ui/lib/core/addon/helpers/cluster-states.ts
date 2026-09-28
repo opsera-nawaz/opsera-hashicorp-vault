@@ -66,13 +66,20 @@ export const CLUSTER_STATES = {
   },
 };
 
-export function clusterStates([state]) {
-  const defaultDisplay = {
+interface ClusterStateDisplay {
+  glyph: string;
+  isOk: boolean | null;
+  isSyncing: boolean | null;
+  color?: string;
+}
+
+export function clusterStates([state]: [string]): ClusterStateDisplay {
+  const defaultDisplay: ClusterStateDisplay = {
     glyph: '',
     isOk: null,
     isSyncing: null,
   };
-  return CLUSTER_STATES[state] || defaultDisplay;
+  return CLUSTER_STATES[state as keyof typeof CLUSTER_STATES] || defaultDisplay;
 }
 
 export default buildHelper(clusterStates);

@@ -6,12 +6,16 @@
 import { service } from '@ember/service';
 import Helper from '@ember/component/helper';
 
-export default Helper.extend({
-  flashMessages: service(),
+import type FlashMessageService from 'vault/services/flash-messages';
 
-  compute([message, type]) {
+type FlashMessageType = 'success' | 'warning' | 'info' | 'danger' | 'alert' | 'secondary';
+
+export default class SetFlashMessageHelper extends Helper {
+  @service declare readonly flashMessages: FlashMessageService;
+
+  compute([message, type]: [string, FlashMessageType?]): () => void {
     return () => {
       this.flashMessages[type || 'success'](message);
     };
-  },
-});
+  }
+}

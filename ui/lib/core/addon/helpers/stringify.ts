@@ -5,7 +5,7 @@
 
 import { helper as buildHelper } from '@ember/component/helper';
 
-export function stringify([target], { skipFormat }) {
+export function stringify([target]: [unknown], { skipFormat }: { skipFormat?: boolean }): string | undefined {
   if (skipFormat) {
     return JSON.stringify(target);
   }

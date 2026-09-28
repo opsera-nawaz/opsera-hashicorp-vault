@@ -7,8 +7,11 @@ import Helper from '@ember/component/helper';
 import { Promise } from 'rsvp';
 
 export default class AwaitHelper extends Helper {
-  compute([promise]) {
-    if (!promise || typeof promise.then !== 'function') {
+  lastPromise: unknown = null;
+  value: unknown = null;
+
+  compute([promise]: [unknown]): unknown {
+    if (!promise || typeof (promise as PromiseLike<unknown>).then !== 'function') {
       return promise;
     }
     if (promise !== this.lastPromise) {
@@ -18,8 +21,12 @@ export default class AwaitHelper extends Helper {
     }
     return this.value;
   }
-  async resolve(promise) {
-    let value;
+
+  // return type intentionally omitted: `Promise` here is rsvp's import
+  // (shadowing the global), and an async method's declared return type must
+  // be the global `Promise`, so it's left to inference instead.
+  async resolve(promise: unknown) {
+    let value: unknown;
     try {
       value = await Promise.resolve(promise);
     } catch (error) {

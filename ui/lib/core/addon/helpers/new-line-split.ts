@@ -5,7 +5,7 @@
 
 import { helper } from '@ember/component/helper';
 
-export function newLineSplit([lines]) {
+export function newLineSplit([lines]: [string]): string[] {
   return lines.split('\n');
 }
 

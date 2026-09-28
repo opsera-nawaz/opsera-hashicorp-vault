@@ -18,15 +18,15 @@ It assumes that Changelog headers for Vault versions >= 1.4.3 are structured as:
 etc.
 */
 
-export function changelogUrlFor([version]) {
+export function changelogUrlFor([version]: [string | undefined]): string {
   const url = 'https://www.github.com/hashicorp/vault/blob/main/CHANGELOG.md#';
   if (!version) return url;
   try {
     // strip the '+prem' from enterprise versions and remove periods
-    const versionNumber = version.split('+')[0].split('.').join('');
+    const versionNumber = version.split('+')[0]!.split('.').join('');
 
     // only recent versions have a predictable url
-    if (versionNumber >= 143) {
+    if (Number(versionNumber) >= 143) {
       return url.concat(versionNumber);
     }
   } catch (e) {

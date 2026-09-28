@@ -48,7 +48,7 @@ export const largestUnitFromSeconds = (seconds: number) => {
 };
 
 // parses duration string ('3m') and returns seconds
-export const durationToSeconds = (duration: string) => {
+export const durationToSeconds = (duration: string | number) => {
   // we assume numbers are seconds
   if (typeof duration === 'number') return duration;
   try {

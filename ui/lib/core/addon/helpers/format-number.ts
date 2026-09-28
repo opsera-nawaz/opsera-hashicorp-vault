@@ -5,7 +5,7 @@
 
 import { helper } from '@ember/component/helper';
 
-export function formatNumber([value]) {
+export function formatNumber([value]: [unknown]): unknown {
   if (typeof value !== 'number') {
     return value;
   }

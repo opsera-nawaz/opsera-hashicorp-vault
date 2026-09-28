@@ -7,14 +7,14 @@ import { helper } from '@ember/component/helper';
 import { durationToSeconds } from 'core/utils/duration-utils';
 import { formatDuration, intervalToDuration } from 'date-fns';
 
-export function duration([time]) {
+export function duration([time]: [string | number]): string | number {
   // 0 (integer) does not necessarily mean 0 seconds, i.e. it can represent using system ttl defaults
   if (time === 0) return time;
 
   // assume numbers are seconds or parses duration strings into seconds
   const seconds = durationToSeconds(time);
 
-  if (Number.isInteger(seconds)) {
+  if (seconds !== null && Number.isInteger(seconds)) {
     // durationObject: { years: 0, months: 0, days: 0, hours: 1, minutes: 0, seconds: 6 }
     const durationObject = intervalToDuration({ start: 0, end: seconds * 1000 });
 
