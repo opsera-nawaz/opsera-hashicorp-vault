@@ -2456,6 +2456,23 @@ func (p *Policy) EncryptWithOptions(opts EncryptionOptions, value string, factor
 		return "", errutil.UserError{Err: fmt.Sprintf("message encryption not supported for key type %v", keyType)}
 	}
 
+	// EncryptWithOptions is the single point through which every encrypt
+	// call site funnels (Encrypt, EncryptWithFactory, and transit's
+	// path_encrypt.go/path_rewrap.go/path_datakey.go all resolve here), so
+	// gating here enforces FIPS mode for new ChaCha20-Poly1305 (and any
+	// other non-Approved) encryption without duplicating the check at each
+	// caller. This intentionally does not touch DecryptWithOptions: existing
+	// ChaCha20-Poly1305 ciphertext -- written before FIPS mode was enabled,
+	// or under a non-FIPS build -- must remain decryptable indefinitely, so
+	// only the encrypt path is gated (WO-042; key generation/rotation was
+	// already gated by WO-027's RotateInMemoryWithAlgorithm).
+	if isFIPSMode() && !keyType.IsFIPSApproved() {
+		return "", errutil.UserError{Err: fmt.Sprintf(
+			"key type %s is not permitted for encryption in FIPS mode; use %s instead",
+			keyType, fipsApprovedAlternative(keyType),
+		)}
+	}
+
 	var ciphertext []byte
 
 	switch p.KeyVersionType(opts.KeyVersion) {
