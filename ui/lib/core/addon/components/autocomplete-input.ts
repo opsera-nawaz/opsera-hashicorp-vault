@@ -23,41 +23,56 @@ import { tracked } from '@glimmer/tracking';
  * @param {string} [placeholder] - input placeholder
  */
 
-export default class AutocompleteInputComponent extends Component {
+interface AutocompleteOption {
+  label: string;
+  value: string;
+}
+
+interface AutocompleteInputArgs {
+  value: string;
+  onChange: (value: string) => void;
+  optionsTrigger?: string;
+  options?: AutocompleteOption[];
+  label?: string;
+  subText?: string;
+  placeholder?: string;
+}
+
+export default class AutocompleteInputComponent extends Component<AutocompleteInputArgs> {
   @tracked showOptions = false;
-  rootElement;
-  inputElement;
+  rootElement?: HTMLElement;
+  inputElement?: HTMLElement | null;
 
   @action
-  setElement(element) {
+  setElement(element: HTMLElement): void {
     this.rootElement = element;
-    this.inputElement = element.querySelector('.input');
+    this.inputElement = element.querySelector<HTMLElement>('.input');
   }
 
   @action
-  onInput(event) {
+  onInput(event: InputEvent): void {
     const { options = [], optionsTrigger } = this.args;
     if (optionsTrigger && options.length) {
       this.showOptions = event.data === optionsTrigger;
     }
-    this.args.onChange(event.target.value);
+    this.args.onChange((event.target as HTMLInputElement).value);
   }
 
   @action
-  onFocusOut(event) {
+  onFocusOut(event: FocusEvent): void {
     // Enable close on outside click
-    if (!this.rootElement?.contains(event.relatedTarget)) {
+    if (!this.rootElement?.contains(event.relatedTarget as Node | null)) {
       this.showOptions = false;
     }
   }
 
   @action
-  selectOption(value) {
+  selectOption(value: string): void {
     // if trigger character is at start of value it needs to be trimmed
-    const appendValue = value.startsWith(this.args.optionsTrigger) ? value.slice(1) : value;
+    const appendValue = value.startsWith(this.args.optionsTrigger ?? '') ? value.slice(1) : value;
     const newValue = this.args.value + appendValue;
     this.args.onChange(newValue);
     this.showOptions = false;
-    this.inputElement.focus();
+    this.inputElement?.focus();
   }
 }

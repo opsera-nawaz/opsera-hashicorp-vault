@@ -22,31 +22,52 @@ import { encodePath } from 'vault/utils/path-encoding-helpers';
  * @param {boolean} [linkToPaths=true] - If true link to the path.
  */
 
-export default class KeyValueHeader extends Component {
-  get showCurrent() {
+interface BaseKey {
+  display?: string;
+  id?: string;
+}
+
+interface KeyValueHeaderArgs {
+  mode?: string | null;
+  baseKey?: BaseKey | null;
+  path?: string | null;
+  root?: string | string[] | null;
+  showCurrent?: boolean;
+  linkToPaths?: boolean;
+}
+
+interface Crumb {
+  label?: string;
+  text?: string;
+  path?: string | null;
+  model?: string;
+}
+
+export default class KeyValueHeader extends Component<KeyValueHeaderArgs> {
+  get showCurrent(): boolean {
     return this.args.showCurrent || true;
   }
 
-  get linkToPaths() {
+  get linkToPaths(): boolean {
     return this.args.linkToPaths || true;
   }
 
-  stripTrailingSlash(str) {
+  stripTrailingSlash(str: string): string {
     return str[str.length - 1] === '/' ? str.slice(0, -1) : str;
   }
 
-  get currentPath() {
+  get currentPath(): string | null | undefined {
     if (!this.args.mode || this.showCurrent === false) {
       return this.args.path;
     }
     return `vault.cluster.secrets.backend.${this.args.mode}`;
   }
 
-  get secretPath() {
-    const crumbs = [];
+  get secretPath(): (string | Crumb)[] {
+    const crumbs: (string | Crumb)[] = [];
     const root = this.args.root;
     const baseKey = this.args.baseKey?.display || this.args.baseKey?.id;
-    const baseKeyModel = encodePath(this.args.baseKey?.id);
+    const baseKeyModel = encodePath(this.args.baseKey?.id as string);
 
     if (root) {
       if (Array.isArray(root)) {
@@ -82,16 +103,20 @@ export default class KeyValueHeader extends Component {
 
     ancestors.forEach((ancestor, index) => {
       crumbs.push({
-        label: parts[index],
-        text: this.stripTrailingSlash(parts[index]),
+        // non-null: `ancestors.length > 0` (checked above) is only possible
+        // when `keyPartsForKey(baseKey)` also returned a non-null array
+        label: parts![index],
+        text: this.stripTrailingSlash(parts![index] as string),
         path: path,
         model: encodePath(ancestor),
       });
     });
 
     crumbs.push({
-      label: keyWithoutParentKey(baseKey),
-      text: this.stripTrailingSlash(keyWithoutParentKey(baseKey)),
+      // non-null: `baseKey` is truthy here (checked above), so
+      // keyWithoutParentKey's `key ? ... : null` always takes the non-null branch
+      label: keyWithoutParentKey(baseKey)!,
+      text: this.stripTrailingSlash(keyWithoutParentKey(baseKey)!),
       path: currentPath,
       model: baseKeyModel,
     });
