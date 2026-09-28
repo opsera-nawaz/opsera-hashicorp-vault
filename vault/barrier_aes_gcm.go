@@ -93,9 +93,9 @@ type AESGCMBarrier struct {
 
 	initialized atomic.Bool
 
-	UnaccountedEncryptions *atomic.Int64
+	unaccountedEncryptions *atomic.Int64
 	// Used only for testing
-	RemoteEncryptions     *atomic.Int64
+	remoteEncryptions     *atomic.Int64
 	totalLocalEncryptions *atomic.Int64
 
 	bestEffortKeyringTimeout time.Duration
@@ -145,8 +145,8 @@ func NewAESGCMBarrier(physical physical.Backend, detectDeadlocks bool) (*AESGCMB
 		sealed:                   true,
 		cache:                    make(map[uint32]cipher.AEAD),
 		currentAESGCMVersionByte: byte(AESGCMVersion2),
-		UnaccountedEncryptions:   atomic.NewInt64(0),
-		RemoteEncryptions:        atomic.NewInt64(0),
+		unaccountedEncryptions:   atomic.NewInt64(0),
+		remoteEncryptions:        atomic.NewInt64(0),
 		totalLocalEncryptions:    atomic.NewInt64(0),
 		bestEffortKeyringTimeout: keyringTimeout,
 	}
@@ -418,8 +418,8 @@ func (b *AESGCMBarrier) ReloadKeyring(ctx context.Context) error {
 	// Reset enc. counters, this may be a leadership change
 	b.totalLocalEncryptions.Store(0)
 	b.totalLocalEncryptions.Store(0)
-	b.UnaccountedEncryptions.Store(0)
-	b.RemoteEncryptions.Store(0)
+	b.unaccountedEncryptions.Store(0)
+	b.remoteEncryptions.Store(0)
 
 	return b.recoverKeyring(plain)
 }
@@ -651,9 +651,9 @@ func (b *AESGCMBarrier) Rotate(ctx context.Context, randomSource io.Reader) (uin
 	}
 
 	// Clear encryption tracking
-	b.RemoteEncryptions.Store(0)
+	b.remoteEncryptions.Store(0)
 	b.totalLocalEncryptions.Store(0)
-	b.UnaccountedEncryptions.Store(0)
+	b.unaccountedEncryptions.Store(0)
 
 	// Swap the keyrings
 	b.keyring = newKeyring
@@ -1199,11 +1199,11 @@ func (b *AESGCMBarrier) ConsumeEncryptionCount(consumer func(int64) error) error
 		b.l.RLock()
 		defer b.l.RUnlock()
 
-		c := b.UnaccountedEncryptions.Load()
+		c := b.unaccountedEncryptions.Load()
 		err := consumer(c)
 		if err == nil && c > 0 {
 			// Consumer succeeded, remove those from local encryptions
-			b.UnaccountedEncryptions.Sub(c)
+			b.unaccountedEncryptions.Sub(c)
 		}
 		return err
 	}
@@ -1212,9 +1212,9 @@ func (b *AESGCMBarrier) ConsumeEncryptionCount(consumer func(int64) error) error
 
 func (b *AESGCMBarrier) AddRemoteEncryptions(encryptions int64) {
 	// For rollup and persistence
-	b.UnaccountedEncryptions.Add(encryptions)
+	b.unaccountedEncryptions.Add(encryptions)
 	// For testing
-	b.RemoteEncryptions.Add(encryptions)
+	b.remoteEncryptions.Add(encryptions)
 }
 
 func (b *AESGCMBarrier) encryptTracked(path string, term uint32, gcm cipher.AEAD, buf []byte) ([]byte, error) {
@@ -1223,7 +1223,7 @@ func (b *AESGCMBarrier) encryptTracked(path string, term uint32, gcm cipher.AEAD
 		return nil, err
 	}
 	// Increment the local encryption count, and track metrics
-	b.UnaccountedEncryptions.Add(1)
+	b.unaccountedEncryptions.Add(1)
 	b.totalLocalEncryptions.Add(1)
 	metrics.IncrCounterWithLabels(barrierEncryptsMetric, 1, termLabel(term))
 
@@ -1287,7 +1287,7 @@ func (b *AESGCMBarrier) CheckBarrierAutoRotate(ctx context.Context) (string, err
 func (b *AESGCMBarrier) persistEncryptions(ctx context.Context) error {
 	if !b.sealed {
 		// Encryption count persistence
-		upe := b.UnaccountedEncryptions.Load()
+		upe := b.unaccountedEncryptions.Load()
 		if upe > 0 {
 			activeKey := b.keyring.ActiveKey()
 			// Move local (unpersisted) encryptions to the key and persist.  This prevents us from needing to persist if
@@ -1303,7 +1303,7 @@ func (b *AESGCMBarrier) persistEncryptions(ctx context.Context) error {
 				activeKey.Encryptions -= uint64(newEncs)
 				return err
 			}
-			b.UnaccountedEncryptions.Sub(newEncs)
+			b.unaccountedEncryptions.Sub(newEncs)
 		}
 	}
 	return nil
@@ -1314,7 +1314,7 @@ func (b *AESGCMBarrier) encryptions() int64 {
 	if b.keyring != nil {
 		activeKey := b.keyring.ActiveKey()
 		if activeKey != nil {
-			return b.UnaccountedEncryptions.Load() + int64(activeKey.Encryptions)
+			return b.unaccountedEncryptions.Load() + int64(activeKey.Encryptions)
 		}
 	}
 	return 0

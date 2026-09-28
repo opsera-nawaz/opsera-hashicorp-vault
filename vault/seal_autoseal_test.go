@@ -24,7 +24,7 @@ import (
 
 // phy implements physical.Backend. It maps keys to a slice of entries.
 // Each call to Put appends the entry to the slice of entries for that
-// key. No deduplication is done. This allows the test for UpgradeKeys to
+// key. No deduplication is done. This allows the test for upgradeKeys to
 // verify entries are only being updated when the underlying encryption key
 // has been updated.
 type phy struct {
@@ -124,7 +124,7 @@ func TestAutoSeal_UpgradeKeys(t *testing.T) {
 		}
 
 		for phyKey, phyEntries := range pBackend.entries {
-			// Calling UpgradeKeys should only add an entry if the key has
+			// Calling upgradeKeys should only add an entry if the key has
 			// changed.
 			if keyCount, entryCount := len(encKeys), len(phyEntries); keyCount != entryCount {
 				t.Errorf("phyKey = %s: encryption key count not equal to entry count: keys=%d, entries=%d", phyKey, keyCount, entryCount)
@@ -134,7 +134,7 @@ func TestAutoSeal_UpgradeKeys(t *testing.T) {
 			// in encKeys. Iterate over each phyEntry and verify it was
 			// encrypted with its corresponding key in encKeys.
 			for i, phyEntry := range phyEntries {
-				wrappedEntryValue, err := UnmarshalSealWrappedValue(phyEntry.Value)
+				wrappedEntryValue, err := unmarshalSealWrappedValue(phyEntry.Value)
 				if err != nil {
 					t.Errorf("phyKey = %s: failed to unmarshal stored keys: %s", phyKey, err)
 				}
@@ -149,22 +149,22 @@ func TestAutoSeal_UpgradeKeys(t *testing.T) {
 		}
 	}
 
-	// Verify the current state is correct before calling UpgradeKeys.
+	// Verify the current state is correct before calling upgradeKeys.
 	check()
 
-	// Call UpgradeKeys before changing the encryption key and verify
+	// Call upgradeKeys before changing the encryption key and verify
 	// nothing has changed.
-	if err := autoSeal.UpgradeKeys(ctx); err != nil {
-		t.Fatalf("UpgradeKeys: want no error, got %v", err)
+	if err := autoSeal.upgradeKeys(ctx); err != nil {
+		t.Fatalf("upgradeKeys: want no error, got %v", err)
 	}
 	check()
 
-	// Change the encryption key, call UpgradeKeys, then verify the stored
+	// Change the encryption key, call upgradeKeys, then verify the stored
 	// keys and recovery key has been re-encrypted with the new encryption
 	// key.
 	changeKey("primanti")
-	if err := autoSeal.UpgradeKeys(ctx); err != nil {
-		t.Fatalf("UpgradeKeys: want no error, got %v", err)
+	if err := autoSeal.upgradeKeys(ctx); err != nil {
+		t.Fatalf("upgradeKeys: want no error, got %v", err)
 	}
 	check()
 }
@@ -193,8 +193,8 @@ func TestAutoSeal_HealthCheck(t *testing.T) {
 	autoSeal := NewAutoSeal(testSealAccess)
 	autoSeal.SetCore(core)
 	core.seal = autoSeal
-	autoSeal.StartHealthCheck(t.Context())
-	defer autoSeal.StopHealthCheck()
+	autoSeal.startHealthCheck(t.Context())
+	defer autoSeal.stopHealthCheck()
 	wrappers[0].SetError(errors.New("disconnected"))
 
 	tries := 10

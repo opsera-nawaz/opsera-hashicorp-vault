@@ -32,10 +32,10 @@ func (b *BarrierEncryptorAccess) Decrypt(ctx context.Context, key string, cipher
 	return b.barrierEncryptor.Decrypt(ctx, key, ciphertext)
 }
 
-// NewBarrierDecryptingStorage returns a view of storage that will decrypt the
+// newBarrierDecryptingStorage returns a view of storage that will decrypt the
 // storage values for Get operations. The returned storage is read-only, and
 // will error on attempts to Put or Delete.
-func NewBarrierDecryptingStorage(
+func newBarrierDecryptingStorage(
 	barrier BarrierEncryptor, underlying physical.Backend,
 ) logical.Storage {
 	return &barrierDecryptingStorage{

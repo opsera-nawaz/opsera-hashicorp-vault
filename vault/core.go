@@ -3138,13 +3138,13 @@ func (c *Core) postUnseal(ctx context.Context, unsealer UnsealStrategy) (retErr 
 	// the keys used for auto unsealing ensures Vault and its data will
 	// continue to be accessible even after prior seal keys are destroyed.
 	if seal, ok := c.seal.(*autoSeal); ok {
-		if err := seal.UpgradeKeys(c.activeContext); err != nil {
+		if err := seal.upgradeKeys(c.activeContext); err != nil {
 			c.logger.Warn("post-unseal upgrade seal keys failed", "error", err)
 		}
 
 		// Start a periodic but infrequent heartbeat to detect auto-seal backend outages at runtime rather than being
 		// surprised by this at the next need to unseal.
-		seal.StartHealthCheck(ctx)
+		seal.startHealthCheck(ctx)
 	}
 
 	// This is intentionally the last block in this function. We want to allow
@@ -3252,7 +3252,7 @@ func (c *Core) preSeal() error {
 	c.logger.Info("pre-seal teardown starting")
 
 	if seal, ok := c.seal.(*autoSeal); ok {
-		seal.StopHealthCheck()
+		seal.stopHealthCheck()
 	}
 	// Clear any pending funcs
 	c.postUnsealFuncs = nil
@@ -3327,7 +3327,7 @@ func (c *Core) preSeal() error {
 	}
 
 	if seal, ok := c.seal.(*autoSeal); ok {
-		seal.StopHealthCheck()
+		seal.stopHealthCheck()
 	}
 
 	if c.systemBackend != nil && c.systemBackend.mfaBackend != nil {

@@ -783,7 +783,7 @@ var _ snapshot.Sealer = (*sealer)(nil)
 
 // Seal encrypts the data with using the seal access object.
 func (s *sealer) Seal(ctx context.Context, pt []byte) ([]byte, error) {
-	wrappedValue, err := SealWrapValue(ctx, s.access, true, pt, func(_ context.Context, errs map[string]error) error {
+	wrappedValue, err := sealWrapValue(ctx, s.access, true, pt, func(_ context.Context, errs map[string]error) error {
 		if s.logger != nil {
 			s.logger.Warn("sealed value not wrapped with all seals", "use", s.use)
 		}
@@ -793,16 +793,16 @@ func (s *sealer) Seal(ctx context.Context, pt []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	return MarshalSealWrappedValue(wrappedValue)
+	return marshalSealWrappedValue(wrappedValue)
 }
 
 // Open decrypts the data using the seal access object.
 func (s *sealer) Open(ctx context.Context, ct []byte) ([]byte, error) {
-	wrappedEntryValue, err := UnmarshalSealWrappedValue(ct)
+	wrappedEntryValue, err := unmarshalSealWrappedValue(ct)
 	if err != nil {
 		return nil, err
 	}
 
-	pt, _, err := UnsealWrapValue(ctx, s.access, "", wrappedEntryValue)
+	pt, _, err := unsealWrapValue(ctx, s.access, "", wrappedEntryValue)
 	return pt, err
 }

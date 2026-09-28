@@ -365,7 +365,7 @@ func writeStoredKeys(ctx context.Context, storage physical.Backend, encryptor se
 	}
 
 	// Encrypt and marshal the keys
-	pe, err := SealWrapStoredBarrierKeys(ctx, encryptor, keys)
+	pe, err := sealWrapStoredBarrierKeys(ctx, encryptor, keys)
 	if err != nil {
 		return fmt.Errorf("failed to marshal value for storage: %w", err)
 	}
@@ -390,7 +390,7 @@ func readStoredKeys(ctx context.Context, storage physical.Backend, encryptor sea
 		return nil, nil
 	}
 
-	return UnsealWrapStoredBarrierKeys(ctx, encryptor, pe)
+	return unsealWrapStoredBarrierKeys(ctx, encryptor, pe)
 }
 
 func (c *Core) SetPhysicalSealGenInfo(ctx context.Context, sealGenInfo *seal.SealGenerationInfo) error {
