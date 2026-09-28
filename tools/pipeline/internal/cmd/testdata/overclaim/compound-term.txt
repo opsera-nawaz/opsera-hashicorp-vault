@@ -1,0 +1,3 @@
+```release-note:improvement
+core/fips-path: refactor the FIPS-path build tag plumbing; no functional change.
+```

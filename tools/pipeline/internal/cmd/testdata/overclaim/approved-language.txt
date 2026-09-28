@@ -1,0 +1,3 @@
+```release-note:improvement
+core/fips: Vault establishes a FIPS-aligned posture for Community Edition builds; see docs/fips/residual-crypto-risk-register.md for the FIPS 140-3 alignment details.
+```

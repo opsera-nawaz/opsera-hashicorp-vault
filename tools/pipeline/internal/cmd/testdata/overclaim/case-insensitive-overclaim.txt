@@ -1,0 +1,3 @@
+```release-note:improvement
+core: vault is now fips VALIDATED with no supporting evidence attached.
+```

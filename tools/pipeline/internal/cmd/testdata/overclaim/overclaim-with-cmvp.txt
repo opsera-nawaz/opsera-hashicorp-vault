@@ -1,0 +1,3 @@
+```release-note:improvement
+core/seal: Vault uses AWS KMS (CMVP #4523) for FIPS validated encryption of the barrier key.
+```

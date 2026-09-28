@@ -1,0 +1,4 @@
+```release-note:improvement
+core/seal: Vault is now FIPS validated
+when configured with AWS KMS auto-unseal (CMVP #4523).
+```

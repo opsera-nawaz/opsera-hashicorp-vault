@@ -1,0 +1,3 @@
+```release-note:improvement
+core/fips: Add RPM, DEB packages of FIPS 140-2 and HSM+FIPS 140-2 Vault Enterprise.
+```
