@@ -136,6 +136,8 @@ jobs:
       - run: make ci-vet-codechecker
         name: Check custom linters (non-blocking)
         continue-on-error: true
+      - run: make ci-lint-cycle-detection
+        name: Check import-cycle boundaries (EPIC-04, blocking)
       - run: make protolint
         name: Protobuf lint
 
