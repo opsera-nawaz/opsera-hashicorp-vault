@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "exceptions": [
+    {
+      "exception_id": "EXC-2026-001",
+      "check_id": "FIPS-CRYPTO-002",
+      "status": "EXCEPTION",
+      "finding_ref": "RR-004",
+      "reason": "sdk/helper/keysutil/policy.go retains golang.org/x/crypto/ed25519 and chacha20poly1305 imports for backward-compatible reads of existing Transit keys; approved pending Phase 2 migration completion.",
+      "approved_by": "fips-compliance-team",
+      "expires_at": "2026-12-31",
+      "created_at": "2026-09-20T00:00:00Z"
+    },
+    {
+      "exception_id": "EXC-2026-002",
+      "check_id": "FIPS-TLS-002",
+      "status": "REVIEW",
+      "finding_ref": "RR-005",
+      "reason": "Default cluster (port 8201) cipher suite list includes ChaCha20-Poly1305; pending operator guidance rollout requiring an explicit cluster_cipher_suites override.",
+      "created_at": "2026-09-21T00:00:00Z"
+    },
+    {
+      "exception_id": "EXC-2026-003",
+      "check_id": "FIPS-DEP-001",
+      "status": "PASS",
+      "reason": "malformed test record: exception records must never declare status PASS -- exercises status-integrity coercion to REVIEW.",
+      "created_at": "2026-09-22T00:00:00Z"
+    }
+  ]
+}

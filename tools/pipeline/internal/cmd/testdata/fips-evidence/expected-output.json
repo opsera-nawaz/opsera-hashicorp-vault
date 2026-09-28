@@ -1,0 +1,164 @@
+{
+  "generated_at": "2026-09-27T12:00:00Z",
+  "release_version": "2.2.0-beta1-test",
+  "cmvp_certificates": [
+    {
+      "provider": "AWS KMS",
+      "certificate_number": "5146",
+      "module_name": "AWS-LC Cryptographic Module (dynamic)",
+      "validation_status": "expired",
+      "expiry_date": "2020-01-01",
+      "fips_endpoint_url": "https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5146",
+      "product_binding_status": "requires_external_lookup",
+      "notes": "test fixture: expiry_date is deliberately in the past to exercise the expired-certificate edge case"
+    },
+    {
+      "provider": "Azure Key Vault",
+      "certificate_number": "4700",
+      "module_name": "NITROXIII CNN35XX-NFBE HSM Family",
+      "validation_status": "active",
+      "expiry_date": "2029-05-29",
+      "fips_endpoint_url": "https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/4700",
+      "product_binding_status": "confirmed",
+      "notes": "test fixture: expiry_date is in the future, validation_status must remain active"
+    },
+    {
+      "provider": "GCP Cloud KMS",
+      "certificate_number": "4399",
+      "module_name": "NITROXIII CNN35XX-NFBE HSM Family",
+      "validation_status": "expired",
+      "expiry_date": "2026-09-21",
+      "fips_endpoint_url": "https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/4399",
+      "product_binding_status": "requires_external_lookup",
+      "notes": "test fixture: expiry_date has passed, validation_status must be overridden to expired even though it started as historical"
+    }
+  ],
+  "configuration_diffs": {
+    "tls_listener": {
+      "source_file": "testdata/fips-evidence/sample-vault-unset.hcl",
+      "listener_type": "tcp",
+      "tls_min_version_explicit": false,
+      "cipher_suites_explicit": false,
+      "approved_cipher_suites_baseline": [
+        "TLS_AES_128_GCM_SHA256",
+        "TLS_AES_256_GCM_SHA384",
+        "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+        "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+        "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+        "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+      ]
+    }
+  },
+  "verification_log": [
+    {
+      "check_id": "FIPS-CRYPTO-001",
+      "status": "PASS",
+      "evidence_source": "fips/crypto_inventory.yaml",
+      "timestamp": "2026-09-27T12:00:00Z",
+      "notes": "Phase 1 consolidated cryptographic inventory is present and version-controlled."
+    },
+    {
+      "check_id": "FIPS-CRYPTO-002",
+      "status": "REVIEW",
+      "evidence_source": "docs/fips/residual-crypto-risk-register.md#RR-004",
+      "timestamp": "2026-09-27T12:00:00Z",
+      "notes": "Approved-algorithm allowlist gate is declared (.golangci.yml, tools/semgrep/ci/fips-crypto-imports.yml) but is not yet wired into a CI workflow and does not currently cover sdk/helper/keysutil/policy.go; see RR-004."
+    },
+    {
+      "check_id": "FIPS-CRYPTO-005",
+      "status": "REVIEW",
+      "evidence_source": "testdata/fips-evidence/sample-cmvp-certificates.json",
+      "timestamp": "2026-09-27T12:00:00Z",
+      "notes": "cmvp certificate 5146 (AWS-LC Cryptographic Module (dynamic), provider AWS KMS) expiry_date 2020-01-01 has passed as of 2026-09-27; validation_status overridden from \"active\" to \"expired\"; cmvp certificate 4399 (NITROXIII CNN35XX-NFBE HSM Family, provider GCP Cloud KMS) expiry_date 2026-09-21 has passed as of 2026-09-27; validation_status overridden from \"historical\" to \"expired\""
+    },
+    {
+      "check_id": "FIPS-DEP-001",
+      "status": "PASS",
+      "evidence_source": "fips/crypto_inventory.yaml",
+      "timestamp": "2026-09-27T12:00:00Z",
+      "notes": "Cryptographic dependency identification (Phase 1) is present and version-controlled."
+    },
+    {
+      "check_id": "FIPS-CONTAINER-001",
+      "status": "PASS",
+      "evidence_source": "fips/crypto_inventory.yaml",
+      "timestamp": "2026-09-27T12:00:00Z",
+      "notes": "Container base image classification (Phase 1) is present and version-controlled."
+    },
+    {
+      "check_id": "FIPS-TLS-001",
+      "status": "REVIEW",
+      "evidence_source": "testdata/fips-evidence/sample-vault-unset.hcl",
+      "timestamp": "2026-09-27T12:00:00Z",
+      "notes": "tls_min_version_explicit=false, cipher_suites_explicit=false in testdata/fips-evidence/sample-vault-unset.hcl; an unset value must not be assumed to default to a FIPS-Approved configuration"
+    },
+    {
+      "check_id": "FIPS-CRYPTO-002",
+      "status": "EXCEPTION",
+      "evidence_source": "testdata/fips-evidence/sample-exceptions.json",
+      "timestamp": "2026-09-20T00:00:00Z",
+      "notes": "sdk/helper/keysutil/policy.go retains golang.org/x/crypto/ed25519 and chacha20poly1305 imports for backward-compatible reads of existing Transit keys; approved pending Phase 2 migration completion.",
+      "source_exception_id": "EXC-2026-001"
+    },
+    {
+      "check_id": "FIPS-TLS-002",
+      "status": "REVIEW",
+      "evidence_source": "testdata/fips-evidence/sample-exceptions.json",
+      "timestamp": "2026-09-21T00:00:00Z",
+      "notes": "Default cluster (port 8201) cipher suite list includes ChaCha20-Poly1305; pending operator guidance rollout requiring an explicit cluster_cipher_suites override.",
+      "source_exception_id": "EXC-2026-002"
+    },
+    {
+      "check_id": "FIPS-DEP-001",
+      "status": "REVIEW",
+      "evidence_source": "testdata/fips-evidence/sample-exceptions.json",
+      "timestamp": "2026-09-22T00:00:00Z",
+      "notes": "exception record EXC-2026-003 declared invalid status \"PASS\" (exceptions must be FAIL, REVIEW, or EXCEPTION, never PASS); coerced to REVIEW to preserve the status-integrity invariant. Original reason: malformed test record: exception records must never declare status PASS -- exercises status-integrity coercion to REVIEW.",
+      "source_exception_id": "EXC-2026-003"
+    },
+    {
+      "check_id": "FIPS-RUNTIME-001",
+      "status": "PASS",
+      "evidence_source": "fips evidence generation pipeline (.release/scripts/generate-fips-evidence.sh)",
+      "timestamp": "2026-09-27T12:00:00Z",
+      "notes": "Dated FIPS evidence package generated, aggregating CMVP certificate references, a TLS listener configuration snapshot, exception records, and SBOM/provenance/risk-register sub-artifact references."
+    }
+  ],
+  "exceptions": [
+    {
+      "exception_id": "EXC-2026-001",
+      "check_id": "FIPS-CRYPTO-002",
+      "status": "EXCEPTION",
+      "finding_ref": "RR-004",
+      "reason": "sdk/helper/keysutil/policy.go retains golang.org/x/crypto/ed25519 and chacha20poly1305 imports for backward-compatible reads of existing Transit keys; approved pending Phase 2 migration completion.",
+      "approved_by": "fips-compliance-team",
+      "expires_at": "2026-12-31",
+      "created_at": "2026-09-20T00:00:00Z"
+    },
+    {
+      "exception_id": "EXC-2026-002",
+      "check_id": "FIPS-TLS-002",
+      "status": "REVIEW",
+      "finding_ref": "RR-005",
+      "reason": "Default cluster (port 8201) cipher suite list includes ChaCha20-Poly1305; pending operator guidance rollout requiring an explicit cluster_cipher_suites override.",
+      "created_at": "2026-09-21T00:00:00Z"
+    },
+    {
+      "exception_id": "EXC-2026-003",
+      "check_id": "FIPS-DEP-001",
+      "status": "PASS",
+      "reason": "malformed test record: exception records must never declare status PASS -- exercises status-integrity coercion to REVIEW.",
+      "created_at": "2026-09-22T00:00:00Z"
+    }
+  ],
+  "risk_register_ref": "docs/fips/residual-crypto-risk-register.md",
+  "sbom_ref": ".release/sbom/2.2.0-beta1-test-annotated-sbom.json",
+  "build_provenance_ref": ".release/provenance/2.2.0-beta1-test-provenance.json",
+  "warnings": [
+    "cmvp certificate 5146 (AWS-LC Cryptographic Module (dynamic), provider AWS KMS) expiry_date 2020-01-01 has passed as of 2026-09-27; validation_status overridden from \"active\" to \"expired\"",
+    "cmvp certificate 4399 (NITROXIII CNN35XX-NFBE HSM Family, provider GCP Cloud KMS) expiry_date 2026-09-21 has passed as of 2026-09-27; validation_status overridden from \"historical\" to \"expired\"",
+    "risk register reference does not exist yet on disk",
+    "sbom reference does not exist yet on disk",
+    "build provenance reference does not exist yet on disk"
+  ]
+}

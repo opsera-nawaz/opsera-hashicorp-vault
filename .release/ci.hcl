@@ -141,3 +141,31 @@ event "fips-annotate-sbom" {
 	on = "fail"
   }
 }
+
+# crt-generate-fips-evidence assembles the dated FIPS 140-3 evidence package
+# required by FIPS-RUNTIME-001: CMVP certificate references
+# (.release/fips-data/cmvp-certificates.json), a TLS listener configuration
+# snapshot, algorithm-restriction verification results, exception records
+# consumed from the exception tracking system (FIPS Phase 4 CI enforcement
+# work), and references to the risk register, annotated SBOM, and build
+# provenance attestation produced by fips-annotate-sbom above. It runs via
+# .release/scripts/generate-fips-evidence.sh (which shells out to the
+# `pipeline fips evidence` command implemented in
+# tools/pipeline/internal/cmd/generate_fips_evidence.go) and writes a dated,
+# version-controlled JSON artifact to .release/fips-evidence/.
+#
+# The underlying GitHub Actions workflow this action delegates to is owned by
+# the CI-enforcement work (FIPS Phase 4 CI gates) and is intentionally out of
+# scope for this story -- see the epic's CI enforcement stories.
+event "crt-generate-fips-evidence" {
+  depends = ["crt-generate-sbom", "fips-annotate-sbom"]
+  action "crt-generate-fips-evidence" {
+	organization = "hashicorp"
+	repository = "vault"
+	workflow = "crt-generate-fips-evidence"
+  }
+
+  notification {
+	on = "fail"
+  }
+}
