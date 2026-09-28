@@ -1,0 +1,5676 @@
+{
+  "generatedFor": "WO-058 — Triage ui/app/ files into migration effort buckets (largest remaining UI TypeScript conversion story)",
+  "generatedAt": "2026-09-28",
+  "methodology": {
+    "scope": "Every .js file under ui/app/ at the time of triage (479 files). The WO-058 description text (486 remaining files, 25 services, 38 models, 84 controllers, 173 routes, 488 components, 77 forms) was written when the story was drafted, before WO-034/048/049/050/051 landed and before other parallel-merged work already converted app/forms/** (77 files, all .ts), app/serializers/identity/** (5 files, all .ts), and app/services/auth.ts + 9 other services. This artifact reflects the actual current on-disk state, not the stale WO description counts.",
+    "patternDetection": "Regex-based static analysis of each file's default export: `Mixin.create(` -> mixin; `export default class` -> octane-class; `.extend(` with `export default` -> classic-extend; `export default helper(`/`buildHelper(`/plain function export -> helper; everything else -> utility.",
+    "dependencyGraph": "Built by parsing `import ... from '...'` specifiers in every .js AND .ts file under ui/app/, resolving relative imports and bare `vault/...` absolute imports (per ui/tsconfig.json paths mapping) to real files under app/, and counting unique resolving source files per target module. This counts only static import statements — it does NOT count Ember's implicit resolution (store.findRecord('foo') resolving to models/foo.ts, {{foo-bar}} template invocations, or DI service injection by name), which is why ember-data adapters/serializers/models can show a low or zero static dependencyCount while still being load-bearing. Wave assignment therefore layers a domain-priority override on top of the raw import graph (see waveAssignment) rather than relying on dependencyCount alone, unlike WO-023's ui/lib/core triage where intra-core static imports were a fair proxy for coupling.",
+    "waveAssignment": "wave 1: category is one of models/adapters/serializers/services (ember-data + auth foundations consumed almost entirely via implicit DI/store resolution rather than static import, so they are pulled into wave 1 unconditionally per this WO's implementation_steps order), OR the file is secret-edit.js / parse-pki-cert.js (explicit high-blast-radius files named in the acceptance criteria), OR dependencyCount >= 5. wave 2: dependencyCount 1-4 (everything else, mostly routes/controllers/components consumed by other routes/controllers/components). wave 3: dependencyCount === 0 (leaf nodes — helpers, utils, standalone components/routes with no intra-app static importers — convert last)."
+  },
+  "summary": {
+    "totalJsFiles": 479,
+    "byCategory": {
+      "services": 10,
+      "adapters": 42,
+      "serializers": 30,
+      "macros": 3,
+      "utils": 22,
+      "helpers": 23,
+      "decorators": 3,
+      "lib": 5,
+      "mixins": 5,
+      "models": 37,
+      "routes": 132,
+      "controllers": 67,
+      "router.js": 1,
+      "components": 87,
+      "app.js": 1,
+      "breakpoints.js": 1,
+      "initializers": 3,
+      "instance-initializers": 2,
+      "transforms": 5
+    },
+    "byCurrentPattern": {
+      "octane-class": 238,
+      "classic-extend": 170,
+      "helper": 24,
+      "utility": 42,
+      "mixin": 5
+    },
+    "byEstimatedEffort": {
+      "low": 412,
+      "medium": 63,
+      "high": 4
+    },
+    "byRecommendedWave": {
+      "1": 137,
+      "2": 48,
+      "3": 294
+    }
+  },
+  "topDependedOnFiles": [
+    {
+      "filePath": "app/services/flash-messages.js",
+      "dependencyCount": 35,
+      "dependents": [
+        "app/components/agents/registry/table.ts",
+        "app/components/auth-config-form/options.ts",
+        "app/components/dashboard/widgets/quick-actions.ts",
+        "app/components/identity/entities/table.ts",
+        "app/components/mount-backend-form.ts",
+        "app/components/page/acl-policies.ts",
+        "app/components/page/egp-policies.ts",
+        "app/components/page/identity-group-aliases.ts",
+        "app/components/page/identity-groups.ts",
+        "app/components/page/methods.ts",
+        "app/components/page/namespaces.ts",
+        "app/components/page/policies.ts",
+        "app/components/page/rgp-policies.ts",
+        "app/components/recovery/page/snapshots/snapshot-details.ts",
+        "app/components/seal-action.ts",
+        "app/components/secret-engine/card/version.ts",
+        "app/components/secret-engine/configure-ssh.ts",
+        "app/components/secret-engine/configure-wif.ts",
+        "app/components/secret-engine/list.ts",
+        "app/components/secret-engine/page/general-settings.ts",
+        "app/components/secret-engine/ttl-picker-v2.ts",
+        "app/components/secret-engines/catalog.ts",
+        "app/components/tools/hash.ts",
+        "app/components/tools/lookup.ts",
+        "app/components/tools/random.ts",
+        "app/components/tools/rewrap.ts",
+        "app/components/tools/unwrap.ts",
+        "app/components/tools/wrap.ts",
+        "app/components/transit-form-create.ts",
+        "app/components/transit-form-edit.ts",
+        "app/components/wizard/agent-registry/agent-registry-wizard.ts",
+        "app/components/wizard/namespaces/namespace-wizard.ts",
+        "app/components/wizard/secret-engines/secret-engines-wizard.ts",
+        "app/routes/vault/cluster/agents/registry/index.ts",
+        "app/services/api.ts"
+      ]
+    },
+    {
+      "filePath": "app/adapters/application.js",
+      "dependencyCount": 27,
+      "dependents": [
+        "app/adapters/aws-credential.js",
+        "app/adapters/capabilities.js",
+        "app/adapters/cluster.js",
+        "app/adapters/console.js",
+        "app/adapters/control-group-config.js",
+        "app/adapters/control-group.js",
+        "app/adapters/database/connection.js",
+        "app/adapters/database/credential.js",
+        "app/adapters/database/role.js",
+        "app/adapters/generated-item-list.js",
+        "app/adapters/identity/base.js",
+        "app/adapters/mfa-login-enforcement.js",
+        "app/adapters/mfa-method.js",
+        "app/adapters/mfa-setup.js",
+        "app/adapters/named-path.js",
+        "app/adapters/node.js",
+        "app/adapters/path-filter-config.js",
+        "app/adapters/permissions.js",
+        "app/adapters/policy.js",
+        "app/adapters/replication-mode.js",
+        "app/adapters/role-aws.js",
+        "app/adapters/secret-engine.js",
+        "app/adapters/secret.js",
+        "app/adapters/secrets-engine-path.js",
+        "app/adapters/transform.js",
+        "app/adapters/transform/base.js",
+        "app/adapters/transit-key.js"
+      ]
+    },
+    {
+      "filePath": "app/services/version.js",
+      "dependencyCount": 27,
+      "dependents": [
+        "app/components/auth-config-form/options.ts",
+        "app/components/auth/form-template.ts",
+        "app/components/auth/form/base.ts",
+        "app/components/clients/date-range.ts",
+        "app/components/clients/page-header.ts",
+        "app/components/clients/page/counts.ts",
+        "app/components/clients/running-total.ts",
+        "app/components/clients/table.ts",
+        "app/components/license-banners.ts",
+        "app/components/mfa/mfa-form.ts",
+        "app/components/mount/secrets-engine-form.ts",
+        "app/components/policy-form-modal.ts",
+        "app/components/secret-engine/configure-wif.ts",
+        "app/components/secret-engines/catalog.ts",
+        "app/components/upgrade-path-analyzer/upgrade-path-analyzer.ts",
+        "app/resources/auth/method.ts",
+        "app/routes/vault/cluster/agents/index.ts",
+        "app/routes/vault/cluster/clients/counts.ts",
+        "app/routes/vault/cluster/clients/counts/client-list.ts",
+        "app/routes/vault/cluster/recovery/snapshots.ts",
+        "app/routes/vault/cluster/secrets/backend/configuration/edit.ts",
+        "app/routes/vault/cluster/secrets/backend/configuration/plugin-settings.ts",
+        "app/routes/vault/cluster/support/upgrade-info.ts",
+        "app/routes/vault/cluster/support/upgrade.ts",
+        "app/routes/vault/cluster/user-preferences.ts",
+        "app/services/checklist-state.ts",
+        "app/services/flags.ts"
+      ]
+    },
+    {
+      "filePath": "app/serializers/application.js",
+      "dependencyCount": 18,
+      "dependents": [
+        "app/serializers/capabilities.js",
+        "app/serializers/control-group.js",
+        "app/serializers/gcp/config.js",
+        "app/serializers/identity/_base.ts",
+        "app/serializers/mfa-login-enforcement.js",
+        "app/serializers/mfa-method.js",
+        "app/serializers/oidc/assignment.js",
+        "app/serializers/oidc/key.js",
+        "app/serializers/policy.js",
+        "app/serializers/replication-mode.js",
+        "app/serializers/role-aws.js",
+        "app/serializers/role.js",
+        "app/serializers/secret-engine.js",
+        "app/serializers/secret.js",
+        "app/serializers/transform.js",
+        "app/serializers/transform/alphabet.js",
+        "app/serializers/transform/role.js",
+        "app/serializers/transform/template.js"
+      ]
+    },
+    {
+      "filePath": "app/macros/lazy-capabilities.js",
+      "dependencyCount": 17,
+      "dependents": [
+        "app/macros/identity-capabilities.js",
+        "app/macros/lazy-capabilities.js",
+        "app/models/control-group-config.js",
+        "app/models/control-group.js",
+        "app/models/database/connection.js",
+        "app/models/database/role.js",
+        "app/models/identity/entity.js",
+        "app/models/identity/group.js",
+        "app/models/oidc/assignment.js",
+        "app/models/oidc/key.js",
+        "app/models/policy.js",
+        "app/models/role-aws.js",
+        "app/models/secret.js",
+        "app/models/transform/alphabet.js",
+        "app/models/transform/role.js",
+        "app/models/transform/template.js",
+        "app/models/transit-key.js"
+      ]
+    },
+    {
+      "filePath": "app/utils/field-to-attrs.js",
+      "dependencyCount": 14,
+      "dependents": [
+        "app/decorators/model-expanded-attributes.js",
+        "app/decorators/model-form-fields.js",
+        "app/models/control-group-config.js",
+        "app/models/database/connection.js",
+        "app/models/database/role.js",
+        "app/models/identity/_base.js",
+        "app/models/mfa-method.js",
+        "app/models/oidc/key.js",
+        "app/models/policy/egp.js",
+        "app/models/policy/rgp.js",
+        "app/models/role-aws.js",
+        "app/models/transform/alphabet.js",
+        "app/models/transform/role.js",
+        "app/models/transform/template.js"
+      ]
+    },
+    {
+      "filePath": "app/utils/path-encoding-helpers.js",
+      "dependencyCount": 14,
+      "dependents": [
+        "app/adapters/generated-item-list.js",
+        "app/adapters/role-aws.js",
+        "app/adapters/secret-engine.js",
+        "app/adapters/secret.js",
+        "app/adapters/secrets-engine-path.js",
+        "app/adapters/transform.js",
+        "app/adapters/transform/base.js",
+        "app/adapters/transit-key.js",
+        "app/components/auth/form/saml.ts",
+        "app/components/secret-link.js",
+        "app/routes/vault/cluster/secrets/backend/list.js",
+        "app/routes/vault/cluster/secrets/backend/secret-edit.js",
+        "app/services/console.js",
+        "app/utils/kv-path.ts"
+      ]
+    },
+    {
+      "filePath": "app/utils/error-message.js",
+      "dependencyCount": 9,
+      "dependents": [
+        "app/components/database-role-edit.js",
+        "app/components/identity/popup-alias.js",
+        "app/components/identity/popup-members.js",
+        "app/components/identity/popup-metadata.js",
+        "app/components/identity/popup-policy.js",
+        "app/components/mfa/mfa-form.ts",
+        "app/components/namespace-picker.ts",
+        "app/components/page/acl-policies.ts",
+        "app/components/page/policies.ts"
+      ]
+    },
+    {
+      "filePath": "app/utils/mfa-login-enforcement-helpers.js",
+      "dependencyCount": 8,
+      "dependents": [
+        "app/components/mfa/mfa-login-enforcement-form.js",
+        "app/components/mfa/mfa-login-enforcement-header.js",
+        "app/routes/vault/cluster/access/mfa/enforcements/create.js",
+        "app/routes/vault/cluster/access/mfa/enforcements/enforcement.js",
+        "app/routes/vault/cluster/access/mfa/enforcements/enforcement/edit.js",
+        "app/routes/vault/cluster/access/mfa/enforcements/index.js",
+        "app/routes/vault/cluster/access/mfa/methods/index.js",
+        "app/routes/vault/cluster/access/mfa/methods/method.js"
+      ]
+    },
+    {
+      "filePath": "app/helpers/add-to-array.js",
+      "dependencyCount": 7,
+      "dependents": [
+        "app/adapters/database/role.js",
+        "app/components/mfa/mfa-login-enforcement-form.js",
+        "app/models/mfa-login-enforcement.js",
+        "app/services/auth.ts",
+        "app/services/console.js",
+        "app/services/csp-event.js",
+        "app/utils/mfa-login-enforcement-helpers.js"
+      ]
+    },
+    {
+      "filePath": "app/utils/identity-helpers.js",
+      "dependencyCount": 7,
+      "dependents": [
+        "app/components/identity/edit-form.js",
+        "app/routes/vault/cluster/access/identity/entities/aliases/add.js",
+        "app/routes/vault/cluster/access/identity/entities/aliases/index.js",
+        "app/routes/vault/cluster/access/identity/entities/show.js",
+        "app/routes/vault/cluster/access/identity/groups/aliases/add.js",
+        "app/routes/vault/cluster/access/identity/groups/aliases/index.ts",
+        "app/routes/vault/cluster/access/identity/groups/show.js"
+      ]
+    },
+    {
+      "filePath": "app/decorators/model-validations.js",
+      "dependencyCount": 6,
+      "dependents": [
+        "app/models/database/role.js",
+        "app/models/mfa-login-enforcement.js",
+        "app/models/mfa-method.js",
+        "app/models/oidc/assignment.js",
+        "app/models/oidc/key.js",
+        "app/models/secret-engine.js"
+      ]
+    },
+    {
+      "filePath": "app/lib/route-paths.js",
+      "dependencyCount": 6,
+      "dependents": [
+        "app/routes/vault/cluster.js",
+        "app/routes/vault/cluster/auth.js",
+        "app/routes/vault/cluster/init.js",
+        "app/routes/vault/cluster/redirect.js",
+        "app/routes/vault/cluster/replication-dr-promote.js",
+        "app/routes/vault/cluster/unseal.js"
+      ]
+    },
+    {
+      "filePath": "app/adapters/identity/base.js",
+      "dependencyCount": 5,
+      "dependents": [
+        "app/adapters/identity/entity-alias.js",
+        "app/adapters/identity/entity-merge.js",
+        "app/adapters/identity/entity.js",
+        "app/adapters/identity/group-alias.js",
+        "app/adapters/identity/group.js"
+      ]
+    },
+    {
+      "filePath": "app/lib/control-group-error.js",
+      "dependencyCount": 5,
+      "dependents": [
+        "app/adapters/database/credential.js",
+        "app/adapters/database/role.js",
+        "app/components/console/ui-panel.js",
+        "app/routes/application.js",
+        "app/services/control-group.js"
+      ]
+    },
+    {
+      "filePath": "app/mixins/backend-crumb.js",
+      "dependencyCount": 5,
+      "dependents": [
+        "app/controllers/vault/cluster/secrets/backend/actions.js",
+        "app/controllers/vault/cluster/secrets/backend/create.js",
+        "app/controllers/vault/cluster/secrets/backend/edit.js",
+        "app/controllers/vault/cluster/secrets/backend/list.js",
+        "app/controllers/vault/cluster/secrets/backend/show.js"
+      ]
+    },
+    {
+      "filePath": "app/mixins/unsaved-model-route.js",
+      "dependencyCount": 5,
+      "dependents": [
+        "app/routes/vault/cluster/access/method/item/create.js",
+        "app/routes/vault/cluster/access/method/item/edit.js",
+        "app/routes/vault/cluster/policies/acl/create.js",
+        "app/routes/vault/cluster/policies/egp/create.js",
+        "app/routes/vault/cluster/policies/rgp/create.js"
+      ]
+    },
+    {
+      "filePath": "app/models/cluster.js",
+      "dependencyCount": 5,
+      "dependents": [
+        "app/components/auth/form-template.ts",
+        "app/components/auth/form/base.ts",
+        "app/components/auth/page.ts",
+        "app/components/upgrade-path-analyzer/upgrade-path-analyzer.ts",
+        "app/routes/vault/cluster/resilience-recovery.ts"
+      ]
+    },
+    {
+      "filePath": "app/models/identity/_base.js",
+      "dependencyCount": 5,
+      "dependents": [
+        "app/models/identity/entity-alias.js",
+        "app/models/identity/entity-merge.js",
+        "app/models/identity/entity.js",
+        "app/models/identity/group-alias.js",
+        "app/models/identity/group.js"
+      ]
+    },
+    {
+      "filePath": "app/utils/forms/validators.js",
+      "dependencyCount": 5,
+      "dependents": [
+        "app/components/secret-create-or-update.js",
+        "app/forms/mount.ts",
+        "app/forms/secrets/kv.ts",
+        "app/models/secret-engine.js",
+        "app/utils/forms/validate.ts"
+      ]
+    },
+    {
+      "filePath": "app/adapters/transform/base.js",
+      "dependencyCount": 4,
+      "dependents": [
+        "app/adapters/transform/alphabet.js",
+        "app/adapters/transform/role.js",
+        "app/adapters/transform/template.js",
+        "app/adapters/transform/transformation.js"
+      ]
+    },
+    {
+      "filePath": "app/helpers/tabs-for-identity-show.js",
+      "dependencyCount": 4,
+      "dependents": [
+        "app/routes/vault/cluster/access/identity/entities/aliases/show.js",
+        "app/routes/vault/cluster/access/identity/entities/show.js",
+        "app/routes/vault/cluster/access/identity/groups/aliases/show.js",
+        "app/routes/vault/cluster/access/identity/groups/show.js"
+      ]
+    },
+    {
+      "filePath": "app/mixins/unload-model-route.js",
+      "dependencyCount": 4,
+      "dependents": [
+        "app/routes/vault/cluster/access/control-group-accessor.js",
+        "app/routes/vault/cluster/access/control-groups-configure.js",
+        "app/routes/vault/cluster/access/control-groups.js",
+        "app/routes/vault/cluster/policy/show.js"
+      ]
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/secret-edit.js",
+      "dependencyCount": 4,
+      "dependents": [
+        "app/routes/vault/cluster/secrets/backend/actions.js",
+        "app/routes/vault/cluster/secrets/backend/create-root.js",
+        "app/routes/vault/cluster/secrets/backend/edit.js",
+        "app/routes/vault/cluster/secrets/backend/show.js"
+      ]
+    },
+    {
+      "filePath": "app/utils/model-helpers/database-helpers.js",
+      "dependencyCount": 4,
+      "dependents": [
+        "app/components/database-role-setting-form.js",
+        "app/models/database/connection.js",
+        "app/models/database/role.js",
+        "app/serializers/database/connection.js"
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "filePath": "app/services/flash-messages.js",
+      "category": "services",
+      "dependencyCount": 35,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 28,
+      "dependents": [
+        "app/components/agents/registry/table.ts",
+        "app/components/auth-config-form/options.ts",
+        "app/components/dashboard/widgets/quick-actions.ts",
+        "app/components/identity/entities/table.ts",
+        "app/components/mount-backend-form.ts",
+        "app/components/page/acl-policies.ts",
+        "app/components/page/egp-policies.ts",
+        "app/components/page/identity-group-aliases.ts",
+        "app/components/page/identity-groups.ts",
+        "app/components/page/methods.ts",
+        "app/components/page/namespaces.ts",
+        "app/components/page/policies.ts",
+        "app/components/page/rgp-policies.ts",
+        "app/components/recovery/page/snapshots/snapshot-details.ts",
+        "app/components/seal-action.ts",
+        "app/components/secret-engine/card/version.ts",
+        "app/components/secret-engine/configure-ssh.ts",
+        "app/components/secret-engine/configure-wif.ts",
+        "app/components/secret-engine/list.ts",
+        "app/components/secret-engine/page/general-settings.ts",
+        "app/components/secret-engine/ttl-picker-v2.ts",
+        "app/components/secret-engines/catalog.ts",
+        "app/components/tools/hash.ts",
+        "app/components/tools/lookup.ts",
+        "app/components/tools/random.ts",
+        "app/components/tools/rewrap.ts",
+        "app/components/tools/unwrap.ts",
+        "app/components/tools/wrap.ts",
+        "app/components/transit-form-create.ts",
+        "app/components/transit-form-edit.ts",
+        "app/components/wizard/agent-registry/agent-registry-wizard.ts",
+        "app/components/wizard/namespaces/namespace-wizard.ts",
+        "app/components/wizard/secret-engines/secret-engines-wizard.ts",
+        "app/routes/vault/cluster/agents/registry/index.ts",
+        "app/services/api.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/application.js",
+      "category": "adapters",
+      "dependencyCount": 27,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 139,
+      "dependents": [
+        "app/adapters/aws-credential.js",
+        "app/adapters/capabilities.js",
+        "app/adapters/cluster.js",
+        "app/adapters/console.js",
+        "app/adapters/control-group-config.js",
+        "app/adapters/control-group.js",
+        "app/adapters/database/connection.js",
+        "app/adapters/database/credential.js",
+        "app/adapters/database/role.js",
+        "app/adapters/generated-item-list.js",
+        "app/adapters/identity/base.js",
+        "app/adapters/mfa-login-enforcement.js",
+        "app/adapters/mfa-method.js",
+        "app/adapters/mfa-setup.js",
+        "app/adapters/named-path.js",
+        "app/adapters/node.js",
+        "app/adapters/path-filter-config.js",
+        "app/adapters/permissions.js",
+        "app/adapters/policy.js",
+        "app/adapters/replication-mode.js",
+        "app/adapters/role-aws.js",
+        "app/adapters/secret-engine.js",
+        "app/adapters/secret.js",
+        "app/adapters/secrets-engine-path.js",
+        "app/adapters/transform.js",
+        "app/adapters/transform/base.js",
+        "app/adapters/transit-key.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/services/version.js",
+      "category": "services",
+      "dependencyCount": 27,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 125,
+      "dependents": [
+        "app/components/auth-config-form/options.ts",
+        "app/components/auth/form-template.ts",
+        "app/components/auth/form/base.ts",
+        "app/components/clients/date-range.ts",
+        "app/components/clients/page-header.ts",
+        "app/components/clients/page/counts.ts",
+        "app/components/clients/running-total.ts",
+        "app/components/clients/table.ts",
+        "app/components/license-banners.ts",
+        "app/components/mfa/mfa-form.ts",
+        "app/components/mount/secrets-engine-form.ts",
+        "app/components/policy-form-modal.ts",
+        "app/components/secret-engine/configure-wif.ts",
+        "app/components/secret-engines/catalog.ts",
+        "app/components/upgrade-path-analyzer/upgrade-path-analyzer.ts",
+        "app/resources/auth/method.ts",
+        "app/routes/vault/cluster/agents/index.ts",
+        "app/routes/vault/cluster/clients/counts.ts",
+        "app/routes/vault/cluster/clients/counts/client-list.ts",
+        "app/routes/vault/cluster/recovery/snapshots.ts",
+        "app/routes/vault/cluster/secrets/backend/configuration/edit.ts",
+        "app/routes/vault/cluster/secrets/backend/configuration/plugin-settings.ts",
+        "app/routes/vault/cluster/support/upgrade-info.ts",
+        "app/routes/vault/cluster/support/upgrade.ts",
+        "app/routes/vault/cluster/user-preferences.ts",
+        "app/services/checklist-state.ts",
+        "app/services/flags.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/application.js",
+      "category": "serializers",
+      "dependencyCount": 18,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 79,
+      "dependents": [
+        "app/serializers/capabilities.js",
+        "app/serializers/control-group.js",
+        "app/serializers/gcp/config.js",
+        "app/serializers/identity/_base.ts",
+        "app/serializers/mfa-login-enforcement.js",
+        "app/serializers/mfa-method.js",
+        "app/serializers/oidc/assignment.js",
+        "app/serializers/oidc/key.js",
+        "app/serializers/policy.js",
+        "app/serializers/replication-mode.js",
+        "app/serializers/role-aws.js",
+        "app/serializers/role.js",
+        "app/serializers/secret-engine.js",
+        "app/serializers/secret.js",
+        "app/serializers/transform.js",
+        "app/serializers/transform/alphabet.js",
+        "app/serializers/transform/role.js",
+        "app/serializers/transform/template.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/macros/lazy-capabilities.js",
+      "category": "macros",
+      "dependencyCount": 17,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 58,
+      "dependents": [
+        "app/macros/identity-capabilities.js",
+        "app/macros/lazy-capabilities.js",
+        "app/models/control-group-config.js",
+        "app/models/control-group.js",
+        "app/models/database/connection.js",
+        "app/models/database/role.js",
+        "app/models/identity/entity.js",
+        "app/models/identity/group.js",
+        "app/models/oidc/assignment.js",
+        "app/models/oidc/key.js",
+        "app/models/policy.js",
+        "app/models/role-aws.js",
+        "app/models/secret.js",
+        "app/models/transform/alphabet.js",
+        "app/models/transform/role.js",
+        "app/models/transform/template.js",
+        "app/models/transit-key.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/utils/field-to-attrs.js",
+      "category": "utils",
+      "dependencyCount": 14,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 111,
+      "dependents": [
+        "app/decorators/model-expanded-attributes.js",
+        "app/decorators/model-form-fields.js",
+        "app/models/control-group-config.js",
+        "app/models/database/connection.js",
+        "app/models/database/role.js",
+        "app/models/identity/_base.js",
+        "app/models/mfa-method.js",
+        "app/models/oidc/key.js",
+        "app/models/policy/egp.js",
+        "app/models/policy/rgp.js",
+        "app/models/role-aws.js",
+        "app/models/transform/alphabet.js",
+        "app/models/transform/role.js",
+        "app/models/transform/template.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/utils/path-encoding-helpers.js",
+      "category": "utils",
+      "dependencyCount": 14,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 28,
+      "dependents": [
+        "app/adapters/generated-item-list.js",
+        "app/adapters/role-aws.js",
+        "app/adapters/secret-engine.js",
+        "app/adapters/secret.js",
+        "app/adapters/secrets-engine-path.js",
+        "app/adapters/transform.js",
+        "app/adapters/transform/base.js",
+        "app/adapters/transit-key.js",
+        "app/components/auth/form/saml.ts",
+        "app/components/secret-link.js",
+        "app/routes/vault/cluster/secrets/backend/list.js",
+        "app/routes/vault/cluster/secrets/backend/secret-edit.js",
+        "app/services/console.js",
+        "app/utils/kv-path.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/utils/error-message.js",
+      "category": "utils",
+      "dependencyCount": 9,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 20,
+      "dependents": [
+        "app/components/database-role-edit.js",
+        "app/components/identity/popup-alias.js",
+        "app/components/identity/popup-members.js",
+        "app/components/identity/popup-metadata.js",
+        "app/components/identity/popup-policy.js",
+        "app/components/mfa/mfa-form.ts",
+        "app/components/namespace-picker.ts",
+        "app/components/page/acl-policies.ts",
+        "app/components/page/policies.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/utils/mfa-login-enforcement-helpers.js",
+      "category": "utils",
+      "dependencyCount": 8,
+      "pattern": "utility",
+      "effort": "medium",
+      "lines": 192,
+      "dependents": [
+        "app/components/mfa/mfa-login-enforcement-form.js",
+        "app/components/mfa/mfa-login-enforcement-header.js",
+        "app/routes/vault/cluster/access/mfa/enforcements/create.js",
+        "app/routes/vault/cluster/access/mfa/enforcements/enforcement.js",
+        "app/routes/vault/cluster/access/mfa/enforcements/enforcement/edit.js",
+        "app/routes/vault/cluster/access/mfa/enforcements/index.js",
+        "app/routes/vault/cluster/access/mfa/methods/index.js",
+        "app/routes/vault/cluster/access/mfa/methods/method.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/helpers/add-to-array.js",
+      "category": "helpers",
+      "dependencyCount": 7,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 34,
+      "dependents": [
+        "app/adapters/database/role.js",
+        "app/components/mfa/mfa-login-enforcement-form.js",
+        "app/models/mfa-login-enforcement.js",
+        "app/services/auth.ts",
+        "app/services/console.js",
+        "app/services/csp-event.js",
+        "app/utils/mfa-login-enforcement-helpers.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/utils/identity-helpers.js",
+      "category": "utils",
+      "dependencyCount": 7,
+      "pattern": "utility",
+      "effort": "medium",
+      "lines": 367,
+      "dependents": [
+        "app/components/identity/edit-form.js",
+        "app/routes/vault/cluster/access/identity/entities/aliases/add.js",
+        "app/routes/vault/cluster/access/identity/entities/aliases/index.js",
+        "app/routes/vault/cluster/access/identity/entities/show.js",
+        "app/routes/vault/cluster/access/identity/groups/aliases/add.js",
+        "app/routes/vault/cluster/access/identity/groups/aliases/index.ts",
+        "app/routes/vault/cluster/access/identity/groups/show.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/decorators/model-validations.js",
+      "category": "decorators",
+      "dependencyCount": 6,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 28,
+      "dependents": [
+        "app/models/database/role.js",
+        "app/models/mfa-login-enforcement.js",
+        "app/models/mfa-method.js",
+        "app/models/oidc/assignment.js",
+        "app/models/oidc/key.js",
+        "app/models/secret-engine.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/lib/route-paths.js",
+      "category": "lib",
+      "dependencyCount": 6,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 19,
+      "dependents": [
+        "app/routes/vault/cluster.js",
+        "app/routes/vault/cluster/auth.js",
+        "app/routes/vault/cluster/init.js",
+        "app/routes/vault/cluster/redirect.js",
+        "app/routes/vault/cluster/replication-dr-promote.js",
+        "app/routes/vault/cluster/unseal.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/identity/base.js",
+      "category": "adapters",
+      "dependencyCount": 5,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 29,
+      "dependents": [
+        "app/adapters/identity/entity-alias.js",
+        "app/adapters/identity/entity-merge.js",
+        "app/adapters/identity/entity.js",
+        "app/adapters/identity/group-alias.js",
+        "app/adapters/identity/group.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/lib/control-group-error.js",
+      "category": "lib",
+      "dependencyCount": 5,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 22,
+      "dependents": [
+        "app/adapters/database/credential.js",
+        "app/adapters/database/role.js",
+        "app/components/console/ui-panel.js",
+        "app/routes/application.js",
+        "app/services/control-group.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/mixins/backend-crumb.js",
+      "category": "mixins",
+      "dependencyCount": 5,
+      "pattern": "mixin",
+      "effort": "low",
+      "lines": 25,
+      "dependents": [
+        "app/controllers/vault/cluster/secrets/backend/actions.js",
+        "app/controllers/vault/cluster/secrets/backend/create.js",
+        "app/controllers/vault/cluster/secrets/backend/edit.js",
+        "app/controllers/vault/cluster/secrets/backend/list.js",
+        "app/controllers/vault/cluster/secrets/backend/show.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/mixins/unsaved-model-route.js",
+      "category": "mixins",
+      "dependencyCount": 5,
+      "pattern": "mixin",
+      "effort": "low",
+      "lines": 34,
+      "dependents": [
+        "app/routes/vault/cluster/access/method/item/create.js",
+        "app/routes/vault/cluster/access/method/item/edit.js",
+        "app/routes/vault/cluster/policies/acl/create.js",
+        "app/routes/vault/cluster/policies/egp/create.js",
+        "app/routes/vault/cluster/policies/rgp/create.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/cluster.js",
+      "category": "models",
+      "dependencyCount": 5,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 115,
+      "dependents": [
+        "app/components/auth/form-template.ts",
+        "app/components/auth/form/base.ts",
+        "app/components/auth/page.ts",
+        "app/components/upgrade-path-analyzer/upgrade-path-analyzer.ts",
+        "app/routes/vault/cluster/resilience-recovery.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/identity/_base.js",
+      "category": "models",
+      "dependencyCount": 5,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 25,
+      "dependents": [
+        "app/models/identity/entity-alias.js",
+        "app/models/identity/entity-merge.js",
+        "app/models/identity/entity.js",
+        "app/models/identity/group-alias.js",
+        "app/models/identity/group.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/utils/forms/validators.js",
+      "category": "utils",
+      "dependencyCount": 5,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 91,
+      "dependents": [
+        "app/components/secret-create-or-update.js",
+        "app/forms/mount.ts",
+        "app/forms/secrets/kv.ts",
+        "app/models/secret-engine.js",
+        "app/utils/forms/validate.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/transform/base.js",
+      "category": "adapters",
+      "dependencyCount": 4,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 78,
+      "dependents": [
+        "app/adapters/transform/alphabet.js",
+        "app/adapters/transform/role.js",
+        "app/adapters/transform/template.js",
+        "app/adapters/transform/transformation.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/helpers/tabs-for-identity-show.js",
+      "category": "helpers",
+      "dependencyCount": 4,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 28,
+      "dependents": [
+        "app/routes/vault/cluster/access/identity/entities/aliases/show.js",
+        "app/routes/vault/cluster/access/identity/entities/show.js",
+        "app/routes/vault/cluster/access/identity/groups/aliases/show.js",
+        "app/routes/vault/cluster/access/identity/groups/show.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/mixins/unload-model-route.js",
+      "category": "mixins",
+      "dependencyCount": 4,
+      "pattern": "mixin",
+      "effort": "low",
+      "lines": 35,
+      "dependents": [
+        "app/routes/vault/cluster/access/control-group-accessor.js",
+        "app/routes/vault/cluster/access/control-groups-configure.js",
+        "app/routes/vault/cluster/access/control-groups.js",
+        "app/routes/vault/cluster/policy/show.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/secret-edit.js",
+      "category": "routes",
+      "dependencyCount": 4,
+      "pattern": "classic-extend",
+      "effort": "high",
+      "lines": 803,
+      "dependents": [
+        "app/routes/vault/cluster/secrets/backend/actions.js",
+        "app/routes/vault/cluster/secrets/backend/create-root.js",
+        "app/routes/vault/cluster/secrets/backend/edit.js",
+        "app/routes/vault/cluster/secrets/backend/show.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/utils/model-helpers/database-helpers.js",
+      "category": "utils",
+      "dependencyCount": 4,
+      "pattern": "utility",
+      "effort": "medium",
+      "lines": 249,
+      "dependents": [
+        "app/components/database-role-setting-form.js",
+        "app/models/database/connection.js",
+        "app/models/database/role.js",
+        "app/serializers/database/connection.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/adapters/policy.js",
+      "category": "adapters",
+      "dependencyCount": 3,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 42,
+      "dependents": [
+        "app/adapters/policy/acl.js",
+        "app/adapters/policy/egp.js",
+        "app/adapters/policy/rgp.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/identity/entities/create.js",
+      "category": "controllers",
+      "dependencyCount": 3,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 40,
+      "dependents": [
+        "app/controllers/vault/cluster/access/identity/entities/aliases/add.js",
+        "app/controllers/vault/cluster/access/identity/entities/edit.js",
+        "app/controllers/vault/cluster/access/identity/entities/merge.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/identity/groups/create.js",
+      "category": "controllers",
+      "dependencyCount": 3,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 40,
+      "dependents": [
+        "app/controllers/vault/cluster/access/identity/groups/aliases/add.js",
+        "app/controllers/vault/cluster/access/identity/groups/edit.js",
+        "app/controllers/vault/cluster/access/identity/groups/merge.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/helpers/-date-base.js",
+      "category": "helpers",
+      "dependencyCount": 3,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 48,
+      "dependents": [
+        "app/helpers/is-after.js",
+        "app/helpers/is-before.js",
+        "app/helpers/now.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/helpers/remove-from-array.js",
+      "category": "helpers",
+      "dependencyCount": 3,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 35,
+      "dependents": [
+        "app/adapters/database/role.js",
+        "app/components/mfa/mfa-login-enforcement-form.js",
+        "app/utils/model-helpers/kmip-role-fields.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/lib/token-storage.js",
+      "category": "lib",
+      "dependencyCount": 3,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 22,
+      "dependents": [
+        "app/routes/vault/cluster.js",
+        "app/services/auth.ts",
+        "app/services/control-group.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/macros/identity-capabilities.js",
+      "category": "macros",
+      "dependencyCount": 3,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 11,
+      "dependents": [
+        "app/models/identity/entity-alias.js",
+        "app/models/identity/group-alias.js",
+        "app/models/identity/group.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/models/secret-engine.js",
+      "category": "models",
+      "dependencyCount": 3,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 274,
+      "dependents": [
+        "app/routes/vault/cluster/secrets/backend/configuration/edit.ts",
+        "app/routes/vault/cluster/secrets/backend/configuration/general-settings.ts",
+        "app/routes/vault/cluster/secrets/backend/configuration/plugin-settings.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/policy.js",
+      "category": "serializers",
+      "dependencyCount": 3,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 24,
+      "dependents": [
+        "app/serializers/policy/acl.js",
+        "app/serializers/policy/egp.js",
+        "app/serializers/policy/rgp.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/services/current-cluster.js",
+      "category": "services",
+      "dependencyCount": 3,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [
+        "app/components/upgrade-path-analyzer/upgrade-path-analyzer.ts",
+        "app/routes/vault/cluster/resilience-recovery.ts",
+        "app/services/auth.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/services/permissions.js",
+      "category": "services",
+      "dependencyCount": 3,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 490,
+      "dependents": [
+        "app/components/resultant-acl-banner.js",
+        "app/services/auth.ts",
+        "app/services/checklist-state.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/utils/chart-helpers.js",
+      "category": "utils",
+      "dependencyCount": 3,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 68,
+      "dependents": [
+        "app/components/billing/metric-card.ts",
+        "app/components/billing/summary-card.ts",
+        "app/utils/metrics-helpers.ts"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/utils/clamp.js",
+      "category": "utils",
+      "dependencyCount": 3,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 15,
+      "dependents": [
+        "app/models/transit-key.js",
+        "app/routes/vault/cluster/secrets/backend/secret-edit.js",
+        "app/services/pagination.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/utils/shared-model-boundary.js",
+      "category": "utils",
+      "dependencyCount": 3,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 19,
+      "dependents": [
+        "app/routes/vault/cluster.js",
+        "app/routes/vault/cluster/access.js",
+        "app/routes/vault/cluster/logout.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/adapters/named-path.js",
+      "category": "adapters",
+      "dependencyCount": 2,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 86,
+      "dependents": [
+        "app/adapters/oidc/assignment.js",
+        "app/adapters/oidc/key.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/decorators/model-expanded-attributes.js",
+      "category": "decorators",
+      "dependencyCount": 2,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 96,
+      "dependents": [
+        "app/models/aws-credential.js",
+        "app/models/secret-engine.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/helpers/aws-regions.js",
+      "category": "helpers",
+      "dependencyCount": 2,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 96,
+      "dependents": [
+        "app/forms/secrets/aws-config.ts",
+        "app/forms/sync/aws-sm.ts"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/helpers/tabs-for-auth-section.js",
+      "category": "helpers",
+      "dependencyCount": 2,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 137,
+      "dependents": [
+        "app/routes/vault/cluster/access/method/index.js",
+        "app/routes/vault/cluster/settings/auth/configure/index.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/macros/maybe-query-record.js",
+      "category": "macros",
+      "dependencyCount": 2,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 46,
+      "dependents": [
+        "app/components/secret-edit.js",
+        "app/macros/lazy-capabilities.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/mixins/focus-on-insert.js",
+      "category": "mixins",
+      "dependencyCount": 2,
+      "pattern": "mixin",
+      "effort": "low",
+      "lines": 36,
+      "dependents": [
+        "app/components/role-edit.js",
+        "app/components/transit-edit.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/models/policy.js",
+      "category": "models",
+      "dependencyCount": 2,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 36,
+      "dependents": [
+        "app/models/policy/acl.js",
+        "app/models/policy/rgp.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/router.js",
+      "category": "router.js",
+      "dependencyCount": 2,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 268,
+      "dependents": [
+        "app/components/namespace-picker.ts",
+        "app/routes/vault/cluster/secrets/enable/index.ts"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/utils/api-path.js",
+      "category": "utils",
+      "dependencyCount": 2,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 30,
+      "dependents": [
+        "app/models/identity/entity.js",
+        "app/utils/constants/capabilities.ts"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/utils/sort-objects.js",
+      "category": "utils",
+      "dependencyCount": 2,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 24,
+      "dependents": [
+        "app/components/page/methods.ts",
+        "app/services/pagination.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/adapters/generated-item-list.js",
+      "category": "adapters",
+      "dependencyCount": 1,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 119,
+      "dependents": [
+        "app/services/path-help.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/components/role-edit.js",
+      "category": "components",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 115,
+      "dependents": [
+        "app/components/role-aws-edit.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/identity/entities/aliases/add.js",
+      "category": "controllers",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 11,
+      "dependents": [
+        "app/controllers/vault/cluster/access/identity/entities/aliases/edit.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/identity/groups/aliases/add.js",
+      "category": "controllers",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 11,
+      "dependents": [
+        "app/controllers/vault/cluster/access/identity/groups/aliases/edit.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/leases/list.js",
+      "category": "controllers",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 79,
+      "dependents": [
+        "app/controllers/vault/cluster/access/leases/list-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/oidc-provider.js",
+      "category": "controllers",
+      "dependencyCount": 1,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 38,
+      "dependents": [
+        "app/controllers/vault/cluster/oidc-provider-ns.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/actions.js",
+      "category": "controllers",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 22,
+      "dependents": [
+        "app/controllers/vault/cluster/secrets/backend/actions-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/create.js",
+      "category": "controllers",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 26,
+      "dependents": [
+        "app/controllers/vault/cluster/secrets/backend/create-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/credentials.js",
+      "category": "controllers",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [
+        "app/controllers/vault/cluster/secrets/backend/credentials-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/edit.js",
+      "category": "controllers",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 32,
+      "dependents": [
+        "app/controllers/vault/cluster/secrets/backend/edit-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/list.js",
+      "category": "controllers",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 126,
+      "dependents": [
+        "app/controllers/vault/cluster/secrets/backend/list-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/show.js",
+      "category": "controllers",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 35,
+      "dependents": [
+        "app/controllers/vault/cluster/secrets/backend/show-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/helpers/number-to-word.js",
+      "category": "helpers",
+      "dependencyCount": 1,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 28,
+      "dependents": [
+        "app/components/mfa/form/verify.ts"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/helpers/split-object.js",
+      "category": "helpers",
+      "dependencyCount": 1,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 38,
+      "dependents": [
+        "app/adapters/secret-engine.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/helpers/supported-managed-auth-backends.js",
+      "category": "helpers",
+      "dependencyCount": 1,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 17,
+      "dependents": [
+        "app/routes/vault/cluster/access/method.ts"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/lib/arg-tokenizer.js",
+      "category": "lib",
+      "dependencyCount": 1,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 46,
+      "dependents": [
+        "app/lib/console-helpers.ts"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/lib/kv-object.js",
+      "category": "lib",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 60,
+      "dependents": [
+        "app/components/secret-edit.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/mixins/key-mixin.js",
+      "category": "mixins",
+      "dependencyCount": 1,
+      "pattern": "mixin",
+      "effort": "low",
+      "lines": 60,
+      "dependents": [
+        "app/models/secret.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/models/aws-credential.js",
+      "category": "models",
+      "dependencyCount": 1,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 84,
+      "dependents": [
+        "app/components/generate-credentials.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/generated-item.js",
+      "category": "models",
+      "dependencyCount": 1,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 45,
+      "dependents": [
+        "app/services/path-help.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/policy/rgp.js",
+      "category": "models",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 22,
+      "dependents": [
+        "app/models/policy/egp.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/leases/list.js",
+      "category": "routes",
+      "dependencyCount": 1,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 119,
+      "dependents": [
+        "app/routes/vault/cluster/access/leases/list-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/routes/vault/cluster/oidc-provider.js",
+      "category": "routes",
+      "dependencyCount": 1,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 174,
+      "dependents": [
+        "app/routes/vault/cluster/oidc-provider-ns.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/credentials.js",
+      "category": "routes",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 115,
+      "dependents": [
+        "app/routes/vault/cluster/secrets/backend/credentials-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/edit.js",
+      "category": "routes",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 15,
+      "dependents": [
+        "app/routes/vault/cluster/secrets/backend/edit-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/list.js",
+      "category": "routes",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 605,
+      "dependents": [
+        "app/routes/vault/cluster/secrets/backend/list-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/show.js",
+      "category": "routes",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 15,
+      "dependents": [
+        "app/routes/vault/cluster/secrets/backend/show-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/sign.js",
+      "category": "routes",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 39,
+      "dependents": [
+        "app/routes/vault/cluster/secrets/backend/sign-root.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/services/control-group.js",
+      "category": "services",
+      "dependencyCount": 1,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 153,
+      "dependents": [
+        "app/services/api.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/services/csp-event.js",
+      "category": "services",
+      "dependencyCount": 1,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 38,
+      "dependents": [
+        "app/components/auth/page.ts"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/utils/identity-manager.js",
+      "category": "utils",
+      "dependencyCount": 1,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 54,
+      "dependents": [
+        "app/serializers/cluster.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/utils/parse-pki-cert-oids.js",
+      "category": "utils",
+      "dependencyCount": 1,
+      "pattern": "utility",
+      "effort": "medium",
+      "lines": 96,
+      "dependents": [
+        "app/utils/parse-pki-cert.js"
+      ],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/utils/query-param-string.js",
+      "category": "utils",
+      "dependencyCount": 1,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 37,
+      "dependents": [
+        "app/utils/kv-path.ts"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/utils/remove-record.js",
+      "category": "utils",
+      "dependencyCount": 1,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 36,
+      "dependents": [
+        "app/mixins/unload-model-route.js"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/utils/trim-right.js",
+      "category": "utils",
+      "dependencyCount": 1,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 14,
+      "dependents": [
+        "app/components/policy-form.ts"
+      ],
+      "recommendedWave": 2
+    },
+    {
+      "filePath": "app/adapters/aws-credential.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 37,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/capabilities.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 84,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/cluster.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 226,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/console.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 14,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/control-group-config.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 25,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/control-group.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 30,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/database/connection.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 84,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/database/credential.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 63,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/database/role.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 225,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/identity/entity-alias.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/identity/entity-merge.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 23,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/identity/entity.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 24,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/identity/group-alias.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/identity/group.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 24,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/mfa-login-enforcement.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 35,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/mfa-method.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 60,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/mfa-setup.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 19,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/node.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/oidc/assignment.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/oidc/key.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 17,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/path-filter-config.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 34,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/permissions.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 18,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/policy/acl.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/policy/egp.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/policy/rgp.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/replication-mode.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 20,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/role-aws.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 81,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/secret-engine.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 103,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/secret.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 83,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/secrets-engine-path.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 53,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/transform/alphabet.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/transform/role.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/transform/template.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/transform/transformation.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 11,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/transform.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 102,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/adapters/transit-key.js",
+      "category": "adapters",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 125,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/app.js",
+      "category": "app.js",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 211,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/breakpoints.js",
+      "category": "breakpoints.js",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/alphabet-edit.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 105,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/app-footer.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 12,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/console/command-input.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 37,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/console/log-json.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 12,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/console/log-list.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/console/log-object.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 35,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/console/log-text.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 12,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/console/output-log.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/console/ui-panel.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 174,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/control-group-success.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 41,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/control-group.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 97,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/database-connection.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 171,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/database-role-edit.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 184,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/database-role-setting-form.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 59,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/enabled-plugin-card.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 67,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/file-to-array-buffer.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 63,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/flash-message.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/flash-toast.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 38,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/generate-credentials-database.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 43,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/generate-credentials-totp.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 81,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/generated-item-list.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 54,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/generated-item.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 116,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/get-credentials-card.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 56,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/identity/edit-form.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 166,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/identity/item-details.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 29,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/identity/lookup-input.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 77,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/identity/popup-alias.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 43,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/identity/popup-members.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 47,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/identity/popup-metadata.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 48,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/identity/popup-policy.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 50,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/key-version-select.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 11,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/keymgmt/distribute.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 324,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/keymgmt/key-edit.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 224,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/keymgmt/provider-edit.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 250,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/license-info.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 50,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/link-status.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 46,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/logo-edition.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 21,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/mfa/method-form.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 67,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/mfa/mfa-login-enforcement-form.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 217,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/mfa/mfa-login-enforcement-header.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 84,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/mfa/mfa-setup-step-one.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 82,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/mfa/mfa-setup-step-two.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 46,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/mount-accessor-select.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 63,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/mount-backend/type-form.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 145,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/oidc/assignment-form.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 62,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/oidc/client-form.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 149,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/oidc/key-form.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 114,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/oidc/provider-form.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 127,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/oidc/scope-form.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 85,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/oidc-consent-block.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 65,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/page/userpass-reset-password.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 43,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/pgp-file.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 89,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/pgp-list.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 59,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/plugin-documentation-flyout.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 52,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/radial-progress.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 35,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/raft-join.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 79,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/raft-storage-overview.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 113,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/raft-storage-restore.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 50,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/regex-validator.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 88,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/resultant-acl-banner.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 37,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/role-aws-edit.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 82,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/role-ssh-edit.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 89,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/secret-create-or-update.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 228,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/secret-edit-toolbar.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "high",
+      "lines": 81,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/components/secret-edit.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "high",
+      "lines": 148,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/components/secret-link.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 58,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/secret-list/aws-role-item.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 12,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/secret-list/database-list-item.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 87,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/secret-list/item.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 12,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/secret-list/ssh-role-item.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 12,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/secret-list/totp-list-item.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 12,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/secret-list/transform-list-item.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 27,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/section-tabs.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/shamir-progress.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 21,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/token-expire-warning.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 69,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/toolbar-secret-link.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 45,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/totp-edit.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 127,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/transform-advanced-templating.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 43,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/transform-role-edit.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 227,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/transform-template-edit.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 136,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/transformation-edit.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 310,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/transit-edit.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 184,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/transit-form-show.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 36,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/transit-key-action/export.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 12,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/transit-key-actions.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 253,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/components/wrap-ttl.js",
+      "category": "components",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 32,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/control-groups-configure.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 17,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/identity/entities/aliases/edit.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/identity/entities/aliases/index.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 19,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/identity/entities/edit.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/identity/entities/index.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 68,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/identity/entities/merge.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/identity/groups/aliases/edit.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/identity/groups/edit.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/identity/groups/merge.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/leases/index.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 17,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/leases/list-root.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/leases/show.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 67,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/method/item/list.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 10,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/methods.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 14,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/mfa/enforcements/enforcement/index.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 34,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/mfa/enforcements/index.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 12,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/mfa/methods/create.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 184,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/mfa/methods/method/index.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 105,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/mfa/methods.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/namespaces/create.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 46,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/oidc/assignments/assignment/details.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 27,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/oidc/clients/client/details.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 27,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/oidc/clients/client.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 12,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/oidc/keys/key/details.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 42,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/oidc/keys/key.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 12,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/oidc/providers/provider/details.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 27,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/oidc/providers/provider.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 12,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/oidc/scopes/scope/details.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 27,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/access/oidc.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 69,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/auth.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 85,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/dashboard.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 21,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/init.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 98,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/mfa-setup.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 53,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/oidc-callback.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/oidc-provider-ns.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 10,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/policies/index.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 18,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/policy/edit.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 39,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/replication-dr-promote/index.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 19,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/actions-root.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/configuration/edit.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 17,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/configuration/index.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 50,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/create-root.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/credentials-root.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/edit-root.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/list-root.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/show-root.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend/sign-root.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/backend.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 11,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/secrets/enable/index.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 18,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/settings/auth/enable.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 19,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/settings/seal.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 30,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/settings.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 11,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster/unseal.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 27,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault/cluster.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 24,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/controllers/vault.js",
+      "category": "controllers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/decorators/model-form-fields.js",
+      "category": "decorators",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 45,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/add.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/coerce-eq.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 14,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/filter-wildcard.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 22,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/is-after.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/is-before.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/is-wildcard-string.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 25,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/multi-line-join.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/nav-to-route.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 20,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/now.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 15,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/route-params-for.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/secret-query-params.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 28,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/sha2-digest-sizes.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 15,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/string-array-to-camel.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 39,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/helpers/sub.js",
+      "category": "helpers",
+      "dependencyCount": 0,
+      "pattern": "helper",
+      "effort": "low",
+      "lines": 11,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/initializers/deprecation-filter.js",
+      "category": "initializers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 22,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/initializers/disable-ember-inspector.js",
+      "category": "initializers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 17,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/initializers/ember-data-identifiers.js",
+      "category": "initializers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 32,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/instance-initializers/theme.js",
+      "category": "instance-initializers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/instance-initializers/track-csp-event.js",
+      "category": "instance-initializers",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 15,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/models/capabilities.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 60,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/control-group-config.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 26,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/control-group.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 21,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/database/connection.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 276,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/database/credential.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 19,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/database/role.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 224,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/identity/entity-alias.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 47,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/identity/entity-merge.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 26,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/identity/entity.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 57,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/identity/group-alias.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 44,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/identity/group.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 89,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/mfa-login-enforcement.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 118,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/mfa-method.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 214,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/mount-config.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 120,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/node.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 38,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/oidc/assignment.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 47,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/oidc/key.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 63,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/path-filter-config.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/policy/acl.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/policy/egp.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 20,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/replication-attributes.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 90,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/replication-mode.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 43,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/role-aws.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "medium",
+      "lines": 82,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/role-jwt.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 44,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/secret.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 40,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/test-form-model.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 18,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/transform/alphabet.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 40,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/transform/role.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 44,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/transform/template.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 56,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/models/transit-key.js",
+      "category": "models",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 194,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/routes/application.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 92,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/loading.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 15,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/control-group-accessor.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 37,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/control-groups-configure.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 41,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/control-groups.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 24,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/entities/aliases/add.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 26,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/entities/aliases/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 32,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/entities/aliases/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 68,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/entities/aliases/show.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 40,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/entities/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 41,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/entities/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 33,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/entities/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 96,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/entities/merge.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 14,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/entities/show.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 52,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/groups/aliases/add.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 26,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/groups/aliases/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 32,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/groups/aliases/show.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 40,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/groups/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 41,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/groups/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 33,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/groups/merge.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/identity/groups/show.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 60,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/leases/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 20,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/leases/list-root.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/leases/show.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 67,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/leases.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/method/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 22,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/method/item/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 36,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/method/item/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 30,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/method/item/list.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 72,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/method/item/show.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 30,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/method/item.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 40,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/method/section.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 31,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/mfa/enforcements/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 20,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/mfa/enforcements/enforcement/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 25,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/mfa/enforcements/enforcement.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 21,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/mfa/enforcements/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 37,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/mfa/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 23,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/mfa/methods/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 26,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/mfa/methods/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 45,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/mfa/methods/method/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 37,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/mfa/methods/method.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 47,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/namespaces/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 22,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/assignments/assignment/details.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 26,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/assignments/assignment/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 20,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/assignments/assignment.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 22,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/assignments/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 19,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/assignments/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 39,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/assignments.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 30,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/clients/client/details.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 8,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/clients/client/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 42,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/clients/client/providers.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 41,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/clients/client.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 19,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/clients/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 47,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/clients/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 44,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 26,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/keys/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 22,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/keys/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 37,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/keys/key/clients.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 29,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/keys/key/details.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/keys/key/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 28,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/keys/key.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 27,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/providers/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 35,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/providers/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 37,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/providers/provider/clients.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 29,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/providers/provider/details.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/providers/provider/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 42,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/providers/provider.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 19,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/scopes/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 14,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/scopes/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 37,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/scopes/scope/details.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/scopes/scope/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 15,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc/scopes/scope.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 22,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access/oidc.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/access.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 23,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/auth.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 158,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/cluster-route-base.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 23,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/dashboard.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 79,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 15,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/init.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 21,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/license.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 33,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/logout.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 55,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/mfa-setup.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/oidc-callback.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 47,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/oidc-provider-ns.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/policies/acl/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 31,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/policies/egp/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 37,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/policies/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/policies/rgp/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 37,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/policies.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 18,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/policy/edit.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 62,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/policy/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/policy/show.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 69,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/policy.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 30,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/recovery.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/redirect.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 36,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/replication-dr-promote/details.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 15,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/replication-dr-promote/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 15,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/replication-dr-promote.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 21,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/actions.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 55,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/configuration.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 163,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/create-root.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 114,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/create.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 20,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/credentials-root.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/edit-root.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/list-root.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/overview.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 133,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/show-root.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend/sign-root.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 7,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets/backend.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 43,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets-redirect-with-path.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 28,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/secrets-redirect.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 17,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/settings/auth/configure/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 19,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/settings/auth/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/settings/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 16,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/settings/seal.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 20,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/settings.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/storage.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 19,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/tools/index.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 23,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/tools/tool.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 32,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/tools.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 13,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster/unseal.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 21,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault/cluster.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 321,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/routes/vault.js",
+      "category": "routes",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 50,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/serializers/capabilities.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 34,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/cluster.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 57,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/config.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 34,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/control-group.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 34,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/database/connection.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 84,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/database/credential.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 36,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/database/role.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 100,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/gcp/config.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 24,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/mfa-login-enforcement.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 47,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/mfa-method.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 29,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/node.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 48,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/oidc/assignment.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 11,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/oidc/key.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 11,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/path-filter-config.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 21,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/policy/acl.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/policy/egp.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/policy/rgp.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 9,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/replication-attributes.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 14,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/replication-mode.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 18,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/role-aws.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 35,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/role.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 46,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/secret-engine.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 112,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/secret.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 48,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/transform/alphabet.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 24,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/transform/role.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 23,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/transform/template.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 61,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/transform.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 38,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/serializers/transit-key.js",
+      "category": "serializers",
+      "dependencyCount": 0,
+      "pattern": "classic-extend",
+      "effort": "low",
+      "lines": 70,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/services/console.js",
+      "category": "services",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 114,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/services/custom-messages.js",
+      "category": "services",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 63,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/services/pagination.js",
+      "category": "services",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "medium",
+      "lines": 195,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/services/replication-mode.js",
+      "category": "services",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 20,
+      "dependents": [],
+      "recommendedWave": 1
+    },
+    {
+      "filePath": "app/transforms/array.js",
+      "category": "transforms",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 29,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/transforms/comma-string.js",
+      "category": "transforms",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 28,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/transforms/date-time-local.js",
+      "category": "transforms",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 35,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/transforms/mount-visibility.js",
+      "category": "transforms",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 21,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/transforms/object.js",
+      "category": "transforms",
+      "dependencyCount": 0,
+      "pattern": "octane-class",
+      "effort": "low",
+      "lines": 27,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/utils/camelize-object-keys.js",
+      "category": "utils",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 14,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/utils/form-config-generator.js",
+      "category": "utils",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "medium",
+      "lines": 195,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/utils/model-helpers/kmip-role-fields.js",
+      "category": "utils",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 28,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/utils/openapi-to-attrs.js",
+      "category": "utils",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "low",
+      "lines": 29,
+      "dependents": [],
+      "recommendedWave": 3
+    },
+    {
+      "filePath": "app/utils/parse-pki-cert.js",
+      "category": "utils",
+      "dependencyCount": 0,
+      "pattern": "utility",
+      "effort": "high",
+      "lines": 415,
+      "dependents": [],
+      "recommendedWave": 1
+    }
+  ]
+}
