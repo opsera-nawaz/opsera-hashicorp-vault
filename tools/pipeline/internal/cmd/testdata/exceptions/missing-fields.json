@@ -1,0 +1,9 @@
+[
+  {
+    "finding_id": "GO-2026-6089",
+    "original_status": "FAIL",
+    "exception_status": "EXCEPTION",
+    "expiry_date": "2099-12-31",
+    "created_at": "2026-01-01T00:00:00Z"
+  }
+]

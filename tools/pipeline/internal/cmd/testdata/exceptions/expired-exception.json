@@ -1,0 +1,12 @@
+[
+  {
+    "finding_id": "FIPS-CRYPTO-002",
+    "original_status": "FAIL",
+    "exception_status": "EXCEPTION",
+    "owner": "security-team",
+    "justification": "Historical exception whose expiry_date has passed and should be re-evaluated.",
+    "expiry_date": "2026-01-01",
+    "jira_reference": "PSP-9999",
+    "created_at": "2025-06-01T00:00:00Z"
+  }
+]

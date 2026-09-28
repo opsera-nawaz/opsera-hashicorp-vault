@@ -66,6 +66,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd.AddCommand(newSarifCmd())
 	rootCmd.AddCommand(newSbomCmd())
 	rootCmd.AddCommand(newSlackCmd())
+	rootCmd.AddCommand(newValidateExceptionsCmd())
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()

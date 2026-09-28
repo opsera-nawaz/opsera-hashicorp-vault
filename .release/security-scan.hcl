@@ -38,6 +38,8 @@ binary {
         // https://hashicorp.atlassian.net/browse/PSP-3913
         // Exempt these until the scanner can handle the boringcrypto suffix for
         // the FIPS 140-3 builds.
+        // Also tracked as structured exception records (owner, justification,
+        // expiry_date) in .release/fips-data/exceptions.json -- see WO-063.
         "GO-2026-6091", "GO-2026-6088", "GO-2026-5972", "GO-2026-6218",
         "GO-2026-6090", "GO-2026-5026", "GO-2026-6089", "GO-2026-5942"
       ]
@@ -84,6 +86,8 @@ container {
         // https://hashicorp.atlassian.net/browse/PSP-3913
         // Exempt these until the scanner can handle the boringcrypto suffix for
         // the FIPS 140-3 builds.
+        // Also tracked as structured exception records (owner, justification,
+        // expiry_date) in .release/fips-data/exceptions.json -- see WO-063.
         "GO-2026-6091", "GO-2026-6088", "GO-2026-5972", "GO-2026-6218",
         "GO-2026-6090", "GO-2026-5026", "GO-2026-6089", "GO-2026-5942"
       ]
