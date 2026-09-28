@@ -3,14 +3,27 @@
  * SPDX-License-Identifier: BUSL-1.1
  */
 
-export function kvErrorHandler(status, errorResponse) {
+import type { ApiErrorResponse } from 'vault/api';
+
+/**
+ * The shape of the returned object depends on which failed request called it: fetchSubkeys
+ * (routes/secret.ts) expects { metadata } (a KvSubkeysResponse), while the secret data read
+ * (routes/secret/details.ts) expects { data, metadata } (the same envelope as a successful
+ * kvV2Read). The real error body's `data` field carries whichever shape the failed endpoint
+ * would have returned on success, which ApiErrorResponse doesn't model — callers cast the
+ * result to the shape their endpoint's error body carries.
+ */
+export function kvErrorHandler(
+  status: number | undefined,
+  errorResponse: ApiErrorResponse | undefined
+): Record<string, unknown> {
   // if it's a legitimate error - throw it!
   if (errorResponse?.isControlGroupError) {
     throw errorResponse;
   }
 
   if (typeof errorResponse === 'object' && errorResponse !== null) {
-    const { data } = errorResponse;
+    const data = errorResponse.data as Record<string, unknown> | undefined;
 
     if (status === 403) {
       return {

@@ -14,6 +14,16 @@ import {
   NON_STRING_WARNING,
 } from 'vault/utils/forms/validators';
 
+type KvPatchKeyState = 'enabled' | 'disabled' | 'deleted';
+
+interface Args {
+  isSaving: boolean;
+  onCancel: () => void;
+  onSubmit: (data: Record<string, unknown>) => void;
+  subkeys: Record<string, unknown>;
+  submitError?: string;
+}
+
 /**
  * @module KvPatch::Editor::Form
  * @description
@@ -41,93 +51,102 @@ import {
  */
 
 export class KeyValueState {
-  @tracked key;
-  @tracked value;
-  @tracked state; // 'enabled', 'disabled' or 'deleted'
-  @tracked keyError;
+  @tracked key: string;
+  @tracked value: unknown;
+  @tracked state: KvPatchKeyState; // 'enabled', 'disabled' or 'deleted'
+  @tracked keyError = '';
 
-  constructor({ key, value = undefined, state = 'disabled' }) {
+  constructor({
+    key,
+    value = undefined,
+    state = 'disabled',
+  }: {
+    key: string;
+    value?: unknown;
+    state?: KvPatchKeyState;
+  }) {
     this.key = key;
     this.value = value;
     this.state = state;
   }
 
-  get keyWarning() {
+  get keyWarning(): string {
     return hasWhitespace(this.key) ? WHITESPACE_WARNING('this key') : '';
   }
 
-  get valueWarning() {
+  get valueWarning(): string {
     if (this.value === null) return '';
     return isNonString(this.value) ? NON_STRING_WARNING : '';
   }
 
-  reset() {
+  reset(): void {
     this.value = undefined;
     this.state = 'disabled';
   }
 
   @action
-  updateValue(event) {
-    this.value = event.target.value;
+  updateValue(event: Event): void {
+    this.value = (event.target as HTMLInputElement).value;
   }
 
   @action
-  updateState(state) {
+  updateState(state: KvPatchKeyState): void {
     this.state = state;
   }
 }
 
-export default class KvPatchEditorForm extends Component {
-  @tracked patchData; // key value pairs in form
+export default class KvPatchEditorForm extends Component<Args> {
+  // private: NativeArray isn't nameable from '@ember/array' for declaration emit purposes
+  @tracked private patchData = A<KeyValueState>(); // key value pairs in form
   @tracked showSubkeys = false;
-  @tracked validationError;
+  @tracked validationError = '';
 
   // tracked variables for new (initially empty) row of inputs.
   // once a user clicks "Add" a KeyValueState class is instantiated for that row
-  @tracked newKey;
-  @tracked newValue;
+  @tracked newKey: string | undefined;
+  @tracked newValue: unknown;
 
-  isOriginalSubkey = (key) => Object.keys(this.args.subkeys).includes(key);
+  isOriginalSubkey = (key: string): boolean => Object.keys(this.args.subkeys).includes(key);
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: Args) {
+    super(owner, args);
     const kvData = Object.keys(this.args.subkeys).map((key) => this.generateData(key));
     this.patchData = A(kvData);
     this.resetNewRow();
   }
 
-  get newKeyWarning() {
+  get newKeyWarning(): string {
     return hasWhitespace(this.newKey) ? WHITESPACE_WARNING('this key') : '';
   }
 
-  get newValueWarning() {
+  get newValueWarning(): string {
     if (this.newValue === null) return '';
     return isNonString(this.newValue) ? NON_STRING_WARNING : '';
   }
 
-  get newKeyError() {
+  get newKeyError(): string {
     return this.validateKey(this.newKey);
   }
 
-  generateData(key, value, state) {
+  generateData(key: string, value?: unknown, state?: KvPatchKeyState): KeyValueState {
     return new KeyValueState({ key, value, state });
   }
 
-  resetNewRow() {
+  resetNewRow(): void {
     this.newKey = undefined;
     this.newValue = undefined;
   }
 
-  validateKey(key) {
+  validateKey(key: string | undefined): string {
     return this.patchData.any((KV) => KV.key === key)
       ? `"${key}" key already exists. Update the value of the existing key or rename this one.`
       : '';
   }
 
   @action
-  updateKey(KV, event) {
+  updateKey(KV: KeyValueState, event: Event): void {
     // KV is KeyValueState class
-    const key = event.target.value;
+    const key = (event.target as HTMLInputElement).value;
     // if a user refocuses an input that already has a key
     // validateKey miscalculates and thinks it's a duplicate
     if (KV.key === key) return; // so we return if values match
@@ -140,18 +159,18 @@ export default class KvPatchEditorForm extends Component {
   }
 
   @action
-  updateNewKey(event) {
-    const key = event.target.value;
+  updateNewKey(event: Event): void {
+    const key = (event.target as HTMLInputElement).value;
     this.newKey = key;
   }
 
   @action
-  updateNewValue(event) {
-    this.newValue = event.target.value;
+  updateNewValue(event: Event): void {
+    this.newValue = (event.target as HTMLInputElement).value;
   }
 
   @action
-  addRow() {
+  addRow(): void {
     if (!this.newKey || this.newKeyError) return;
     const KV = this.generateData(this.newKey, this.newValue, 'enabled');
     this.patchData.pushObject(KV);
@@ -160,7 +179,7 @@ export default class KvPatchEditorForm extends Component {
   }
 
   @action
-  undoKey(KV) {
+  undoKey(KV: KeyValueState): void {
     if (this.isOriginalSubkey(KV.key)) {
       // reset state to 'disabled' and value to undefined
       KV.reset();
@@ -171,9 +190,9 @@ export default class KvPatchEditorForm extends Component {
   }
 
   @action
-  submit(event) {
+  submit(event: Event): void {
     event.preventDefault();
-    if (this.newKeyError || this.patchData.any((KV) => KV.keyError)) {
+    if (this.newKeyError || this.patchData.any((KV) => !!KV.keyError)) {
       this.validationError = 'This form contains validations errors, please resolve those before submitting.';
       return;
     }
@@ -184,7 +203,7 @@ export default class KvPatchEditorForm extends Component {
       this.addRow();
     }
 
-    const data = this.patchData.reduce((obj, KV) => {
+    const data = this.patchData.reduce((obj: Record<string, unknown>, KV) => {
       // only include edited inputs
       const { state } = KV;
       if (state === 'enabled' || state === 'deleted') {

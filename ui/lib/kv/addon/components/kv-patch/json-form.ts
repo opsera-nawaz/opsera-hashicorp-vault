@@ -7,6 +7,14 @@ import Component from '@glimmer/component';
 import { action } from '@ember/object';
 import { tracked } from '@glimmer/tracking';
 
+interface Args {
+  isSaving: boolean;
+  onCancel: () => void;
+  onSubmit: (data: Record<string, unknown>) => void;
+  subkeys: Record<string, unknown>;
+  submitError?: string;
+}
+
 /**
  * @module KvPatchJsonForm
  * @description
@@ -22,18 +30,18 @@ import { tracked } from '@glimmer/tracking';
  * @param {string} submitError - error message string from parent if submit failed
  */
 
-export default class KvPatchJsonForm extends Component {
-  @tracked jsonObject;
-  @tracked lintingErrors;
+export default class KvPatchJsonForm extends Component<Args> {
+  @tracked jsonObject: string;
+  @tracked lintingErrors = false;
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: Args) {
+    super(owner, args);
     // prefill JSON editor with an empty object
     this.jsonObject = JSON.stringify({ '': '' }, null, 2);
   }
 
   @action
-  handleJson(value) {
+  handleJson(value: string): void {
     this.lintingErrors = false;
 
     try {
@@ -45,9 +53,9 @@ export default class KvPatchJsonForm extends Component {
   }
 
   @action
-  submit(event) {
+  submit(event: Event): void {
     event.preventDefault();
-    const patchData = JSON.parse(this.jsonObject);
+    const patchData = JSON.parse(this.jsonObject) as Record<string, unknown>;
     this.args.onSubmit(patchData);
   }
 }

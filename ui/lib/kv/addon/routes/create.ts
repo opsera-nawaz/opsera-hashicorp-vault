@@ -8,10 +8,24 @@ import { service } from '@ember/service';
 import { breadcrumbsForSecret } from 'kv/utils/kv-breadcrumbs';
 import KvForm from 'vault/forms/secrets/kv';
 
-export default class KvSecretsCreateRoute extends Route {
-  @service secretMountPath;
+import type Controller from '@ember/controller';
+import type { Breadcrumb } from 'vault/app-types';
+import type SecretMountPath from 'vault/services/secret-mount-path';
 
-  model(params) {
+interface RouteModel {
+  backend: string;
+  path: string | undefined;
+  form: KvForm;
+}
+
+interface RouteController extends Controller {
+  breadcrumbs: Breadcrumb[];
+}
+
+export default class KvSecretsCreateRoute extends Route {
+  @service declare readonly secretMountPath: SecretMountPath;
+
+  model(params: { initialKey?: string }): RouteModel {
     const backend = this.secretMountPath.currentPath;
     const { initialKey: path } = params;
 
@@ -31,7 +45,7 @@ export default class KvSecretsCreateRoute extends Route {
     };
   }
 
-  setupController(controller, resolvedModel) {
+  setupController(controller: RouteController, resolvedModel: RouteModel): void {
     super.setupController(controller, resolvedModel);
 
     const crumbs = [

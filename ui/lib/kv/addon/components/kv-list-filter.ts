@@ -12,6 +12,13 @@ import { keyIsFolder, parentKeyForKey, keyWithoutParentKey } from 'core/utils/ke
 import { tracked } from '@glimmer/tracking';
 import { task, timeout } from 'ember-concurrency';
 
+import type RouterService from '@ember/routing/router-service';
+
+interface Args {
+  mountPoint: string;
+  filterValue: string;
+}
+
 /**
  * @module KvListFilter
  * `KvListFilter` is used for filtering on the KV metadata LIST response.
@@ -28,52 +35,52 @@ import { task, timeout } from 'ember-concurrency';
  * @param {string} filterValue - Full initial search value. A concatenation between the list-directory's dynamic path "path-to-secret" and the queryParam "pageFilter". For example, if we're inside the beep/ directory searching for any secret that starts with "my-" this value will equal "beep/my-".
  */
 
-export default class KvListFilterComponent extends Component {
-  @service('app-router') router;
-  @tracked query;
+export default class KvListFilterComponent extends Component<Args> {
+  @service('app-router') declare readonly router: RouterService;
+  @tracked query: string | undefined;
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: Args) {
+    super(owner, args);
     this.query = this.args.filterValue;
   }
 
-  navigate(pathToSecret, pageFilter) {
+  navigate(pathToSecret?: string | null, pageFilter?: string | null): void {
     const route = pathToSecret ? `${this.args.mountPoint}.list-directory` : `${this.args.mountPoint}.list`;
-    const args = [route];
+    const queryParams = { queryParams: { pageFilter: pageFilter ? pageFilter : null } };
     if (pathToSecret) {
-      args.push(pathToSecret);
+      this.router.transitionTo(route, pathToSecret, queryParams);
+    } else {
+      this.router.transitionTo(route, queryParams);
     }
-    args.push({
-      queryParams: {
-        pageFilter: pageFilter ? pageFilter : null,
-      },
-    });
-    this.router.transitionTo(...args);
   }
 
   @action
-  handleKeyDown(event) {
+  handleKeyDown(event: KeyboardEvent): void {
     const isEscKeyPressed = keys.ESC.includes(event.key);
     if (isEscKeyPressed) {
       // On escape, transition to the nearest parentDirectory.
       // If no parentDirectory, then to the list route.
-      const input = event.target.value;
+      const input = (event.target as HTMLInputElement).value;
       const parentDirectory = parentKeyForKey(input);
-      !parentDirectory ? this.navigate() : this.navigate(parentDirectory);
+      if (!parentDirectory) {
+        this.navigate();
+      } else {
+        this.navigate(parentDirectory);
+      }
     }
     // ignore all other key events
   }
 
-  @action handleInput(evt) {
-    this.query = evt.target.value;
+  @action handleInput(evt: Event): void {
+    this.query = (evt.target as HTMLInputElement).value;
   }
 
   @task
-  *handleSearch(evt) {
+  *handleSearch(evt: Event) {
     evt.preventDefault();
     // shows loader to indicate that the search was executed
     yield timeout(Ember.testing ? 0 : 250);
-    const searchTerm = this.query;
+    const searchTerm = this.query ?? '';
     const isDirectory = keyIsFolder(searchTerm);
     const parentDirectory = parentKeyForKey(searchTerm);
     const secretWithinDirectory = keyWithoutParentKey(searchTerm);

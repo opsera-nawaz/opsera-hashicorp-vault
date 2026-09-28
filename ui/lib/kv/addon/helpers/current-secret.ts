@@ -5,10 +5,21 @@
 
 import isDeleted from 'kv/helpers/is-deleted';
 
+import type { KvSecretMetadata } from 'kv/utils/kv-types';
+
+export interface CurrentSecretInfo {
+  state: 'destroyed' | 'deleted' | 'created';
+  isDeactivated: boolean;
+  deletionTime: string;
+}
+
 // helps in long logic statements for state of a currentVersion
-export default function currentSecret(metadata) {
+export default function currentSecret(
+  metadata: KvSecretMetadata | null | undefined
+): CurrentSecretInfo | false {
   if (metadata?.versions && metadata?.current_version) {
     const data = metadata.versions[metadata.current_version];
+    if (!data) return false;
     const state = data.destroyed ? 'destroyed' : isDeleted(data.deletion_time) ? 'deleted' : 'created';
     return {
       state,

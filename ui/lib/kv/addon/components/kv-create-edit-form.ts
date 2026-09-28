@@ -11,6 +11,28 @@ import { task } from 'ember-concurrency';
 import { pathIsFromDirectory } from 'kv/utils/kv-breadcrumbs';
 import { waitFor } from '@ember/test-waiters';
 
+import type KvForm from 'vault/forms/secrets/kv';
+import type ApiService from 'vault/services/api';
+import type ControlGroupService from 'vault/services/control-group';
+import type FlashMessageService from 'vault/services/flash-messages';
+import type RouterService from '@ember/routing/router-service';
+import type { ValidationMap } from 'vault/app-types';
+
+interface Args {
+  form: KvForm;
+  path: string;
+  backend: string;
+  showJson: boolean;
+  onChange?: (value: unknown) => void;
+}
+
+interface Metadata {
+  custom_metadata?: Record<string, string>;
+  max_versions?: number;
+  cas_required?: boolean;
+  delete_version_after?: string;
+}
+
 /**
  * @module KvCreateEditForm is used for creating and editing kv secret data and metadata, it hides/shows a json editor and renders validation errors for the json editor
  *
@@ -29,21 +51,21 @@ import { waitFor } from '@ember/test-waiters';
  * @param {function} onSecretDataChange - function passed from parent to handle secret data change side effects
  */
 
-export default class KvCreateEditForm extends Component {
-  @service api;
-  @service controlGroup;
-  @service flashMessages;
-  @service('app-router') router;
+export default class KvCreateEditForm extends Component<Args> {
+  @service declare readonly api: ApiService;
+  @service declare readonly controlGroup: ControlGroupService;
+  @service declare readonly flashMessages: FlashMessageService;
+  @service('app-router') declare readonly router: RouterService;
 
-  @tracked lintingErrors;
-  @tracked modelValidations;
-  @tracked invalidFormAlert;
-  @tracked errorMessage;
+  @tracked lintingErrors = false;
+  @tracked modelValidations: ValidationMap | null = null;
+  @tracked invalidFormAlert = '';
+  @tracked errorMessage: string | null = null;
 
   @action
-  onJsonChange(value) {
+  onJsonChange(value: string): void {
     try {
-      const json = JSON.parse(value);
+      const json = JSON.parse(value) as Record<string, string>;
       this.args.form.data.secretData = json;
       this.lintingErrors = false;
       this.args.onChange?.(json);
@@ -53,46 +75,51 @@ export default class KvCreateEditForm extends Component {
   }
 
   @action
-  onKvObjectChange(value) {
+  onKvObjectChange(value: Record<string, string>): void {
     this.args.form.data.secretData = value;
     this.args.onChange?.(value);
   }
 
   @action
-  pathValidations() {
+  pathValidations(): void {
     // check path attribute warnings on key up for new secrets
     const { state } = this.args.form.toJSON();
-    if (state?.path?.warnings) {
+    if (state['path']?.warnings) {
       // only set model validations if warnings exist
       this.modelValidations = state;
     }
   }
 
   @action
-  onCancel() {
+  onCancel(): void {
     const { form, path } = this.args;
     if (form.isNew) {
-      pathIsFromDirectory(path)
-        ? this.router.transitionTo('vault.cluster.secrets.backend.kv.list-directory', path)
-        : this.router.transitionTo('vault.cluster.secrets.backend.kv.list');
+      if (pathIsFromDirectory(path)) {
+        this.router.transitionTo('vault.cluster.secrets.backend.kv.list-directory', path);
+      } else {
+        this.router.transitionTo('vault.cluster.secrets.backend.kv.list');
+      }
     } else {
       this.router.transitionTo('vault.cluster.secrets.backend.kv.secret.index');
     }
   }
 
-  hasMetadata(metadata) {
+  hasMetadata(metadata: Metadata): boolean {
     try {
       const { custom_metadata = {}, max_versions, cas_required, delete_version_after = '0s' } = metadata;
-      return (
-        Object.keys(custom_metadata).length || max_versions || cas_required || delete_version_after !== '0s'
+      return !!(
+        Object.keys(custom_metadata).length ||
+        max_versions ||
+        cas_required ||
+        delete_version_after !== '0s'
       );
-    } catch (e) {
+    } catch {
       return false;
     }
   }
 
   save = task(
-    waitFor(async (event) => {
+    waitFor(async (event: Event) => {
       event.preventDefault();
 
       const { isValid, state, invalidFormMessage, data } = this.args.form.toJSON();
@@ -125,7 +152,7 @@ export default class KvCreateEditForm extends Component {
           const { message, response } = await this.api.parseError(error);
           if (response?.isControlGroupError) {
             this.controlGroup.saveTokenFromError(response);
-            const err = this.controlGroup.logFromError(response);
+            const err = this.controlGroup.logFromError(response) as { content: string };
             this.errorMessage = err.content;
           } else {
             this.errorMessage = message;

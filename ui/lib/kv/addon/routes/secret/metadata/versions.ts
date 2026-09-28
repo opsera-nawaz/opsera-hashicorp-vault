@@ -6,8 +6,16 @@
 import Route from '@ember/routing/route';
 import { breadcrumbsForSecret } from 'kv/utils/kv-breadcrumbs';
 
+import type Controller from '@ember/controller';
+import type { Breadcrumb } from 'vault/app-types';
+import type { MetadataRouteModel } from '../metadata';
+
+interface RouteController extends Controller {
+  breadcrumbs: Breadcrumb[];
+}
+
 export default class KvSecretMetadataVersionsRoute extends Route {
-  setupController(controller, resolvedModel) {
+  setupController(controller: RouteController, resolvedModel: MetadataRouteModel): void {
     super.setupController(controller, resolvedModel);
     const breadcrumbsArray = [
       { label: 'Vault', route: 'vault', icon: 'vault', linkExternal: true },

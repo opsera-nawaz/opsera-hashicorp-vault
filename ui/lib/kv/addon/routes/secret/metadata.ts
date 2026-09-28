@@ -7,13 +7,24 @@ import Route from '@ember/routing/route';
 import { service } from '@ember/service';
 import KvForm from 'vault/forms/secrets/kv';
 
-export default class KvSecretMetadataRoute extends Route {
-  @service secretMountPath;
-  @service api;
+import type ApiService from 'vault/services/api';
+import type SecretMountPath from 'vault/services/secret-mount-path';
+import type { KvSecretMetadata } from 'kv/utils/kv-types';
+import type { SecretRouteModel } from '../secret';
 
-  async fetchMetadata(backend, path) {
+export interface MetadataRouteModel extends SecretRouteModel {
+  form: KvForm;
+}
+
+export default class KvSecretMetadataRoute extends Route {
+  @service declare readonly secretMountPath: SecretMountPath;
+  @service declare readonly api: ApiService;
+
+  async fetchMetadata(backend: string, path: string): Promise<KvSecretMetadata | null> {
     try {
-      return await this.api.secrets.kvV2ReadMetadata(path, backend);
+      // KvV2ReadMetadataResponse types versions/custom_metadata as plain `object`; KvSecretMetadata
+      // describes the actual shape the KV UI relies on (see kv-types.ts).
+      return (await this.api.secrets.kvV2ReadMetadata(path, backend)) as unknown as KvSecretMetadata;
     } catch (error) {
       const { response } = await this.api.parseError(error);
       if (response?.isControlGroupError) {
@@ -24,8 +35,8 @@ export default class KvSecretMetadataRoute extends Route {
     }
   }
 
-  async model() {
-    const parentModel = this.modelFor('secret');
+  async model(): Promise<MetadataRouteModel> {
+    const parentModel = this.modelFor('secret') as SecretRouteModel;
     const { backend, path } = parentModel;
     if (!parentModel.metadata) {
       // metadata read on the secret root fails silently
@@ -36,7 +47,13 @@ export default class KvSecretMetadataRoute extends Route {
     const { custom_metadata, max_versions, cas_required, delete_version_after } = parentModel.metadata || {};
     return {
       ...parentModel,
-      form: new KvForm({ path, custom_metadata, max_versions, cas_required, delete_version_after }),
+      form: new KvForm({
+        path,
+        custom_metadata: custom_metadata ?? undefined,
+        max_versions,
+        cas_required,
+        delete_version_after,
+      }),
     };
   }
 }

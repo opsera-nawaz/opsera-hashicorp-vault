@@ -6,6 +6,16 @@
 import Component from '@glimmer/component';
 import { tracked } from '@glimmer/tracking';
 
+import type KvForm from 'vault/forms/secrets/kv';
+import type { Breadcrumb } from 'vault/app-types';
+
+interface Args {
+  form: KvForm;
+  path: string;
+  backend: string;
+  breadcrumbs: Breadcrumb[];
+}
+
 /**
  * @module KvSecretCreate is used for creating the initial version of a secret
  *
@@ -22,7 +32,7 @@ import { tracked } from '@glimmer/tracking';
  * @param {array} breadcrumbs - breadcrumb objects to render in page header
  */
 
-export default class KvSecretCreate extends Component {
+export default class KvSecretCreate extends Component<Args> {
   @tracked showJsonView = false;
   @tracked showMetadata = false;
 }

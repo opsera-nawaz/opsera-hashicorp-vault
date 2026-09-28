@@ -10,6 +10,28 @@ import { tracked } from '@glimmer/tracking';
 import { task } from 'ember-concurrency';
 import { waitFor } from '@ember/test-waiters';
 
+import type ApiService from 'vault/services/api';
+import type ControlGroupService from 'vault/services/control-group';
+import type FlashMessageService from 'vault/services/flash-messages';
+import type RouterService from '@ember/routing/router-service';
+import type { ApiParsedError } from 'vault/api';
+import type { Breadcrumb } from 'vault/app-types';
+import type { KvSecretMetadata, KvSubkeysMetadata } from 'kv/utils/kv-types';
+
+interface Args {
+  path: string;
+  backend: string;
+  metadata: KvSecretMetadata | null;
+  subkeys: Record<string, unknown>;
+  subkeysMeta?: KvSubkeysMetadata;
+  breadcrumbs: Breadcrumb[];
+}
+
+interface ErrorLog {
+  type: string;
+  content: string;
+}
+
 /**
  * @module KvSecretPatch
  * @description
@@ -33,29 +55,30 @@ import { waitFor } from '@ember/test-waiters';
  * @param {array} breadcrumbs - breadcrumb objects to render in page header
  */
 
-export default class KvSecretPatch extends Component {
-  @service controlGroup;
-  @service flashMessages;
-  @service('app-router') router;
-  @service api;
+export default class KvSecretPatch extends Component<Args> {
+  @service declare readonly controlGroup: ControlGroupService;
+  @service declare readonly flashMessages: FlashMessageService;
+  @service('app-router') declare readonly router: RouterService;
+  @service declare readonly api: ApiService;
 
-  @tracked controlGroupError;
-  @tracked errorMessage;
-  @tracked invalidFormAlert;
+  @tracked controlGroupError: ErrorLog | undefined;
+  @tracked errorMessage: string | undefined;
+  @tracked invalidFormAlert: string | undefined;
   @tracked patchMethod = 'UI';
 
   @action
-  selectPatchMethod(event) {
-    this.patchMethod = event.target.value;
+  selectPatchMethod(event: Event): void {
+    this.patchMethod = (event.target as HTMLInputElement).value;
   }
 
   @task
   @waitFor
-  *save(data) {
+  *save(data: Record<string, unknown>) {
     const isEmpty = this.isEmpty(data);
     if (isEmpty) {
       this.flashMessages.info(`No changes to submit. No updates made to "${this.args.path}".`);
-      return this.onCancel();
+      this.onCancel();
+      return;
     }
 
     try {
@@ -67,10 +90,10 @@ export default class KvSecretPatch extends Component {
       this.flashMessages.success(`Successfully patched new version of ${path}.`);
       this.router.transitionTo('vault.cluster.secrets.backend.kv.secret.index');
     } catch (error) {
-      const { message, response } = yield this.api.parseError(error);
+      const { message, response } = (yield this.api.parseError(error)) as ApiParsedError;
       if (response?.isControlGroupError) {
         this.controlGroup.saveTokenFromError(response);
-        this.controlGroupError = this.controlGroup.logFromError(response);
+        this.controlGroupError = this.controlGroup.logFromError(response) as ErrorLog;
         return;
       }
       this.errorMessage = message;
@@ -79,11 +102,11 @@ export default class KvSecretPatch extends Component {
   }
 
   @action
-  onCancel() {
+  onCancel(): void {
     this.router.transitionTo('vault.cluster.secrets.backend.kv.secret.index');
   }
 
-  isEmpty(object) {
+  isEmpty(object: Record<string, unknown>): boolean {
     const emptyKeys = Object.keys(object).every((k) => k === '');
     const emptyValues = Object.values(object).every((v) => v === '');
     return emptyKeys && emptyValues;

@@ -6,10 +6,12 @@
 import Route from '@ember/routing/route';
 import { service } from '@ember/service';
 
-export default class KvRoute extends Route {
-  @service('app-router') router;
+import type RouterService from '@ember/routing/router-service';
 
-  redirect() {
+export default class KvRoute extends Route {
+  @service('app-router') declare readonly router: RouterService;
+
+  redirect(): void {
     this.router.transitionTo('vault.cluster.secrets.backend.kv.list');
   }
 }

@@ -7,6 +7,11 @@ import Component from '@glimmer/component';
 import { action } from '@ember/object';
 import { tracked } from '@glimmer/tracking';
 
+interface Args {
+  subkeys: Record<string, unknown>;
+  isPatchAllowed: boolean;
+}
+
 /**
  * @module KvSubkeysCard
  * @description
@@ -30,7 +35,7 @@ sample subkeys:
     "quux": null
 }
 ```
- * 
+ *
  * @example
  * <KvSubkeysCard @subkeys={{this.subkeys}} @isPatchAllowed={{true}} />
  *
@@ -38,11 +43,11 @@ sample subkeys:
  * @param {boolean} isPatchAllowed - if true, renders the "Patch secret" action. True when: (1) the version is enterprise, (2) a user has "patch" secret + "read" subkeys capabilities, (3) latest secret version is not deleted or destroyed
  */
 
-export default class KvSubkeysCard extends Component {
+export default class KvSubkeysCard extends Component<Args> {
   @tracked showJson = false;
 
   @action
-  toggleJson(event) {
-    this.showJson = event.target.checked;
+  toggleJson(event: Event): void {
+    this.showJson = (event.target as HTMLInputElement).checked;
   }
 }

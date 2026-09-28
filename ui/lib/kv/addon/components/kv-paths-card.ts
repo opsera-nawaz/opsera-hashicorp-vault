@@ -8,6 +8,20 @@ import { service } from '@ember/service';
 import { kvMetadataPath, kvDataPath } from 'vault/utils/kv-path';
 import { encodePath } from 'vault/utils/path-encoding-helpers';
 
+import type NamespaceService from 'vault/services/namespace';
+
+interface Args {
+  path: string;
+  backend: string;
+  isCondensed: boolean;
+}
+
+interface PathEntry {
+  label: string;
+  snippet: string;
+  text: string;
+}
+
 /**
  * @module KvPathsCard is used to display copyable secret paths for KV v2 for CLI and API use.
  * This component is permission agnostic because args come from the views mount path and url params.
@@ -23,10 +37,10 @@ import { encodePath } from 'vault/utils/path-encoding-helpers';
  * @param {boolean} isCondensed - if true a smaller version displays with no commands section or extra explanatory text
  */
 
-export default class KvPathsCard extends Component {
-  @service namespace;
+export default class KvPathsCard extends Component<Args> {
+  @service declare readonly namespace: NamespaceService;
 
-  get paths() {
+  get paths(): PathEntry[] {
     const { backend, path } = this.args;
     const namespace = this.namespace.path;
     const cli = `-mount="${backend}" "${path}"`;
@@ -66,9 +80,10 @@ export default class KvPathsCard extends Component {
     ];
   }
 
-  get commands() {
-    const cliPath = this.paths.find((p) => p.label === 'CLI path').snippet;
-    const apiPath = this.paths.find((p) => p.label === 'API path').snippet;
+  get commands(): { cli: string; api: string } {
+    // non-null: 'CLI path' and 'API path' are always present in the `paths` array above
+    const cliPath = this.paths.find((p) => p.label === 'CLI path')!.snippet;
+    const apiPath = this.paths.find((p) => p.label === 'API path')!.snippet;
     // as a future improvement, it might be nice to use window.location.protocol here:
     const url = `https://127.0.0.1:8200${apiPath}`;
 

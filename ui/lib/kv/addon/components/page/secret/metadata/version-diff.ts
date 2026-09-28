@@ -11,6 +11,18 @@ import sortedVersions from 'kv/helpers/sorted-versions';
 import getCurrentSecret from 'kv/helpers/current-secret';
 import isDeleted from 'kv/helpers/is-deleted';
 
+import type ApiService from 'vault/services/api';
+import type { Breadcrumb } from 'vault/app-types';
+import type { KvSecretMetadata } from 'kv/utils/kv-types';
+import type { SortedVersion } from 'kv/helpers/sorted-versions';
+
+interface Args {
+  metadata: KvSecretMetadata;
+  path: string;
+  backend: string;
+  breadcrumbs: Breadcrumb[];
+}
+
 /**
  * @module KvSecretMetadataVersionDiff renders the version diff comparison
  * <Page::Secret::Metadata::VersionDiff
@@ -26,17 +38,16 @@ import isDeleted from 'kv/helpers/is-deleted';
  * @param {array} breadcrumbs - Array to generate breadcrumbs, passed to the page header component
  */
 
-/* eslint-disable no-undef */
-export default class KvSecretMetadataVersionDiff extends Component {
-  @service api;
+export default class KvSecretMetadataVersionDiff extends Component<Args> {
+  @service declare readonly api: ApiService;
 
-  @tracked leftVersion;
-  @tracked rightVersion;
-  @tracked visualDiff;
+  @tracked leftVersion: number | undefined;
+  @tracked rightVersion: number | undefined;
+  @tracked visualDiff: string | null = null;
   @tracked statesMatch = false;
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: Args) {
+    super(owner, args);
 
     // initialize with most recently (before current), active version on left
     const olderVersions = this.sortedVersions.slice(1);
@@ -48,26 +59,28 @@ export default class KvSecretMetadataVersionDiff extends Component {
     this.createVisualDiff();
   }
 
-  get sortedVersions() {
+  get sortedVersions(): SortedVersion[] {
     return sortedVersions(this.args.metadata.versions);
   }
 
   // this can only be true on initialization if the current version is inactive
   // selecting a deleted/destroyed version is otherwise disabled
-  get deactivatedState() {
+  get deactivatedState(): string {
     const { current_version } = this.args.metadata;
     const currentSecret = getCurrentSecret(this.args.metadata);
-    return this.rightVersion === current_version && currentSecret.isDeactivated ? currentSecret.state : '';
+    return this.rightVersion === current_version && currentSecret && currentSecret.isDeactivated
+      ? currentSecret.state
+      : '';
   }
 
   @action
-  handleSelect(side, version, close) {
+  handleSelect(side: 'leftVersion' | 'rightVersion', version: string, close: () => void): void {
     this[side] = Number(version);
     close();
     this.createVisualDiff();
   }
 
-  async createVisualDiff() {
+  async createVisualDiff(): Promise<void> {
     const leftSecretData = await this.fetchSecretData(this.leftVersion);
     const rightSecretData = await this.fetchSecretData(this.rightVersion);
     const diffpatcher = jsondiffpatch.create({});
@@ -75,18 +88,22 @@ export default class KvSecretMetadataVersionDiff extends Component {
 
     this.statesMatch = !delta;
     this.visualDiff = delta
-      ? htmlformatter.format(delta, leftSecretData)
+      ? htmlformatter.format(delta, leftSecretData) ?? ''
       : JSON.stringify(rightSecretData, undefined, 2);
   }
 
-  async fetchSecretData(version) {
+  async fetchSecretData(version: number | undefined): Promise<Record<string, unknown> | undefined> {
     const { backend, path } = this.args;
-    const initOverride = version ? (context) => this.api.addQueryParams(context, { version }) : undefined;
+    const initOverride = version
+      ? (context: Parameters<ApiService['addQueryParams']>[0]) =>
+          this.api.addQueryParams(context, { version })
+      : undefined;
     try {
       const { data } = await this.api.secrets.kvV2Read(path, backend, undefined, initOverride);
-      return data;
-    } catch (e) {
+      return data as Record<string, unknown> | undefined;
+    } catch {
       // capabilities checks are higher up the tree so this request should not fail
+      return undefined;
     }
   }
 }

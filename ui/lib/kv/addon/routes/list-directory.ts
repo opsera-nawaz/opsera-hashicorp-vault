@@ -7,12 +7,45 @@ import Route from '@ember/routing/route';
 import { service } from '@ember/service';
 import { pathIsDirectory, breadcrumbsForSecret } from 'kv/utils/kv-breadcrumbs';
 import { paginate } from 'core/utils/paginate-list';
+import { SecretsApiKvV2ListListEnum } from '@hashicorp/vault-client-typescript';
+
+import type ApiService from 'vault/services/api';
+import type CapabilitiesService from 'vault/services/capabilities';
+import type Controller from '@ember/controller';
+import type RouterService from '@ember/routing/router-service';
+import type SecretMountPath from 'vault/services/secret-mount-path';
+import type { Breadcrumb, Capabilities } from 'vault/app-types';
+import type { PaginatedMetadata } from 'core/utils/paginate-list';
+import type SecretsEngineResource from 'vault/resources/secrets/engine';
+
+interface RouteParams {
+  page?: string;
+  pageFilter?: string;
+  path_to_secret?: string;
+}
+
+interface RouteModel {
+  backendModel: SecretsEngineResource;
+  secrets: 403 | (string[] & Partial<PaginatedMetadata>);
+  backend: string;
+  pathToSecret: string;
+  filterValue: string | undefined;
+  pageFilter: string | undefined;
+  capabilities: Capabilities;
+  failedDirectoryQuery?: boolean;
+}
+
+interface RouteController extends Controller {
+  breadcrumbs: Breadcrumb[];
+  pageFilter?: string;
+  page?: string;
+}
 
 export default class KvSecretsListRoute extends Route {
-  @service('app-router') router;
-  @service secretMountPath;
-  @service api;
-  @service capabilities;
+  @service('app-router') declare readonly router: RouterService;
+  @service declare readonly secretMountPath: SecretMountPath;
+  @service declare readonly api: ApiService;
+  @service declare readonly capabilities: CapabilitiesService;
 
   queryParams = {
     pageFilter: {
@@ -23,14 +56,22 @@ export default class KvSecretsListRoute extends Route {
     },
   };
 
-  async fetchMetadata(backend, pathToSecret, params) {
+  async fetchMetadata(
+    backend: string,
+    pathToSecret: string,
+    params: RouteParams
+  ): Promise<403 | (string[] & Partial<PaginatedMetadata>)> {
     try {
       // kvV2List => GET /:secret-mount-path/metadata/:secret_path/?list=true
       // This request can either list secrets at the mount root or for a specified :secret_path.
       // Since :secret_path already contains a trailing slash, e.g. /metadata/my-secret//
       // the request URL is sanitized by the api service to remove duplicate slashes.
-      const { keys } = await this.api.secrets.kvV2List(pathToSecret, backend, true);
-      return paginate(keys, { page: Number(params.page) || 1, filter: params.pageFilter });
+      const { keys } = await this.api.secrets.kvV2List(
+        pathToSecret,
+        backend,
+        SecretsApiKvV2ListListEnum.TRUE
+      );
+      return paginate(keys ?? [], { page: Number(params.page) || 1, filter: params.pageFilter });
     } catch (error) {
       const { status, response } = await this.api.parseError(error);
       if (status === 403 && !response?.isControlGroupError) {
@@ -43,7 +84,7 @@ export default class KvSecretsListRoute extends Route {
     }
   }
 
-  getPathToSecret(pathParam) {
+  getPathToSecret(pathParam: string | undefined): string {
     if (!pathParam) return '';
     // links and routing assumes pathToParam includes trailing slash
     // users may want to include a percent-encoded octet like %2f in their path. Example: 'foo%2fbar' or non-data octets like 'foo%bar'.
@@ -51,7 +92,7 @@ export default class KvSecretsListRoute extends Route {
     return pathIsDirectory(pathParam) ? pathParam : `${pathParam}/`;
   }
 
-  async model(params) {
+  async model(params: RouteParams): Promise<RouteModel> {
     const { pageFilter, path_to_secret } = params;
     const pathToSecret = this.getPathToSecret(path_to_secret);
     const backend = this.secretMountPath.currentPath;
@@ -62,7 +103,7 @@ export default class KvSecretsListRoute extends Route {
       { backend, path: path_to_secret },
       { routeForCache: 'vault.cluster.secrets.backend.kv' }
     );
-    const backendModel = this.modelFor('application');
+    const backendModel = this.modelFor('application') as SecretsEngineResource;
 
     return {
       backendModel,
@@ -75,13 +116,13 @@ export default class KvSecretsListRoute extends Route {
     };
   }
 
-  setupController(controller, resolvedModel) {
+  setupController(controller: RouteController, resolvedModel: RouteModel): void {
     super.setupController(controller, resolvedModel);
     // renders alert inline error for overview card
     resolvedModel.failedDirectoryQuery =
       resolvedModel.secrets === 403 && pathIsDirectory(resolvedModel.pathToSecret);
 
-    let breadcrumbsArray = [
+    let breadcrumbsArray: Breadcrumb[] = [
       { label: 'Vault', route: 'vault', icon: 'vault', linkExternal: true },
       { label: 'Secrets engines', route: 'secrets', linkExternal: true },
     ];
@@ -99,10 +140,10 @@ export default class KvSecretsListRoute extends Route {
     controller.set('breadcrumbs', breadcrumbsArray);
   }
 
-  resetController(controller, isExiting) {
+  resetController(controller: RouteController, isExiting: boolean): void {
     if (isExiting) {
-      controller.set('pageFilter', null);
-      controller.set('page', null);
+      controller.set('pageFilter', undefined);
+      controller.set('page', undefined);
     }
   }
 }

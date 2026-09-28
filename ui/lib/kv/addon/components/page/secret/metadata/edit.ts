@@ -8,6 +8,22 @@ import { service } from '@ember/service';
 import { task } from 'ember-concurrency';
 import { tracked } from '@glimmer/tracking';
 
+import type KvForm from 'vault/forms/secrets/kv';
+import type ApiService from 'vault/services/api';
+import type { ApiParsedError } from 'vault/api';
+import type FlashMessageService from 'vault/services/flash-messages';
+import type { Breadcrumb, ValidationMap } from 'vault/app-types';
+import type { KvCapabilities } from 'kv/utils/kv-types';
+
+interface Args {
+  form: KvForm;
+  backend: string;
+  breadcrumbs: Breadcrumb[];
+  capabilities: KvCapabilities;
+  onCancel: () => void;
+  onSave: () => void;
+}
+
 /**
  * @module KvSecretMetadataEdit
  * This component renders the view for editing a kv secret's metadata.
@@ -21,16 +37,16 @@ import { tracked } from '@glimmer/tracking';
  * @callback onSave - Callback triggered on save success that transitions to the metadata details route.
  */
 
-export default class KvSecretMetadataEditComponent extends Component {
-  @service flashMessages;
-  @service api;
+export default class KvSecretMetadataEditComponent extends Component<Args> {
+  @service declare readonly flashMessages: FlashMessageService;
+  @service declare readonly api: ApiService;
 
   @tracked errorBanner = '';
   @tracked invalidFormAlert = '';
-  @tracked modelValidations = null;
+  @tracked modelValidations: ValidationMap | null = null;
 
   @task
-  *save(event) {
+  *save(event: Event) {
     event.preventDefault();
     try {
       const { isValid, state, invalidFormMessage, data } = this.args.form.toJSON();
@@ -44,7 +60,7 @@ export default class KvSecretMetadataEditComponent extends Component {
         this.args.onSave();
       }
     } catch (error) {
-      const { message } = yield this.api.parseError(error);
+      const { message } = (yield this.api.parseError(error)) as ApiParsedError;
       this.errorBanner = message;
       this.invalidFormAlert = 'There was an error submitting this form.';
     }

@@ -15,6 +15,26 @@ import isDeleted from 'kv/helpers/is-deleted';
 import { isAdvancedSecret } from 'core/utils/advanced-secret';
 import { dump } from 'js-yaml';
 
+import type ApiService from 'vault/services/api';
+import type FlashMessageService from 'vault/services/flash-messages';
+import type RouterService from '@ember/routing/router-service';
+import type { Breadcrumb } from 'vault/app-types';
+import type { WrapInfo } from 'vault/api';
+import type { KvCapabilities, KvSecretDataModel, KvSecretMetadata } from 'kv/utils/kv-types';
+import type { SortedVersion } from 'kv/helpers/sorted-versions';
+
+type DeleteType = 'delete-version' | 'delete-latest-version' | 'destroy';
+
+interface Args {
+  backend: string;
+  breadcrumbs: Breadcrumb[];
+  capabilities: KvCapabilities;
+  isPatchAllowed: boolean;
+  metadata: KvSecretMetadata | null;
+  path: string;
+  secret: KvSecretDataModel;
+}
+
 /**
  * @module KvSecretDetails renders the key/value data of a KV secret.
  * It also renders a dropdown to display different versions of the secret.
@@ -37,17 +57,19 @@ import { dump } from 'js-yaml';
  * @param {object} secret - data and metadata objects from kvV2Read response - { secretData: data, ...metadata }
  */
 
-export default class KvSecretDetails extends Component {
-  @service flashMessages;
-  @service('app-router') router;
-  @service api;
+export default class KvSecretDetails extends Component<Args> {
+  @service declare readonly flashMessages: FlashMessageService;
+  @service('app-router') declare readonly router: RouterService;
+  @service declare readonly api: ApiService;
 
-  @tracked format = 'ui';
-  @tracked wrappedData = null;
-  @tracked syncStatus = null; // array of association sync status info by destination
+  @tracked format: 'ui' | 'json' | 'yaml' = 'ui';
+  @tracked wrappedData: string | null = null;
+  @tracked syncStatus: unknown[] | null = null; // array of association sync status info by destination
 
-  constructor() {
-    super(...arguments);
+  declare originalSecret: string;
+
+  constructor(owner: unknown, args: Args) {
+    super(owner, args);
     this.fetchSyncStatus.perform();
     this.originalSecret = JSON.stringify(this.args.secret.secretData || {});
     if (isAdvancedSecret(this.originalSecret)) {
@@ -57,29 +79,31 @@ export default class KvSecretDetails extends Component {
   }
 
   // 'json' and 'yaml' both render the code block
-  get showCodeView() {
+  get showCodeView(): boolean {
     return this.format !== 'ui';
   }
 
-  get secretDataAsYaml() {
+  get secretDataAsYaml(): string {
     // fall back to an empty object so the view matches the JSON placeholder rather than rendering blank
     return dump(this.args.secret.secretData || {}, { noRefs: true });
   }
 
   @action
-  setFormat(format) {
+  setFormat(format: 'ui' | 'json' | 'yaml'): void {
     this.format = format;
   }
 
   @action
-  closeVersionMenu(close) {
+  closeVersionMenu(close: () => void): void {
     // strange issue where closing dropdown triggers full transition (which redirects to auth screen in production)
     // closing dropdown in next tick of run loop fixes it
-    next(() => close());
+    next(() => {
+      close();
+    });
   }
 
   @action
-  clearWrappedData() {
+  clearWrappedData(): void {
     this.wrappedData = null;
   }
 
@@ -88,37 +112,40 @@ export default class KvSecretDetails extends Component {
   *wrapSecret() {
     try {
       const { secretData: data, ...metadata } = this.args.secret;
-      const { wrap_info } = yield this.api.sys.wrap(
+      const { wrap_info } = (yield this.api.sys.wrap(
         { data, metadata },
-        this.api.buildHeaders({ wrap: 1800 })
-      );
-      if (!wrap_info.token) throw 'No token';
+        this.api.buildHeaders({ wrap: '1800' })
+      )) as { wrap_info: WrapInfo | null };
+      if (!wrap_info?.token) throw new Error('No token');
       this.wrappedData = wrap_info.token;
       this.flashMessages.success('Secret successfully wrapped!');
-    } catch (error) {
+    } catch {
       this.flashMessages.danger('Could not wrap secret.');
     }
   }
 
-  @task
-  @waitFor
-  *fetchSyncStatus() {
-    try {
-      const { backend: mount, path: secret_name } = this.args;
-      const { associated_destinations } = yield this.api.sys.systemReadSyncAssociationsDestinations(
-        (context) => this.api.addQueryParams(context, { mount, secret_name })
-      );
-      this.syncStatus = Object.values(associated_destinations);
-    } catch (e) {
-      // silently error
-    }
-  }
+  // assigned as a field (rather than `@task` decorated) so its `.perform()` call in the
+  // constructor above is properly typed as a Task instance.
+  fetchSyncStatus = task(
+    waitFor(async () => {
+      try {
+        const { backend: mount, path: secret_name } = this.args;
+        const { associated_destinations } = await this.api.sys.systemReadSyncAssociationsDestinations(
+          (context: Parameters<ApiService['addQueryParams']>[0]) =>
+            this.api.addQueryParams(context, { mount, secret_name })
+        );
+        this.syncStatus = Object.values((associated_destinations as Record<string, unknown>) ?? {});
+      } catch {
+        // silently error
+      }
+    })
+  );
 
   @action
-  async undelete() {
+  async undelete(): Promise<void> {
     const { backend, path } = this.args;
     try {
-      await this.api.secrets.kvV2UndeleteVersions(path, backend, { versions: [this.version] });
+      await this.api.secrets.kvV2UndeleteVersions(path, backend, { versions: [Number(this.version)] });
       this.flashMessages.success(`Successfully undeleted ${path}.`);
       this.transition();
     } catch (err) {
@@ -128,15 +155,15 @@ export default class KvSecretDetails extends Component {
   }
 
   @action
-  async handleDestruction(type) {
+  async handleDestruction(type: DeleteType): Promise<void> {
     const { backend, path } = this.args;
     try {
       if (type === 'destroy') {
-        await this.api.secrets.kvV2DestroyVersions(path, backend, { versions: [this.version] });
+        await this.api.secrets.kvV2DestroyVersions(path, backend, { versions: [Number(this.version)] });
       } else if (type === 'delete-latest-version') {
         await this.api.secrets.kvV2Delete(path, backend);
       } else if (type === 'delete-version') {
-        await this.api.secrets.kvV2DeleteVersions(path, backend, { versions: [this.version] });
+        await this.api.secrets.kvV2DeleteVersions(path, backend, { versions: [Number(this.version)] });
       } else {
         throw 'type must be one of delete-latest-version, delete-version, or destroy.';
       }
@@ -152,28 +179,28 @@ export default class KvSecretDetails extends Component {
     }
   }
 
-  transition() {
+  transition(): void {
     // transition to the overview to prevent automatically reading sensitive secret data
     this.router.transitionTo('vault.cluster.secrets.backend.kv.secret.index');
   }
 
-  get sortedVersions() {
+  get sortedVersions(): SortedVersion[] {
     return sortedVersions(this.args.metadata?.versions);
   }
 
-  get version() {
+  get version(): number | string | undefined {
     return (
       this.args.secret?.version ||
-      this.router.currentRoute.queryParams?.version ||
+      (this.router.currentRoute?.queryParams?.['version'] as string | undefined) ||
       this.sortedVersions[0]?.version
     );
   }
 
-  get hideHeaders() {
-    return this.showCodeView || this.emptyState;
+  get hideHeaders(): boolean {
+    return this.showCodeView || !!this.emptyState;
   }
 
-  get secretState() {
+  get secretState(): 'destroyed' | 'deleted' | 'created' | '' {
     const { destroyed, created_time } = this.args.secret;
     if (destroyed) return 'destroyed';
     if (this.isSecretDeleted) return 'deleted';
@@ -181,7 +208,7 @@ export default class KvSecretDetails extends Component {
     return '';
   }
 
-  get versionState() {
+  get versionState(): 'destroyed' | 'deleted' | 'created' | '' {
     const { secret } = this.args;
     if (secret.failReadErrorCode !== 403) {
       return this.secretState;
@@ -204,7 +231,7 @@ export default class KvSecretDetails extends Component {
     return '';
   }
 
-  get showUndelete() {
+  get showUndelete(): boolean {
     const { canUndelete } = this.args.capabilities;
     if (canUndelete) {
       return this.versionState === 'deleted';
@@ -212,7 +239,7 @@ export default class KvSecretDetails extends Component {
     return false;
   }
 
-  get showDelete() {
+  get showDelete(): boolean {
     const { canDeleteVersion, canDeleteLatestVersion } = this.args.capabilities;
     if (canDeleteVersion || canDeleteLatestVersion) {
       return this.versionState === 'created' || this.versionState === '';
@@ -220,11 +247,11 @@ export default class KvSecretDetails extends Component {
     return false;
   }
 
-  get isSecretDeleted() {
+  get isSecretDeleted(): boolean {
     return isDeleted(this.args.secret.deletion_time);
   }
 
-  get showDestroy() {
+  get showDestroy(): boolean | number | string | undefined {
     const { canDestroyVersion } = this.args.capabilities;
     if (canDestroyVersion) {
       return this.versionState !== 'destroyed' && this.version;
@@ -232,7 +259,7 @@ export default class KvSecretDetails extends Component {
     return false;
   }
 
-  get emptyState() {
+  get emptyState(): { title: string; message: string; link?: string } | false {
     const { canReadData, canReadMetadata } = this.args.capabilities;
 
     if (!canReadData) {

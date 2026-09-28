@@ -9,6 +9,23 @@ import { tracked } from '@glimmer/tracking';
 import { assert } from '@ember/debug';
 import currentSecret from 'kv/helpers/current-secret';
 
+import type { KvCapabilities, KvSecretDataModel, KvSecretMetadata } from 'kv/utils/kv-types';
+
+type DeleteMode = 'delete' | 'delete-metadata' | 'destroy';
+type DeleteType = 'delete-version' | 'delete-latest-version' | 'destroy';
+
+interface Args {
+  mode: DeleteMode;
+  // callers pass the route model's narrower `secret` sub-object, which doesn't carry backend/path
+  // itself — those are only present when the caller happens to be modeling the full secret route.
+  secret: KvSecretDataModel & { backend?: string; path?: string };
+  metadata?: KvSecretMetadata;
+  text?: string;
+  capabilities: KvCapabilities;
+  version?: number | string;
+  onDelete: (type: DeleteType) => void;
+}
+
 /**
  * @module KvDeleteModal displays a button for a delete type and launches a modal. Undelete is the only mode that does not launch the modal and is not handled in this component.
  *
@@ -28,11 +45,11 @@ import currentSecret from 'kv/helpers/current-secret';
  * @param {callback} onDelete - callback function fired to handle delete event.
  */
 
-export default class KvDeleteModal extends Component {
-  @tracked deleteType = null; // Either delete-version or delete-current-version.
+export default class KvDeleteModal extends Component<Args> {
+  @tracked deleteType: DeleteType | null = null; // Either delete-version or delete-current-version.
   @tracked modalOpen = false;
 
-  get modalDisplay() {
+  get modalDisplay(): { title: string; color: string; intro: string } {
     switch (this.args.mode) {
       // Does not match adapter key directly because a delete type must be selected.
       case 'delete':
@@ -56,7 +73,7 @@ export default class KvDeleteModal extends Component {
             'This will permanently delete the metadata and versions of the secret. All version history will be removed. This cannot be undone.',
         };
       default:
-        return assert('mode must be one of delete, destroy, or delete-metadata.');
+        assert('mode must be one of delete, destroy, or delete-metadata.', false);
     }
   }
 
@@ -64,10 +81,16 @@ export default class KvDeleteModal extends Component {
     return currentSecret(this.args.metadata);
   }
 
-  get deleteOptions() {
+  get deleteOptions(): Array<{
+    key: DeleteType;
+    label: string;
+    description: string;
+    disabled: boolean;
+    tooltipMessage: string;
+  }> {
     const { capabilities, secret, version } = this.args;
     const { canDeleteVersion, canDeleteLatestVersion } = capabilities;
-    const isDeactivated = this.currentSecret?.isDeactivated || false;
+    const isDeactivated = (this.currentSecret && this.currentSecret.isDeactivated) || false;
     return [
       {
         key: 'delete-version',
@@ -82,15 +105,17 @@ export default class KvDeleteModal extends Component {
         description: 'This deletes the most recent version of the secret.',
         disabled: !canDeleteLatestVersion || isDeactivated,
         tooltipMessage: isDeactivated
-          ? `The latest version of the secret is already ${this.currentSecret.state}.`
+          ? `The latest version of the secret is already ${
+              this.currentSecret ? this.currentSecret.state : ''
+            }.`
           : `Deleting the latest version of this secret requires "delete" capabilities to ${secret.backend}/data/${secret.path}.`,
       },
     ];
   }
 
   @action
-  onDelete() {
-    const type = this.args.mode === 'delete' ? this.deleteType : this.args.mode;
+  onDelete(): void {
+    const type = (this.args.mode === 'delete' ? this.deleteType : this.args.mode) as DeleteType;
     this.args.onDelete(type);
     this.modalOpen = false;
   }

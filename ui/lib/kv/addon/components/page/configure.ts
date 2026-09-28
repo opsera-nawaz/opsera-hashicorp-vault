@@ -9,12 +9,14 @@ import { service } from '@ember/service';
 import { action } from '@ember/object';
 import { tracked } from '@glimmer/tracking';
 import { task } from 'ember-concurrency';
-import type KvForm from 'vault/app/forms/secrets/kv';
-import type { Breadcrumb } from 'vault/vault/app-types';
+
+import type KvForm from 'vault/forms/secrets/kv';
+import type { ApiParsedError } from 'vault/api';
+import type { Breadcrumb, ValidationMap } from 'vault/app-types';
 import type FlashMessageService from 'vault/services/flash-messages';
 import type RouterService from '@ember/routing/router-service';
 import type ApiService from 'vault/services/api';
-import SecretsEngineResource from 'vault/app/resources/secrets/engine';
+import type SecretsEngineResource from 'vault/resources/secrets/engine';
 
 interface Args {
   form: KvForm;
@@ -38,15 +40,15 @@ export default class KvConfigurePageComponent extends Component<Args> {
 
   @tracked errorBanner = '';
   @tracked invalidFormAlert = '';
-  @tracked modelValidations = null;
+  @tracked modelValidations: ValidationMap | null = null;
 
   @action
-  navigateToConfiguration() {
+  navigateToConfiguration(): void {
     this.router.transitionTo(`vault.cluster.secrets.backend.kv.configuration`);
   }
 
   @task
-  *save(event: Event | null) {
+  *save(event: Event) {
     event.preventDefault();
     try {
       const { isValid, state, invalidFormMessage, data } = this.args.form.toJSON();
@@ -59,7 +61,7 @@ export default class KvConfigurePageComponent extends Component<Args> {
         this.navigateToConfiguration();
       }
     } catch (error) {
-      const { message } = yield this.api.parseError(error);
+      const { message } = (yield this.api.parseError(error)) as ApiParsedError;
       this.errorBanner = message;
       this.invalidFormAlert = 'There was an error submitting this form.';
     }

@@ -8,6 +8,19 @@ import Component from '@glimmer/component';
 import { tracked } from '@glimmer/tracking';
 import { isAdvancedSecret } from 'core/utils/advanced-secret';
 
+import type KvForm from 'vault/forms/secrets/kv';
+import type { Breadcrumb } from 'vault/app-types';
+import type { KvSecretDataModel, KvSecretMetadata } from 'kv/utils/kv-types';
+
+interface Args {
+  form: KvForm;
+  secret?: KvSecretDataModel;
+  metadata?: KvSecretMetadata;
+  path: string;
+  backend: string;
+  breadcrumbs: Breadcrumb[];
+}
+
 /**
  * @module KvSecretEdit is used for creating a new version of a secret
  *
@@ -28,14 +41,15 @@ import { isAdvancedSecret } from 'core/utils/advanced-secret';
  * @param {array} breadcrumbs - breadcrumb objects to render in page header
  */
 
-/* eslint-disable no-undef */
-export default class KvSecretEdit extends Component {
+export default class KvSecretEdit extends Component<Args> {
   @tracked showJsonView = false;
   @tracked showDiff = false;
-  @tracked updatedSecret;
+  @tracked updatedSecret: Record<string, unknown>;
 
-  constructor() {
-    super(...arguments);
+  declare originalSecret: string;
+
+  constructor(owner: unknown, args: Args) {
+    super(owner, args);
     this.originalSecret = JSON.stringify(this.args.form.data.secretData || {});
     this.updatedSecret = this.args.form.data.secretData || {};
     if (isAdvancedSecret(this.originalSecret)) {
@@ -44,7 +58,7 @@ export default class KvSecretEdit extends Component {
     }
   }
 
-  get showOldVersionAlert() {
+  get showOldVersionAlert(): boolean {
     const { secret, metadata } = this.args;
     // isNew check prevents alert from flashing after save but before route transitions
     if (metadata?.current_version && secret?.version) {
@@ -53,23 +67,23 @@ export default class KvSecretEdit extends Component {
     return false;
   }
 
-  get diffDelta() {
-    const oldData = JSON.parse(this.originalSecret);
+  get diffDelta(): import('jsondiffpatch').Delta {
+    const oldData = JSON.parse(this.originalSecret) as Record<string, unknown>;
     const diffpatcher = jsondiffpatch.create({});
     return diffpatcher.diff(oldData, this.updatedSecret);
   }
 
-  get visualDiff() {
+  get visualDiff(): string | null {
     if (this.showDiff) {
       return this.diffDelta
-        ? htmlformatter.format(this.diffDelta, this.updatedSecret)
+        ? htmlformatter.format(this.diffDelta, this.updatedSecret) ?? ''
         : JSON.stringify(this.updatedSecret, undefined, 2);
     }
     return null;
   }
 
   @action
-  onSecretDataUpdate(value) {
+  onSecretDataUpdate(value: Record<string, unknown>): void {
     this.updatedSecret = value;
   }
 }

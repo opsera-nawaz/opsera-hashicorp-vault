@@ -118,11 +118,12 @@ module.exports = {
     },
     {
       // Type-checked rules require every linted file to be part of the
-      // ui/tsconfig.json program. e2e/**, playwright.config.ts, and the two
-      // not-yet-migrated lib/kv/**/*.ts files fall outside that tsconfig's
-      // `include`, so they stay on the non-type-checked v8 preset below.
+      // ui/tsconfig.json program. e2e/** and playwright.config.ts fall
+      // outside that tsconfig's `include`, so they stay on the
+      // non-type-checked v8 preset below. lib/kv/**/*.ts was excluded here
+      // too until WO-048 added `lib/kv/**/*` to tsconfig.json's `include`.
       files: ['**/*.ts'],
-      excludedFiles: ['e2e/**/*.ts', 'playwright.config.ts', 'lib/kv/**/*.ts'],
+      excludedFiles: ['e2e/**/*.ts', 'playwright.config.ts'],
       extends: ['plugin:@typescript-eslint/strict-type-checked'],
       parserOptions: {
         project: './tsconfig.json',
@@ -131,7 +132,7 @@ module.exports = {
       rules: warnOnStrictTypeCheckedRules(),
     },
     {
-      files: ['e2e/**/*.ts', 'playwright.config.ts', 'lib/kv/**/*.ts'],
+      files: ['e2e/**/*.ts', 'playwright.config.ts'],
       extends: ['plugin:@typescript-eslint/recommended'],
     },
   ],

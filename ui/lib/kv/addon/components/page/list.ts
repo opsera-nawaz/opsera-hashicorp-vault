@@ -11,6 +11,23 @@ import { tracked } from '@glimmer/tracking';
 import { ancestorKeysForKey } from 'core/utils/key-utils';
 import { pathIsDirectory } from 'kv/utils/kv-breadcrumbs';
 
+import type ApiService from 'vault/services/api';
+import type FlashMessageService from 'vault/services/flash-messages';
+import type RouterService from '@ember/routing/router-service';
+import type VersionService from 'vault/services/version';
+import type { Breadcrumb, Capabilities, EngineOwner } from 'vault/app-types';
+import type { PaginatedMetadata } from 'core/utils/paginate-list';
+
+interface Args {
+  secrets: 403 | (string[] & Partial<PaginatedMetadata>);
+  backend: string;
+  pathToSecret: string;
+  filterValue: string | undefined;
+  failedDirectoryQuery?: boolean;
+  breadcrumbs: Breadcrumb[];
+  capabilities: Capabilities;
+}
+
 /**
  * @module List
  * ListPage component is a component to show a list of secrets.
@@ -24,35 +41,35 @@ import { pathIsDirectory } from 'kv/utils/kv-breadcrumbs';
  * @param {object} capabilities - capabilities for metadata path
  */
 
-export default class KvListPageComponent extends Component {
-  @service flashMessages;
-  @service('app-router') router;
-  @service api;
-  @service version;
+export default class KvListPageComponent extends Component<Args> {
+  @service declare readonly flashMessages: FlashMessageService;
+  @service('app-router') declare readonly router: RouterService;
+  @service declare readonly api: ApiService;
+  @service declare readonly version: VersionService;
 
-  @tracked secretPath;
-  @tracked metadataToDelete = null; // set to the metadata intended to delete
+  @tracked secretPath: string | undefined;
+  @tracked metadataToDelete: string | null = null; // set to the metadata intended to delete
   @tracked showPolicyFlyout = false;
 
   // used for KV list and list-directory view
   // ex: beep/
-  isDirectory = (path) => pathIsDirectory(path);
-  fullSecretPath = (secret) => `${this.args.pathToSecret}${secret}`;
+  isDirectory = (path: string | undefined): boolean => pathIsDirectory(path);
+  fullSecretPath = (secret: string): string => `${this.args.pathToSecret}${secret}`;
 
-  get mountPoint() {
+  get mountPoint(): string {
     // mountPoint tells transition where to start. In this case, mountPoint will always be vault.cluster.secrets.backend.kv.
-    return getOwner(this).mountPoint;
+    return (getOwner(this) as EngineOwner).mountPoint;
   }
 
-  get buttonText() {
+  get buttonText(): string {
     // if secretPath is an empty string it could be because the user hit a permissions error.
     const path = this.secretPath || this.args.pathToSecret;
     return pathIsDirectory(path) ? 'View list' : 'View secret';
   }
 
   // callback from HDS pagination to set the queryParams page
-  get paginationQueryParams() {
-    return (page) => {
+  get paginationQueryParams(): (page: number) => { page: number } {
+    return (page: number) => {
       return {
         page,
       };
@@ -60,14 +77,14 @@ export default class KvListPageComponent extends Component {
   }
 
   @action
-  async onDelete(secretPath) {
+  async onDelete(secretPath: string): Promise<void> {
     try {
       const fullSecretPath = this.fullSecretPath(secretPath);
       await this.api.secrets.kvV2DeleteMetadataAndAllVersions(fullSecretPath, this.args.backend);
       const message = `Successfully deleted the metadata and all version data of the secret ${fullSecretPath}.`;
       this.flashMessages.success(message);
       // if you've deleted a secret from within a directory, transition to its parent directory.
-      if (this.router.currentRoute.localName === 'list-directory') {
+      if (this.router.currentRoute?.localName === 'list-directory') {
         const ancestors = ancestorKeysForKey(fullSecretPath);
         const nearest = ancestors.pop();
         this.router.transitionTo(`${this.mountPoint}.list-directory`, nearest);
@@ -87,15 +104,17 @@ export default class KvListPageComponent extends Component {
   }
 
   @action
-  handleSecretPathInput(value) {
+  handleSecretPathInput(value: string): void {
     this.secretPath = value;
   }
 
   @action
-  transitionToSecretDetail(evt) {
+  transitionToSecretDetail(evt: Event): void {
     evt.preventDefault();
-    pathIsDirectory(this.secretPath)
-      ? this.router.transitionTo('vault.cluster.secrets.backend.kv.list-directory', this.secretPath)
-      : this.router.transitionTo('vault.cluster.secrets.backend.kv.secret.index', this.secretPath);
+    if (pathIsDirectory(this.secretPath)) {
+      this.router.transitionTo('vault.cluster.secrets.backend.kv.list-directory', this.secretPath);
+    } else {
+      this.router.transitionTo('vault.cluster.secrets.backend.kv.secret.index', this.secretPath);
+    }
   }
 }

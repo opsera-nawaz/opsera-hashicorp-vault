@@ -5,6 +5,24 @@
 
 import Component from '@glimmer/component';
 
+import type { KvSecretMetadata } from 'kv/utils/kv-types';
+import type { SortedVersion } from 'kv/helpers/sorted-versions';
+
+interface Args {
+  displayVersion?: number;
+  metadata: KvSecretMetadata;
+  onSelect?: (version: string, close: () => void) => void;
+  onClose?: (close: () => void) => void;
+  route?: string;
+  models?: string[];
+}
+
+interface VersionStatus {
+  icon: string | null;
+  class: string;
+  disabled: boolean;
+}
+
 /**
  * @module KvVersionDropdown
  * Toolbar menu for switching between versions of a KV secret.
@@ -16,12 +34,12 @@ import Component from '@glimmer/component';
  * @param {string} [route] - route for the link variant, e.g. "secret.details"
  * @param {array} [models] - models for that route
  */
-export default class KvVersionDropdown extends Component {
+export default class KvVersionDropdown extends Component<Args> {
   // Returns the icon, colour class and disabled state together so the template resolves
   // one condition set per version instead of nesting {{if}} helpers per argument.
   // The colour comes from the same `has-text-*` helper classes the old BasicDropdown used:
   // they carry `!important`, so unlike HDS's `@color` they survive the disabled styling.
-  status = (versionData) => {
+  status = (versionData: SortedVersion): VersionStatus => {
     const { destroyed, isSecretDeleted, version } = versionData;
     // version keys are strings, current_version is a number
     const isCurrent = Number(version) === Number(this.args.metadata?.current_version);

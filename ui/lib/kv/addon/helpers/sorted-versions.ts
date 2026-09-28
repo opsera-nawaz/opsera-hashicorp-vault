@@ -5,10 +5,16 @@
 
 import isDeleted from 'kv/helpers/is-deleted';
 
-export default function sortedVersions(versions) {
-  const array = [];
+import type { KvMetadataVersion } from 'kv/utils/kv-types';
+
+export type SortedVersion = KvMetadataVersion & { version: string; isSecretDeleted: boolean };
+
+export default function sortedVersions(
+  versions: Record<string, KvMetadataVersion> | undefined
+): SortedVersion[] {
+  const array: SortedVersion[] = [];
   for (const key in versions) {
-    const version = versions[key];
+    const version = versions[key] as KvMetadataVersion;
     const isSecretDeleted = isDeleted(version.deletion_time);
     array.push({ version: key, isSecretDeleted, ...version });
   }

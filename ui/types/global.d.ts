@@ -65,3 +65,21 @@ declare module 'autosize' {
   }
   export default autosize;
 }
+
+// jsondiffpatch and its HTML formatter are compiled into standalone UMD
+// vendor bundles by webpack.jsondiffpatch.config.js and loaded as browser
+// globals via `app.import()` in ember-cli-build.js (used by the KV engine's
+// secret/version-diff views), so they have no import path of their own.
+declare const jsondiffpatch: {
+  create(options?: import('jsondiffpatch').Options): import('jsondiffpatch').DiffPatcher;
+};
+declare const htmlformatter: {
+  format(delta: import('jsondiffpatch').Delta, left?: unknown): string | undefined;
+};
+
+// ember-engines exposes its addon/routes.js as the `ember-engines/routes` module through
+// Ember CLI's addon build merging, not a real package export, so plain Node/TS module
+// resolution can't see it and it ships no types of its own.
+declare module 'ember-engines/routes' {
+  export default function buildRoutes<T>(callback: T): T;
+}
