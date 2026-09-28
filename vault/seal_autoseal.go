@@ -14,6 +14,7 @@ import (
 	log "github.com/hashicorp/go-hclog"
 	metrics "github.com/hashicorp/go-metrics/compat"
 	"github.com/hashicorp/vault/sdk/physical"
+	"github.com/hashicorp/vault/vault/interfaces"
 	"github.com/hashicorp/vault/vault/seal"
 )
 
@@ -33,7 +34,7 @@ type autoSeal struct {
 	barrierSealConfigType SealConfigType
 	barrierConfig         atomic.Value
 	recoveryConfig        atomic.Value
-	core                  *Core
+	core                  interfaces.CoreAccess
 	logger                log.Logger
 
 	unsealedWithUnhealthySeal bool
@@ -84,7 +85,7 @@ func (d *autoSeal) checkCore() error {
 	return nil
 }
 
-func (d *autoSeal) SetCore(core *Core) {
+func (d *autoSeal) SetCore(core interfaces.CoreAccess) {
 	d.core = core
 	if d.logger == nil {
 		d.logger = d.core.Logger().Named("autoseal")
@@ -112,38 +113,73 @@ func (d *autoSeal) RecoveryKeySupported() bool {
 	return true
 }
 
+// coreAccessPhysicalBackend adapts an interfaces.CoreAccess's physical
+// storage accessors (PhysicalGet/PhysicalPut/PhysicalDelete) to the
+// physical.Backend interface expected by the writeStoredKeys, readStoredKeys,
+// writeInitializationFlag, and isInitializationFlagSet helpers shared with
+// defaultSeal in vault/seal.go. List is not implemented since none of those
+// helpers call it.
+type coreAccessPhysicalBackend struct {
+	core interfaces.CoreAccess
+}
+
+var _ physical.Backend = coreAccessPhysicalBackend{}
+
+func (b coreAccessPhysicalBackend) Put(ctx context.Context, entry *physical.Entry) error {
+	e := interfaces.StorageEntry(*entry)
+	return b.core.PhysicalPut(ctx, &e)
+}
+
+func (b coreAccessPhysicalBackend) Get(ctx context.Context, key string) (*physical.Entry, error) {
+	entry, err := b.core.PhysicalGet(ctx, key)
+	if err != nil || entry == nil {
+		return nil, err
+	}
+	pe := physical.Entry(*entry)
+	return &pe, nil
+}
+
+func (b coreAccessPhysicalBackend) Delete(ctx context.Context, key string) error {
+	return b.core.PhysicalDelete(ctx, key)
+}
+
+func (b coreAccessPhysicalBackend) List(ctx context.Context, prefix string) ([]string, error) {
+	return nil, fmt.Errorf("list is not supported through the CoreAccess physical storage boundary")
+}
+
 // SetStoredKeys uses the autoSeal.Access.Encrypts method to wrap the keys. The stored entry
 // does not need to be seal wrapped in this case.
 func (d *autoSeal) SetStoredKeys(ctx context.Context, keys [][]byte) error {
-	return writeStoredKeys(ctx, d.core.physical, d.Access, keys)
+	return writeStoredKeys(ctx, coreAccessPhysicalBackend{d.core}, d.Access, keys)
 }
 
 func (d *autoSeal) SetInitializationFlag(ctx context.Context) error {
-	return writeInitializationFlag(ctx, d.core.physical, true)
+	return writeInitializationFlag(ctx, coreAccessPhysicalBackend{d.core}, true)
 }
 
 func (d *autoSeal) ClearInitializationFlag(ctx context.Context) error {
-	return writeInitializationFlag(ctx, d.core.physical, false)
+	return writeInitializationFlag(ctx, coreAccessPhysicalBackend{d.core}, false)
 }
 
 func (d *autoSeal) IsInitializationFlagSet(ctx context.Context) (bool, error) {
-	return isInitializationFlagSet(ctx, d.core.physical)
+	return isInitializationFlagSet(ctx, coreAccessPhysicalBackend{d.core})
 }
 
 // GetStoredKeys retrieves the key shares by unwrapping the encrypted key using the
 // autoseal.
 func (d *autoSeal) GetStoredKeys(ctx context.Context) ([][]byte, error) {
-	return readStoredKeys(ctx, d.core.physical, d.Access)
+	return readStoredKeys(ctx, coreAccessPhysicalBackend{d.core}, d.Access)
 }
 
 func (d *autoSeal) upgradeStoredKeys(ctx context.Context) error {
-	pe, err := d.core.physical.Get(ctx, StoredBarrierKeysPath)
+	entry, err := d.core.PhysicalGet(ctx, StoredBarrierKeysPath)
 	if err != nil {
 		return fmt.Errorf("failed to fetch stored keys: %w", err)
 	}
-	if pe == nil {
+	if entry == nil {
 		return fmt.Errorf("no stored keys found")
 	}
+	pe := physical.Entry(*entry)
 
 	wrappedEntryValue, err := UnmarshalSealWrappedValue(pe.Value)
 	if err != nil {
@@ -156,7 +192,7 @@ func (d *autoSeal) upgradeStoredKeys(ctx context.Context) error {
 	if !uptodate {
 		d.logger.Info("upgrading stored keys")
 
-		keys, err := UnsealWrapStoredBarrierKeys(ctx, d.GetAccess(), pe)
+		keys, err := UnsealWrapStoredBarrierKeys(ctx, d.GetAccess(), &pe)
 		if err != nil {
 			return fmt.Errorf("failed to decrypt encrypted stored keys: %w", err)
 		}
@@ -191,27 +227,32 @@ func (d *autoSeal) BarrierConfig(ctx context.Context) (*SealConfig, error) {
 		return nil, err
 	}
 
-	// Fetch the core configuration
-	conf, err := d.core.PhysicalBarrierSealConfig(ctx)
+	// Fetch the core configuration. d.core.PhysicalBarrierSealConfig
+	// returns the interfaces package's dependency-free *SealConfig mirror;
+	// convert it to the vault package's own *SealConfig (identical field
+	// layout, so a plain conversion suffices) since that's the type this
+	// method, and the rest of autoSeal, work with.
+	ifConf, err := d.core.PhysicalBarrierSealConfig(ctx)
 	if err != nil {
 		d.logger.Error("failed to read seal configuration", "error", err)
 		return nil, fmt.Errorf("failed to read seal configuration: %w", err)
 	}
 
 	// If the seal configuration is missing, we are not initialized
-	if conf == nil {
+	if ifConf == nil {
 		d.logger.Info("seal configuration missing, not initialized")
 		return nil, nil
 	}
+	conf := SealConfig(*ifConf)
 
-	barrierTypeUpgradeCheck(d.BarrierSealConfigType(), conf)
+	barrierTypeUpgradeCheck(d.BarrierSealConfigType(), &conf)
 
 	if !CompatibleSealTypes(conf.Type, d.BarrierSealConfigType().String()) {
 		d.logger.Error("barrier seal type does not match loaded type", "seal_type", conf.Type, "loaded_type", d.BarrierSealConfigType())
 		return nil, fmt.Errorf("barrier seal type of %q does not match loaded type of %q", conf.Type, d.BarrierSealConfigType())
 	}
 
-	d.SetCachedBarrierConfig(conf)
+	d.SetCachedBarrierConfig(&conf)
 	return conf.Clone(), nil
 }
 
@@ -235,7 +276,8 @@ func (d *autoSeal) SetBarrierConfig(ctx context.Context, conf *SealConfig) error
 
 	conf.Type = d.BarrierSealConfigType().String()
 
-	err := d.core.SetPhysicalBarrierSealConfig(ctx, conf)
+	ifConf := interfaces.SealConfig(*conf)
+	err := d.core.SetPhysicalBarrierSealConfig(ctx, &ifConf)
 	if err != nil {
 		return err
 	}
@@ -263,13 +305,19 @@ func (d *autoSeal) RecoveryConfig(ctx context.Context) (*SealConfig, error) {
 		return nil, err
 	}
 
-	conf, err := d.core.PhysicalRecoverySealConfig(ctx)
+	// d.core.PhysicalRecoverySealConfig/PhysicalRecoverySealConfigOldPath
+	// return the interfaces package's dependency-free *SealConfig mirror.
+	// It's converted to the vault package's own *SealConfig (identical
+	// field layout) once the nil-checks below — which mirror the
+	// pre-existing control flow byte-for-byte — have settled on which
+	// fetch produced the config to use.
+	ifConf, err := d.core.PhysicalRecoverySealConfig(ctx)
 	if err != nil {
 		d.logger.Error("failed to read recovery seal configuration", "error", err)
 		return nil, fmt.Errorf("failed to read recovery seal configuration: %w", err)
 	}
 
-	if conf == nil {
+	if ifConf == nil {
 		if d.core.Sealed() {
 			d.logger.Info("recovery seal configuration missing, but cannot check old path as core is sealed")
 			return nil, nil
@@ -277,24 +325,26 @@ func (d *autoSeal) RecoveryConfig(ctx context.Context) (*SealConfig, error) {
 
 		// Check the old recovery seal config path so an upgraded standby will
 		// return the correct seal config
-		conf, err := d.core.PhysicalRecoverySealConfigOldPath(ctx)
+		ifConf, err := d.core.PhysicalRecoverySealConfigOldPath(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read old recovery seal configuration: %w", err)
 		}
 
 		// If the seal configuration is missing, then we are not initialized.
-		if conf == nil {
+		if ifConf == nil {
 			d.logger.Info("recovery seal configuration missing, not initialized")
 			return nil, nil
 		}
 	}
+
+	conf := SealConfig(*ifConf)
 
 	if !d.RecoverySealConfigType().IsSameAs(conf.Type) {
 		d.logger.Error("recovery seal type does not match loaded type", "seal_type", conf.Type, "loaded_type", d.RecoverySealConfigType())
 		return nil, fmt.Errorf("recovery seal type of %q does not match loaded type of %q", conf.Type, d.RecoverySealConfigType())
 	}
 
-	d.recoveryConfig.Store(conf)
+	d.recoveryConfig.Store(&conf)
 	return conf.Clone(), nil
 }
 
@@ -321,7 +371,8 @@ func (d *autoSeal) SetRecoveryConfig(ctx context.Context, conf *SealConfig) erro
 
 	conf.Type = d.RecoverySealConfigType().String()
 
-	if err := d.core.SetPhysicalRecoverySealConfig(ctx, conf); err != nil {
+	ifConf := interfaces.SealConfig(*conf)
+	if err := d.core.SetPhysicalRecoverySealConfig(ctx, &ifConf); err != nil {
 		d.logger.Error("failed to write recovery seal configuration", "error", err)
 		return fmt.Errorf("failed to write recovery seal configuration: %w", err)
 	}
@@ -367,7 +418,8 @@ func (d *autoSeal) SetRecoveryKey(ctx context.Context, key []byte) error {
 		return fmt.Errorf("failed to encrypt keys for storage: %w", err)
 	}
 
-	if err := d.core.physical.Put(ctx, be); err != nil {
+	entry := interfaces.StorageEntry(*be)
+	if err := d.core.PhysicalPut(ctx, &entry); err != nil {
 		d.logger.Error("failed to write recovery key", "error", err)
 		return fmt.Errorf("failed to write recovery key: %w", err)
 	}
@@ -380,17 +432,18 @@ func (d *autoSeal) RecoveryKey(ctx context.Context) ([]byte, error) {
 }
 
 func (d *autoSeal) getRecoveryKeyInternal(ctx context.Context) ([]byte, error) {
-	pe, err := d.core.physical.Get(ctx, recoveryKeyPath)
+	entry, err := d.core.PhysicalGet(ctx, recoveryKeyPath)
 	if err != nil {
 		d.logger.Error("failed to read recovery key", "error", err)
 		return nil, fmt.Errorf("failed to read recovery key: %w", err)
 	}
-	if pe == nil {
+	if entry == nil {
 		d.logger.Warn("no recovery key found")
 		return nil, fmt.Errorf("no recovery key found")
 	}
+	pe := physical.Entry(*entry)
 
-	pt, err := UnsealWrapRecoveryKey(ctx, d.Access, pe)
+	pt, err := UnsealWrapRecoveryKey(ctx, d.Access, &pe)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt encrypted stored keys: %w", err)
 	}
@@ -399,13 +452,14 @@ func (d *autoSeal) getRecoveryKeyInternal(ctx context.Context) ([]byte, error) {
 }
 
 func (d *autoSeal) upgradeRecoveryKey(ctx context.Context) error {
-	pe, err := d.core.physical.Get(ctx, recoveryKeyPath)
+	entry, err := d.core.PhysicalGet(ctx, recoveryKeyPath)
 	if err != nil {
 		return fmt.Errorf("failed to fetch recovery key: %w", err)
 	}
-	if pe == nil {
+	if entry == nil {
 		return fmt.Errorf("no recovery key found")
 	}
+	pe := physical.Entry(*entry)
 
 	wrappedEntryValue, err := UnmarshalSealWrappedValue(pe.Value)
 	if err != nil {
@@ -418,7 +472,7 @@ func (d *autoSeal) upgradeRecoveryKey(ctx context.Context) error {
 
 	if !uptodate {
 		d.logger.Info("upgrading recovery key")
-		pt, err := UnsealWrapRecoveryKey(ctx, d.Access, pe)
+		pt, err := UnsealWrapRecoveryKey(ctx, d.Access, &pe)
 		if err != nil {
 			return fmt.Errorf("failed to decrypt recovery key: %w", err)
 		}
@@ -434,8 +488,11 @@ func (d *autoSeal) upgradeRecoveryKey(ctx context.Context) error {
 // live outside the barrier. This is called from SetRecoveryConfig which is
 // always called with the stateLock.
 func (d *autoSeal) migrateRecoveryConfig(ctx context.Context) error {
-	// Get config from the old recoverySealConfigPath path
-	be, err := d.core.barrier.Get(ctx, recoverySealConfigPath)
+	// Get config from the old recoverySealConfigPath path. This is the one
+	// place autoSeal reads from the barrier (the encrypted storage layer)
+	// rather than physical storage directly, since the legacy config lived
+	// inside the barrier before it was moved to a plaintext physical path.
+	be, err := d.core.BarrierGet(ctx, recoverySealConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to read old recovery seal configuration during migration: %w", err)
 	}
@@ -450,17 +507,17 @@ func (d *autoSeal) migrateRecoveryConfig(ctx context.Context) error {
 	defer d.logger.Debug("done migrating recovery seal configuration")
 
 	// Perform migration
-	pe := &physical.Entry{
+	pe := &interfaces.StorageEntry{
 		Key:   recoverySealConfigPlaintextPath,
 		Value: be.Value,
 	}
 
-	if err := d.core.physical.Put(ctx, pe); err != nil {
+	if err := d.core.PhysicalPut(ctx, pe); err != nil {
 		return fmt.Errorf("failed to write recovery seal configuration during migration: %w", err)
 	}
 
 	// Perform deletion of the old entry
-	if err := d.core.barrier.Delete(ctx, recoverySealConfigPath); err != nil {
+	if err := d.core.BarrierDelete(ctx, recoverySealConfigPath); err != nil {
 		return fmt.Errorf("failed to delete old recovery seal configuration during migration: %w", err)
 	}
 

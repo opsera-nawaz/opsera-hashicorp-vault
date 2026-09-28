@@ -8,13 +8,16 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
+	log "github.com/hashicorp/go-hclog"
 	wrapping "github.com/hashicorp/go-kms-wrapping/v2"
 	metrics "github.com/hashicorp/go-metrics/compat"
 	"github.com/hashicorp/vault/internalshared/metricsutil"
 	"github.com/hashicorp/vault/sdk/physical"
+	"github.com/hashicorp/vault/vault/interfaces"
 	"github.com/hashicorp/vault/vault/seal"
 	"github.com/stretchr/testify/require"
 )
@@ -210,6 +213,194 @@ func TestAutoSeal_HealthCheck(t *testing.T) {
 	if !autoSeal.Healthy() {
 		t.Fatal("Expected seals to be healthy")
 	}
+}
+
+// mockCoreAccess is a minimal, in-memory implementation of
+// interfaces.CoreAccess. It exists to prove that autoSeal depends only on
+// the CoreAccess interface boundary (WO-015), not on the concrete
+// *vault.Core: unlike the other tests in this file, autoSeal.SetCore below
+// is never given a real *Core.
+type mockCoreAccess struct {
+	mu                  sync.Mutex
+	logger              log.Logger
+	sealed              bool
+	barrierSealConfig   *interfaces.SealConfig
+	recoverySealConfig  *interfaces.SealConfig
+	recoverySealOldPath *interfaces.SealConfig
+	physical            map[string]*interfaces.StorageEntry
+	barrier             map[string]*interfaces.StorageEntry
+}
+
+var _ interfaces.CoreAccess = (*mockCoreAccess)(nil)
+
+func newMockCoreAccess() *mockCoreAccess {
+	return &mockCoreAccess{
+		logger:   log.NewNullLogger(),
+		physical: make(map[string]*interfaces.StorageEntry),
+		barrier:  make(map[string]*interfaces.StorageEntry),
+	}
+}
+
+func (m *mockCoreAccess) Logger() log.Logger {
+	return m.logger
+}
+
+func (m *mockCoreAccess) AddLogger(_ log.Logger) {}
+
+func (m *mockCoreAccess) Sealed() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.sealed
+}
+
+func (m *mockCoreAccess) PhysicalBarrierSealConfig(_ context.Context) (*interfaces.SealConfig, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.barrierSealConfig, nil
+}
+
+func (m *mockCoreAccess) SetPhysicalBarrierSealConfig(_ context.Context, cfg *interfaces.SealConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.barrierSealConfig = cfg
+	return nil
+}
+
+func (m *mockCoreAccess) PhysicalRecoverySealConfig(_ context.Context) (*interfaces.SealConfig, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.recoverySealConfig, nil
+}
+
+func (m *mockCoreAccess) SetPhysicalRecoverySealConfig(_ context.Context, cfg *interfaces.SealConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.recoverySealConfig = cfg
+	return nil
+}
+
+func (m *mockCoreAccess) PhysicalRecoverySealConfigOldPath(_ context.Context) (*interfaces.SealConfig, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.recoverySealOldPath, nil
+}
+
+func (m *mockCoreAccess) PhysicalGet(_ context.Context, key string) (*interfaces.StorageEntry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entry, ok := m.physical[key]
+	if !ok {
+		return nil, nil
+	}
+	return entry, nil
+}
+
+func (m *mockCoreAccess) PhysicalPut(_ context.Context, entry *interfaces.StorageEntry) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.physical[entry.Key] = entry
+	return nil
+}
+
+func (m *mockCoreAccess) PhysicalDelete(_ context.Context, key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.physical, key)
+	return nil
+}
+
+func (m *mockCoreAccess) BarrierGet(_ context.Context, key string) (*interfaces.StorageEntry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entry, ok := m.barrier[key]
+	if !ok {
+		return nil, nil
+	}
+	return entry, nil
+}
+
+func (m *mockCoreAccess) BarrierDelete(_ context.Context, key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.barrier, key)
+	return nil
+}
+
+// MetricSink returns nil: this test never exercises the seal health-check
+// loop, the only autoSeal code path that reports through it.
+func (m *mockCoreAccess) MetricSink() *metricsutil.ClusterMetricSink {
+	return nil
+}
+
+// TestAutoSeal_MockCoreAccess exercises every autoSeal method that touches
+// d.core against a from-scratch mockCoreAccess instead of a real *vault.Core,
+// proving autoSeal.SetCore and the d.core.* call sites in
+// vault/seal_autoseal.go compile and run against interfaces.CoreAccess alone.
+func TestAutoSeal_MockCoreAccess(t *testing.T) {
+	testSealAccess, _ := seal.NewTestSeal(nil)
+	autoSealImpl := NewAutoSeal(testSealAccess)
+
+	core := newMockCoreAccess()
+	autoSealImpl.SetCore(core)
+
+	ctx := context.Background()
+
+	// Stored keys round-trip (SetStoredKeys/GetStoredKeys, which go through
+	// the coreAccessPhysicalBackend adapter shared with writeStoredKeys and
+	// readStoredKeys).
+	inKeys := [][]byte{[]byte("share-a"), []byte("share-b")}
+	require.NoError(t, autoSealImpl.SetStoredKeys(ctx, inKeys))
+	outKeys, err := autoSealImpl.GetStoredKeys(ctx)
+	require.NoError(t, err)
+	require.Equal(t, inKeys, outKeys)
+
+	// Recovery key round-trip (SetRecoveryKey/RecoveryKey/VerifyRecoveryKey,
+	// which go through PhysicalPut/PhysicalGet directly).
+	require.NoError(t, autoSealImpl.SetRecoveryKey(ctx, []byte("recovery-key")))
+	gotRecoveryKey, err := autoSealImpl.RecoveryKey(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []byte("recovery-key"), gotRecoveryKey)
+	require.NoError(t, autoSealImpl.VerifyRecoveryKey(ctx, []byte("recovery-key")))
+	require.Error(t, autoSealImpl.VerifyRecoveryKey(ctx, []byte("wrong-key")))
+
+	// Barrier config round-trip (SetBarrierConfig/BarrierConfig, which go
+	// through SetPhysicalBarrierSealConfig/PhysicalBarrierSealConfig).
+	bc := &SealConfig{SecretShares: 5, SecretThreshold: 3}
+	require.NoError(t, autoSealImpl.SetBarrierConfig(ctx, bc))
+	gotBc, err := autoSealImpl.BarrierConfig(ctx)
+	require.NoError(t, err)
+	require.Equal(t, bc.SecretShares, gotBc.SecretShares)
+	require.Equal(t, bc.SecretThreshold, gotBc.SecretThreshold)
+
+	// A second autoSeal instance sharing the same mock core, with its own
+	// empty cache, must read the config back through
+	// d.core.PhysicalBarrierSealConfig rather than a cache hit.
+	autoSealImpl2 := NewAutoSeal(testSealAccess)
+	autoSealImpl2.SetCore(core)
+	gotBc2, err := autoSealImpl2.BarrierConfig(ctx)
+	require.NoError(t, err)
+	require.Equal(t, bc.SecretShares, gotBc2.SecretShares)
+
+	// Recovery config round-trip (SetRecoveryConfig/RecoveryConfig, which
+	// also exercises migrateRecoveryConfig's BarrierGet/BarrierDelete path;
+	// it's a no-op here since the mock's barrier map starts empty).
+	rc := &SealConfig{SecretShares: 5, SecretThreshold: 3}
+	require.NoError(t, autoSealImpl.SetRecoveryConfig(ctx, rc))
+	gotRc, err := autoSealImpl.RecoveryConfig(ctx)
+	require.NoError(t, err)
+	require.Equal(t, rc.SecretShares, gotRc.SecretShares)
+
+	// Initialization flag round-trip (SetInitializationFlag/
+	// ClearInitializationFlag/IsInitializationFlagSet, which go through the
+	// coreAccessPhysicalBackend adapter).
+	require.NoError(t, autoSealImpl.SetInitializationFlag(ctx))
+	set, err := autoSealImpl.IsInitializationFlagSet(ctx)
+	require.NoError(t, err)
+	require.True(t, set)
+	require.NoError(t, autoSealImpl.ClearInitializationFlag(ctx))
+	set, err = autoSealImpl.IsInitializationFlagSet(ctx)
+	require.NoError(t, err)
+	require.False(t, set)
 }
 
 func TestAutoSeal_BarrierSealConfigType(t *testing.T) {

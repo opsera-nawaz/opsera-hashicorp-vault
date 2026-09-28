@@ -11,6 +11,8 @@ import (
 	log "github.com/hashicorp/go-hclog"
 	wrapping "github.com/hashicorp/go-kms-wrapping/v2"
 	"github.com/stretchr/testify/require"
+
+	"github.com/hashicorp/vault/internalshared/metricsutil"
 )
 
 // MockCryptoBarrier is a minimal in-memory CryptoBarrier used to prove the
@@ -97,6 +99,7 @@ type MockCoreAccess struct {
 	recoverySealConfig  *SealConfig
 	recoverySealOldPath *SealConfig
 	physical            map[string]*StorageEntry
+	barrier             map[string]*StorageEntry
 }
 
 var _ CoreAccess = (*MockCoreAccess)(nil)
@@ -106,6 +109,7 @@ func NewMockCoreAccess() *MockCoreAccess {
 		logger:   log.NewNullLogger(),
 		sealed:   true,
 		physical: make(map[string]*StorageEntry),
+		barrier:  make(map[string]*StorageEntry),
 	}
 }
 
@@ -153,8 +157,32 @@ func (m *MockCoreAccess) PhysicalGet(_ context.Context, key string) (*StorageEnt
 	return entry, nil
 }
 
+func (m *MockCoreAccess) PhysicalPut(_ context.Context, entry *StorageEntry) error {
+	m.physical[entry.Key] = entry
+	return nil
+}
+
 func (m *MockCoreAccess) PhysicalDelete(_ context.Context, key string) error {
 	delete(m.physical, key)
+	return nil
+}
+
+func (m *MockCoreAccess) BarrierGet(_ context.Context, key string) (*StorageEntry, error) {
+	entry, ok := m.barrier[key]
+	if !ok {
+		return nil, nil
+	}
+	return entry, nil
+}
+
+func (m *MockCoreAccess) BarrierDelete(_ context.Context, key string) error {
+	delete(m.barrier, key)
+	return nil
+}
+
+// MetricSink returns nil: none of the CoreAccess mock's exercises touch
+// seal-availability metrics reporting.
+func (m *MockCoreAccess) MetricSink() *metricsutil.ClusterMetricSink {
 	return nil
 }
 

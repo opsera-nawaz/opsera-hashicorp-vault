@@ -12,6 +12,7 @@ import (
 
 	"github.com/hashicorp/vault/sdk/helper/jsonutil"
 	"github.com/hashicorp/vault/sdk/physical"
+	"github.com/hashicorp/vault/vault/interfaces"
 	"github.com/hashicorp/vault/vault/seal"
 )
 
@@ -54,7 +55,7 @@ const (
 )
 
 type Seal interface {
-	SetCore(*Core)
+	SetCore(interfaces.CoreAccess)
 	Init(context.Context) error
 	Finalize(context.Context) error
 	StoredKeysSupported() seal.StoredKeysSupport
@@ -120,8 +121,15 @@ func (d *defaultSeal) SetAccess(access seal.Access) {
 	d.access = access
 }
 
-func (d *defaultSeal) SetCore(core *Core) {
-	d.core = core
+// SetCore accepts an interfaces.CoreAccess to satisfy the shared Seal
+// interface (also implemented by autoSeal, which depends only on
+// CoreAccess as of WO-015). defaultSeal itself is out of WO-015's scope:
+// every real caller passes a *Core, so this asserts back to the concrete
+// type it has always used internally (d.core.physical, d.core.logger,
+// d.core.isRaftUnseal(), etc. below are all *Core-typed field/method
+// accesses, unchanged).
+func (d *defaultSeal) SetCore(core interfaces.CoreAccess) {
+	d.core = core.(*Core)
 }
 
 func (d *defaultSeal) Init(ctx context.Context) error {
@@ -214,8 +222,12 @@ func (d *defaultSeal) BarrierConfig(ctx context.Context) (*SealConfig, error) {
 		return nil, err
 	}
 
-	// Fetch the core configuration
-	conf, err := d.core.PhysicalBarrierSealConfig(ctx)
+	// Fetch the core configuration. This calls the physicalSealConfig
+	// helper directly (rather than d.core.PhysicalBarrierSealConfig, which
+	// is now shaped for interfaces.CoreAccess and returns
+	// *interfaces.SealConfig) since defaultSeal caches a vault-typed
+	// *SealConfig.
+	conf, err := physicalSealConfig(ctx, d.core, "barrier", barrierSealConfigPath)
 	if err != nil {
 		d.core.logger.Error("failed to read seal configuration", "error", err)
 		return nil, fmt.Errorf("failed to check seal configuration: %w", err)
@@ -263,7 +275,9 @@ func (d *defaultSeal) SetBarrierConfig(ctx context.Context, config *SealConfig) 
 		return nil
 	}
 
-	err := d.core.SetPhysicalBarrierSealConfig(ctx, config)
+	// setPhysicalSealConfig, not d.core.SetPhysicalBarrierSealConfig (see
+	// the read side in BarrierConfig above for why).
+	err := setPhysicalSealConfig(ctx, d.core, "barrier", barrierSealConfigPath, config)
 	if err != nil {
 		return err
 	}

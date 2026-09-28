@@ -68,6 +68,7 @@ import (
 	"github.com/hashicorp/vault/vault/cert_count"
 	"github.com/hashicorp/vault/vault/cluster"
 	"github.com/hashicorp/vault/vault/eventbus"
+	"github.com/hashicorp/vault/vault/interfaces"
 	"github.com/hashicorp/vault/vault/observations"
 	"github.com/hashicorp/vault/vault/plugincatalog"
 	"github.com/hashicorp/vault/vault/quotas"
@@ -1337,6 +1338,11 @@ func CreateCore(conf *CoreConfig) (*Core, error) {
 	c.seal.SetCore(c)
 	return c, nil
 }
+
+// Compile-time assertion that *Core satisfies interfaces.CoreAccess, the
+// minimal surface seal implementations (e.g. autoSeal) depend on instead of
+// the concrete *Core type. See vault/interfaces/core.go.
+var _ interfaces.CoreAccess = (*Core)(nil)
 
 // NewCore creates, initializes and configures a Vault node (core).
 func NewCore(conf *CoreConfig) (*Core, error) {
@@ -3400,20 +3406,51 @@ func physicalSealConfig(ctx context.Context, c *Core, label, configPath string) 
 	return config, nil
 }
 
-func (c *Core) PhysicalBarrierSealConfig(ctx context.Context) (*SealConfig, error) {
-	return physicalSealConfig(ctx, c, "barrier", barrierSealConfigPath)
+// PhysicalBarrierSealConfig implements interfaces.CoreAccess. It is also
+// exported for use outside this package (e.g. command/server.go). Internal
+// callers within this package that need the vault-typed *SealConfig (e.g.
+// PhysicalSealConfigs, migrateMultiSealConfig, and defaultSeal in seal.go)
+// call the physicalSealConfig helper directly instead of going through this
+// method, since interfaces.SealConfig and vault's own SealConfig are
+// distinct (if field-identical) types and this method's signature is fixed
+// by interfaces.CoreAccess.
+func (c *Core) PhysicalBarrierSealConfig(ctx context.Context) (*interfaces.SealConfig, error) {
+	cfg, err := physicalSealConfig(ctx, c, "barrier", barrierSealConfigPath)
+	if err != nil || cfg == nil {
+		return nil, err
+	}
+	out := interfaces.SealConfig(*cfg)
+	return &out, nil
 }
 
-func (c *Core) PhysicalRecoverySealConfig(ctx context.Context) (*SealConfig, error) {
-	return physicalSealConfig(ctx, c, "recovery", recoverySealConfigPlaintextPath)
+// PhysicalRecoverySealConfig implements interfaces.CoreAccess. See the
+// PhysicalBarrierSealConfig comment for why internal callers use
+// physicalSealConfig directly instead.
+func (c *Core) PhysicalRecoverySealConfig(ctx context.Context) (*interfaces.SealConfig, error) {
+	cfg, err := physicalSealConfig(ctx, c, "recovery", recoverySealConfigPlaintextPath)
+	if err != nil || cfg == nil {
+		return nil, err
+	}
+	out := interfaces.SealConfig(*cfg)
+	return &out, nil
 }
 
-func (c *Core) PhysicalRecoverySealConfigOldPath(ctx context.Context) (*SealConfig, error) {
-	return physicalSealConfig(ctx, c, "recovery", recoverySealConfigPath)
+// PhysicalRecoverySealConfigOldPath implements interfaces.CoreAccess. Its
+// only caller (autoSeal.RecoveryConfig) already consumes the
+// interfaces.SealConfig-typed result, so unlike PhysicalBarrierSealConfig
+// and PhysicalRecoverySealConfig, no internal vault-typed variant is
+// needed.
+func (c *Core) PhysicalRecoverySealConfigOldPath(ctx context.Context) (*interfaces.SealConfig, error) {
+	cfg, err := physicalSealConfig(ctx, c, "recovery", recoverySealConfigPath)
+	if err != nil || cfg == nil {
+		return nil, err
+	}
+	out := interfaces.SealConfig(*cfg)
+	return &out, nil
 }
 
 func (c *Core) PhysicalSealConfigs(ctx context.Context) (*SealConfig, *SealConfig, error) {
-	barrierConf, err := c.PhysicalBarrierSealConfig(ctx)
+	barrierConf, err := physicalSealConfig(ctx, c, "barrier", barrierSealConfigPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get barrier seal configuration at migration check time: %w", err)
 	}
@@ -3421,7 +3458,7 @@ func (c *Core) PhysicalSealConfigs(ctx context.Context) (*SealConfig, *SealConfi
 		return nil, nil, nil
 	}
 
-	recoveryConf, err := c.PhysicalRecoverySealConfig(ctx)
+	recoveryConf, err := physicalSealConfig(ctx, c, "recovery", recoverySealConfigPlaintextPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get recovery seal configuration at migration check time: %w", err)
 	}
@@ -3429,12 +3466,62 @@ func (c *Core) PhysicalSealConfigs(ctx context.Context) (*SealConfig, *SealConfi
 	return barrierConf, recoveryConf, nil
 }
 
-func (c *Core) SetPhysicalBarrierSealConfig(ctx context.Context, barrierSealConfig *SealConfig) error {
-	return setPhysicalSealConfig(ctx, c, "barrier", barrierSealConfigPath, barrierSealConfig)
+// SetPhysicalBarrierSealConfig implements interfaces.CoreAccess. See the
+// PhysicalBarrierSealConfig comment for why internal callers (defaultSeal
+// in seal.go) use setPhysicalSealConfig directly instead.
+func (c *Core) SetPhysicalBarrierSealConfig(ctx context.Context, barrierSealConfig *interfaces.SealConfig) error {
+	cfg := SealConfig(*barrierSealConfig)
+	return setPhysicalSealConfig(ctx, c, "barrier", barrierSealConfigPath, &cfg)
 }
 
-func (c *Core) SetPhysicalRecoverySealConfig(ctx context.Context, recoverySealConfig *SealConfig) error {
-	return setPhysicalSealConfig(ctx, c, "recovery", recoverySealConfigPlaintextPath, recoverySealConfig)
+// SetPhysicalRecoverySealConfig implements interfaces.CoreAccess. Its only
+// caller (autoSeal.SetRecoveryConfig) already supplies an
+// interfaces.SealConfig, so no internal vault-typed variant is needed.
+func (c *Core) SetPhysicalRecoverySealConfig(ctx context.Context, recoverySealConfig *interfaces.SealConfig) error {
+	cfg := SealConfig(*recoverySealConfig)
+	return setPhysicalSealConfig(ctx, c, "recovery", recoverySealConfigPlaintextPath, &cfg)
+}
+
+// PhysicalGet implements interfaces.CoreAccess by reading an entry directly
+// from physical storage, bypassing the barrier.
+func (c *Core) PhysicalGet(ctx context.Context, key string) (*interfaces.StorageEntry, error) {
+	entry, err := c.physical.Get(ctx, key)
+	if err != nil || entry == nil {
+		return nil, err
+	}
+	out := interfaces.StorageEntry(*entry)
+	return &out, nil
+}
+
+// PhysicalPut implements interfaces.CoreAccess by writing an entry directly
+// to physical storage, bypassing the barrier.
+func (c *Core) PhysicalPut(ctx context.Context, entry *interfaces.StorageEntry) error {
+	pe := physical.Entry(*entry)
+	return c.physical.Put(ctx, &pe)
+}
+
+// PhysicalDelete implements interfaces.CoreAccess by removing an entry
+// directly from physical storage, bypassing the barrier.
+func (c *Core) PhysicalDelete(ctx context.Context, key string) error {
+	return c.physical.Delete(ctx, key)
+}
+
+// BarrierGet implements interfaces.CoreAccess by reading an entry from the
+// barrier. It exists solely to support autoSeal's one-time migration of
+// the recovery seal configuration off its legacy, barrier-encrypted
+// storage path (see autoSeal.migrateRecoveryConfig).
+func (c *Core) BarrierGet(ctx context.Context, key string) (*interfaces.StorageEntry, error) {
+	entry, err := c.barrier.Get(ctx, key)
+	if err != nil || entry == nil {
+		return nil, err
+	}
+	return &interfaces.StorageEntry{Key: entry.Key, Value: entry.Value, SealWrap: entry.SealWrap}, nil
+}
+
+// BarrierDelete implements interfaces.CoreAccess by removing an entry from
+// the barrier. See BarrierGet.
+func (c *Core) BarrierDelete(ctx context.Context, key string) error {
+	return c.barrier.Delete(ctx, key)
 }
 
 func setPhysicalSealConfig(ctx context.Context, c *Core, label, configPath string, sealConfig *SealConfig) error {
@@ -3630,7 +3717,7 @@ func (c *Core) adjustForSealMigration(unwrapSeal Seal) error {
 }
 
 func (c *Core) migrateMultiSealConfig(ctx context.Context) error {
-	barrierSealConfig, err := c.PhysicalBarrierSealConfig(ctx)
+	barrierSealConfig, err := physicalSealConfig(ctx, c, "barrier", barrierSealConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to read existing seal configuration during multi seal migration: %v", err)
 	}
