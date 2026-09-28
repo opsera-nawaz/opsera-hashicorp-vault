@@ -5,6 +5,7 @@ package transit
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"maps"
@@ -865,6 +866,110 @@ func TestTransit_SignVerify_ED25519(t *testing.T) {
 
 	// Verify the total successful transit requests
 	require.Equal(t, uint64(24), b.secretEngineCounts.Transit.MonthlyCount.Load())
+}
+
+// TestTransit_SignVerify_ED25519_FIPS covers WO-043's AC1 (sign rejected),
+// AC2 (verify of an existing signature still succeeds), and the "ECDSA is
+// the recommended alternative" half of AC1, at the full HTTP request/
+// response layer (POST /transit/sign/:name, POST /transit/verify/:name),
+// extending the existing constants.IsFIPS()-conditional pattern used above
+// for sha3 hash algorithms (TestTransit_SignVerify_RSA_PSS) rather than
+// introducing new test infrastructure.
+//
+// Under a real FIPS build (constants.IsFIPS() == true), the key-policy
+// layer already refuses to create a *new* Ed25519 key (WO-027), so there
+// is no HTTP-reachable way to mint fresh Ed25519 key material inside such
+// a binary to exercise the sign-reject assertion against. This test seeds
+// a pre-existing key/signature by writing a keysutil.Policy directly to
+// storage (bypassing the gated create/rotate path), the same technique
+// sdk/helper/keysutil's own FIPS test suite uses (see
+// policy_fips_test.go's newExistingEd25519Fixture) to simulate a key that
+// was created -- and used to sign -- before this binary was built with the
+// fips tag. Persist and VerifySignatureWithOptions are never FIPS-gated,
+// so this part of the test exercises real, always-compiled code; only the
+// sign-side assertion differs between FIPS and non-FIPS builds.
+func TestTransit_SignVerify_ED25519_FIPS(t *testing.T) {
+	b, storage := createBackendWithSysView(t)
+	message := []byte("wo-043-ed25519-fips-message")
+	input := base64.StdEncoding.EncodeToString(message)
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	algo := keysutil.KeyType(keysutil.KeyType_ED25519)
+	p := &keysutil.Policy{
+		Name:                 "legacy-eddsa",
+		Type:                 keysutil.KeyType_ED25519,
+		LatestVersion:        1,
+		MinDecryptionVersion: 1,
+		Keys: map[string]keysutil.KeyEntry{
+			"1": {
+				Key:                priv,
+				FormattedPublicKey: base64.StdEncoding.EncodeToString(pub),
+				Algorithm:          &algo,
+			},
+		},
+	}
+	require.NoError(t, p.Persist(context.Background(), storage), "failed to seed pre-existing ed25519 policy")
+
+	// AC2: verifying a signature produced by this pre-existing Ed25519 key
+	// must succeed via the HTTP verify path, regardless of FIPS mode.
+	// p.VersionTemplate is unset, so the wire prefix is
+	// keysutil.DefaultVersionTemplate ("vault:v{{version}}:") with the key
+	// version substituted in, matching Policy.getVersionPrefix internally.
+	rawSig := ed25519.Sign(priv, message)
+	versionPrefix := strings.Replace(keysutil.DefaultVersionTemplate, "{{version}}", "1", 1)
+	wireSig := versionPrefix + base64.StdEncoding.EncodeToString(rawSig)
+
+	verifyResp, err := b.HandleRequest(context.Background(), &logical.Request{
+		Storage:   storage,
+		Operation: logical.UpdateOperation,
+		Path:      "verify/legacy-eddsa",
+		Data: map[string]interface{}{
+			"input":     input,
+			"signature": wireSig,
+		},
+	})
+	require.NoError(t, err, "verifying an existing ed25519 signature must succeed")
+	require.False(t, verifyResp.IsError())
+	require.True(t, verifyResp.Data["valid"].(bool))
+
+	// AC1: signing new data with this same Ed25519 key must be rejected
+	// under FIPS mode, and must keep working outside it (non-regression).
+	signResp, err := b.HandleRequest(context.Background(), &logical.Request{
+		Storage:   storage,
+		Operation: logical.UpdateOperation,
+		Path:      "sign/legacy-eddsa",
+		Data:      map[string]interface{}{"input": input},
+	})
+	if constants.IsFIPS() {
+		require.Error(t, err, "signing with an ed25519 key must be rejected under FIPS mode")
+		require.Contains(t, err.Error(), "not allowed in FIPS mode")
+		require.Contains(t, err.Error(), "ed25519")
+		require.Contains(t, err.Error(), "ecdsa-p256")
+	} else {
+		require.NoError(t, err, "ed25519 signing must keep working outside FIPS mode")
+		require.NotEmpty(t, signResp.Data["signature"])
+	}
+
+	// Recommended alternative: ECDSA P-256 create + sign must succeed
+	// regardless of FIPS mode, since ECDSA is FIPS-Approved.
+	_, err = b.HandleRequest(context.Background(), &logical.Request{
+		Storage:   storage,
+		Operation: logical.UpdateOperation,
+		Path:      "keys/ecdsa-alt",
+		Data:      map[string]interface{}{"type": "ecdsa-p256"},
+	})
+	require.NoError(t, err, "creating an ecdsa-p256 key must succeed")
+
+	ecdsaSignResp, err := b.HandleRequest(context.Background(), &logical.Request{
+		Storage:   storage,
+		Operation: logical.UpdateOperation,
+		Path:      "sign/ecdsa-alt",
+		Data:      map[string]interface{}{"input": input},
+	})
+	require.NoError(t, err, "signing with the recommended ecdsa-p256 alternative must succeed")
+	require.NotEmpty(t, ecdsaSignResp.Data["signature"])
 }
 
 func TestTransit_SignVerify_RSA_PSS(t *testing.T) {
