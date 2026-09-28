@@ -14,6 +14,31 @@ import { encodePath } from 'vault/utils/path-encoding-helpers';
 import { keyIsFolder, parentKeyForKey } from 'core/utils/key-utils';
 import keys from 'core/utils/keys';
 
+import type RouterService from '@ember/routing/router-service';
+import type { NativeArray } from '@ember/array';
+
+interface RouteUrls {
+  create?: string;
+  list?: string;
+  show?: string;
+  [key: string]: string | undefined;
+}
+
+interface NavigateInputArgs {
+  filter?: string | null;
+  placeholder?: string;
+  urls?: RouteUrls | null;
+  filterFocusDidChange?: (isFocused: boolean) => void;
+  filterDidChange?: (value: string) => void;
+  filterMatchesKey?: boolean;
+  filterPartialMatch?: unknown;
+  firstPartialMatch?: { id?: string };
+  baseKey?: string;
+  shouldNavigateTree?: boolean;
+  mode?: string;
+  extraNavParams?: string;
+}
+
 /**
  * @module NavigateInput
  * `NavigateInput` components are used to filter list data.
@@ -34,14 +59,15 @@ import keys from 'core/utils/keys';
  * @param {String} [extraNavParams] - A string used in route transition when necessary.
  */
 
-const routeFor = function (type, mode, urls) {
-  const MODES = {
-    secrets: 'vault.cluster.secrets.backend',
-    'secrets-cert': 'vault.cluster.secrets.backend',
-    'policy-show': 'vault.cluster.policy',
-    'policy-list': 'vault.cluster.policies',
-    leases: 'vault.cluster.access.leases',
-  };
+const MODES: Record<string, string> = {
+  secrets: 'vault.cluster.secrets.backend',
+  'secrets-cert': 'vault.cluster.secrets.backend',
+  'policy-show': 'vault.cluster.policy',
+  'policy-list': 'vault.cluster.policies',
+  leases: 'vault.cluster.access.leases',
+};
+
+const routeFor = function (type: string, mode: string, urls: RouteUrls | null | undefined) {
   // urls object should have create, list, show keys
   // so we'll return that here
   if (urls) {
@@ -58,15 +84,15 @@ const routeFor = function (type, mode, urls) {
   return useSuffix ? modeVal + '.' + typeVal : modeVal;
 };
 
-export default class NavigateInput extends Component {
-  @service router;
+export default class NavigateInput extends Component<NavigateInputArgs> {
+  @service declare readonly router: RouterService;
   inputId = `nav-input-${guidFor(this)}`;
 
-  get mode() {
+  get mode(): string {
     return this.args.mode || 'secrets';
   }
 
-  transitionToRoute(...args) {
+  transitionToRoute(...args: unknown[]): void {
     const params = args.map((param, index) => {
       if (index === 0 || typeof param !== 'string') {
         return param;
@@ -74,17 +100,17 @@ export default class NavigateInput extends Component {
       return encodePath(param);
     });
 
-    this.router.transitionTo(...params);
+    this.router.transitionTo(...(params as Parameters<RouterService['transitionTo']>));
   }
 
-  keyForNav(key) {
+  keyForNav(key: string): string {
     if (this.mode !== 'secrets-cert') {
       return key;
     }
     return `cert/${key}`;
   }
 
-  onEnter(val) {
+  onEnter(val: string): void {
     const mode = this.mode;
     const baseKey = this.args.baseKey;
     const extraParams = this.args.extraNavParams;
@@ -92,7 +118,9 @@ export default class NavigateInput extends Component {
       return;
     }
     if (this.args.filterMatchesKey && !keyIsFolder(val)) {
-      const params = [routeFor('show', mode, this.args.urls), extraParams, this.keyForNav(val)].compact();
+      const params = (
+        [routeFor('show', mode, this.args.urls), extraParams, this.keyForNav(val)] as NativeArray<unknown>
+      ).compact();
       this.transitionToRoute(...params);
     } else {
       if (mode === 'policies') {
@@ -122,24 +150,24 @@ export default class NavigateInput extends Component {
   }
 
   // pop to the nearest parentKey or to the root
-  onEscape(val) {
+  onEscape(val: string): void {
     const key = parentKeyForKey(val) || '';
-    this.args.filterDidChange(key);
+    this.args.filterDidChange?.(key);
     this.filterUpdated(key);
   }
 
-  onTab(event) {
+  onTab(event: KeyboardEvent): void {
     const firstPartialMatch = this.args.firstPartialMatch?.id;
     if (!firstPartialMatch) {
       return;
     }
     event.preventDefault();
-    this.args.filterDidChange(firstPartialMatch);
+    this.args.filterDidChange?.(firstPartialMatch);
     this.filterUpdated(firstPartialMatch);
   }
 
   // as you type, navigates through the k/v tree
-  filterUpdated(val) {
+  filterUpdated(val: string): void {
     const mode = this.mode;
     if (mode === 'policies' || !this.args.shouldNavigateTree) {
       this.filterUpdatedNoNav(val, mode);
@@ -158,9 +186,9 @@ export default class NavigateInput extends Component {
     this.navigate(this.keyForNav(key), mode, pageFilter);
   }
 
-  navigate(key, mode, pageFilter) {
+  navigate(key: string, mode: string, pageFilter: string): void {
     const route = routeFor(key ? 'list' : 'list-root', mode, this.args.urls);
-    const args = [route];
+    const args: unknown[] = [route];
     if (key) {
       args.push(key);
     }
@@ -182,7 +210,7 @@ export default class NavigateInput extends Component {
     this.transitionToRoute(...args);
   }
 
-  filterUpdatedNoNav(val, mode) {
+  filterUpdatedNoNav(val: string, mode: string): void {
     const key = val ? val.trim() : null;
     const route = routeFor('list-root', mode, this.args.urls);
     // policies are nested under their type (e.g. vault.cluster.policies.acl) rather than a dynamic segment
@@ -199,13 +227,13 @@ export default class NavigateInput extends Component {
   }
 
   @action
-  maybeFocusInput() {
+  maybeFocusInput(): void {
     // if component is loaded and filter is already applied,
     // we assume the user just typed in a filter and the page reloaded
     if (this.args.filter && !Ember.testing) {
       later(
         this,
-        function () {
+        function (this: NavigateInput) {
           document.getElementById(this.inputId)?.focus();
         },
         400
@@ -214,27 +242,28 @@ export default class NavigateInput extends Component {
   }
 
   @action
-  handleInput(evt) {
+  handleInput(evt: Event): void {
+    const value = (evt.target as HTMLInputElement).value;
     if (this.args.filterDidChange) {
-      this.args.filterDidChange(evt.target.value);
+      this.args.filterDidChange(value);
     }
-    debounce(this, this.filterUpdated, evt.target.value, 400);
+    debounce(this, this.filterUpdated, value, 400);
   }
   @action
-  setFilterFocused(isFocused) {
+  setFilterFocused(isFocused: boolean): void {
     if (this.args.filterFocusDidChange) {
       this.args.filterFocusDidChange(isFocused);
     }
   }
   @action
-  handleKeyPress(event) {
+  handleKeyPress(event: KeyboardEvent): void {
     if (event.key === keys.TAB) {
       this.onTab(event);
     }
   }
   @action
-  handleKeyUp(event) {
-    const val = event.target.value;
+  handleKeyUp(event: KeyboardEvent): void {
+    const val = (event.target as HTMLInputElement).value;
     if (event.key === keys.ENTER) {
       this.onEnter(val);
     }
