@@ -149,6 +149,13 @@ func ParsePaddingScheme(s string) (PaddingScheme, error) {
 	}
 }
 
+// AEADFactory and ManagedKeyFactory (below) describe how an individual
+// *transit key version* performs its cryptographic operations: which AEAD
+// primitive to use, or which external KMS parameters resolve a managed
+// key. CryptoBarrier, in contrast, describes the *barrier* (root/master
+// key) encryption surface that sits above individual transit keys. The
+// two are complementary, not competing, abstractions and neither replaces
+// the other.
 type AEADFactory interface {
 	GetAEAD(iv []byte) (cipher.AEAD, error)
 }
@@ -159,6 +166,49 @@ type AssociatedDataFactory interface {
 
 type ManagedKeyFactory interface {
 	GetManagedKeyParameters() ManagedKeyParameters
+}
+
+// CryptoBarrier mirrors, field-for-field, the method set of
+// vault/interfaces.CryptoBarrier (Encrypt/Decrypt/RotateKey), which is
+// itself modeled on vault/barrier_access.go's BarrierEncryptor interface.
+//
+// It is declared locally here rather than imported from vault/interfaces
+// because sdk/helper/keysutil lives in the separate
+// github.com/hashicorp/vault/sdk Go module, which external plugin authors
+// depend on standalone (via `go get github.com/hashicorp/vault/sdk`)
+// without the rest of the hashicorp/vault repository. That module has no
+// dependency edge back onto the root github.com/hashicorp/vault module —
+// adding one (e.g. `import "github.com/hashicorp/vault/vault/interfaces"`)
+// would fail `GOWORK=off go build ./sdk/helper/keysutil/...` (sdk/go.mod
+// has no require/replace for github.com/hashicorp/vault) and, if forced
+// via a relative replace, would pull the entire Vault core binary's
+// transitive dependency graph into every SDK consumer — precisely the
+// "heavy transitive dependencies" outcome this story's edge cases forbid.
+//
+// Because Go interface satisfaction is structural, any concrete type that
+// already implements vault/interfaces.CryptoBarrier (e.g. a
+// vault.BarrierEncryptorAccess or a concrete SecurityBarrier) satisfies
+// this interface too, with no adapter code required. This is the "accepts
+// it as a constructor/method parameter" alignment path: callers on the
+// vault/ side pass their CryptoBarrier value straight into
+// LockManager.WithCryptoBarrier.
+//
+// CryptoBarrier is a dependency-injection point for FIPS Phase 2 barrier
+// algorithm enforcement; it is not consumed by any encrypt/decrypt logic
+// in this story.
+type CryptoBarrier interface {
+	// Encrypt encrypts the given plaintext under the named key and returns
+	// the resulting ciphertext.
+	Encrypt(ctx context.Context, key string, plaintext []byte) ([]byte, error)
+
+	// Decrypt decrypts the given ciphertext under the named key and returns
+	// the resulting plaintext.
+	Decrypt(ctx context.Context, key string, ciphertext []byte) ([]byte, error)
+
+	// RotateKey triggers creation of a new encryption key for the barrier.
+	// All future encryptions use the new key, while data encrypted under
+	// prior keys remains decryptable.
+	RotateKey(ctx context.Context) error
 }
 
 type RestoreInfo struct {

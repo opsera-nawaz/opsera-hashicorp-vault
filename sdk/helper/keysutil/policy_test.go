@@ -1417,3 +1417,81 @@ func TestPolicy_RotateInMemoryWithAlgorithmRejectsUsageChanges(t *testing.T) {
 	_, ok := p.Keys["2"]
 	require.False(t, ok, "new key version should not be created after a rejected algorithm change")
 }
+
+// policyTestCryptoBarrier is a minimal CryptoBarrier implementation used to
+// verify that a mock barrier injected via LockManager.WithCryptoBarrier is
+// reachable from the LockManager and that its encrypt/decrypt operations
+// delegate correctly, independently of (and without disturbing) the
+// transit Policy encrypt/decrypt path exercised elsewhere in this file.
+type policyTestCryptoBarrier struct {
+	encrypted map[string][]byte
+}
+
+func (b *policyTestCryptoBarrier) Encrypt(_ context.Context, key string, plaintext []byte) ([]byte, error) {
+	if b.encrypted == nil {
+		b.encrypted = make(map[string][]byte)
+	}
+	ciphertext := append([]byte("barrier:"), plaintext...)
+	b.encrypted[key] = ciphertext
+	return ciphertext, nil
+}
+
+func (b *policyTestCryptoBarrier) Decrypt(_ context.Context, key string, ciphertext []byte) ([]byte, error) {
+	stored, ok := b.encrypted[key]
+	if !ok || !bytes.Equal(stored, ciphertext) {
+		return nil, errors.New("policyTestCryptoBarrier: ciphertext does not match stored value for key")
+	}
+	return bytes.TrimPrefix(ciphertext, []byte("barrier:")), nil
+}
+
+func (b *policyTestCryptoBarrier) RotateKey(_ context.Context) error {
+	return nil
+}
+
+// TestLockManager_CryptoBarrierInjection_DelegatesEncryptDecrypt verifies
+// that a mock CryptoBarrier can be injected into a LockManager via
+// WithCryptoBarrier and that Encrypt/Decrypt calls made through the stored
+// CryptoBarrier delegate to that mock, while ordinary transit Policy
+// encrypt/decrypt operations on the same LockManager remain unaffected.
+func TestLockManager_CryptoBarrierInjection_DelegatesEncryptDecrypt(t *testing.T) {
+	t.Parallel()
+
+	barrier := &policyTestCryptoBarrier{}
+	lm, err := NewLockManager(true, 0, WithCryptoBarrier(barrier))
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	// The injected CryptoBarrier delegates encrypt/decrypt to the mock.
+	cb := lm.GetCryptoBarrier()
+	require.NotNil(t, cb)
+
+	ciphertext, err := cb.Encrypt(ctx, "root", []byte("plaintext"))
+	require.NoError(t, err)
+	require.NotEqual(t, []byte("plaintext"), ciphertext)
+
+	plaintext, err := cb.Decrypt(ctx, "root", ciphertext)
+	require.NoError(t, err)
+	require.Equal(t, []byte("plaintext"), plaintext)
+
+	// Ordinary Policy-level encrypt/decrypt through the same LockManager
+	// (unrelated to the injected barrier) continues to work identically.
+	storage := &logical.InmemStorage{}
+	p, _, err := lm.GetPolicy(ctx, PolicyRequest{
+		Name:    "transit-key",
+		KeyType: KeyType_AES256_GCM96,
+		Storage: storage,
+		Upsert:  true,
+	}, rand.Reader)
+	require.NoError(t, err)
+	defer p.Unlock()
+
+	transitCiphertext, err := p.Encrypt(0, nil, nil, base64.StdEncoding.EncodeToString([]byte("transit-plaintext")))
+	require.NoError(t, err)
+
+	transitPlaintext, err := p.Decrypt(nil, nil, transitCiphertext)
+	require.NoError(t, err)
+	decoded, err := base64.StdEncoding.DecodeString(transitPlaintext)
+	require.NoError(t, err)
+	require.Equal(t, []byte("transit-plaintext"), decoded)
+}

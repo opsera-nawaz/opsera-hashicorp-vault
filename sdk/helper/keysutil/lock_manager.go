@@ -88,9 +88,35 @@ type LockManager struct {
 	useCache bool
 	cache    Cache
 	keyLocks []*locksutil.LockEntry
+
+	// cryptoBarrier is an optional dependency-injection point for a
+	// CryptoBarrier (see policy.go), used by FIPS Phase 2 work to route
+	// barrier-level encrypt/decrypt/rotate operations through a
+	// FIPS-approved-algorithm-enforcing barrier implementation. It is nil
+	// unless explicitly configured via WithCryptoBarrier, and no code path
+	// in this story reads or requires it — existing callers that never
+	// provide one continue to behave identically.
+	cryptoBarrier CryptoBarrier
 }
 
-func NewLockManager(useCache bool, cacheSize int) (*LockManager, error) {
+// LockManagerOption configures optional LockManager behavior via the
+// functional options pattern.
+type LockManagerOption func(*LockManager)
+
+// WithCryptoBarrier wires an optional CryptoBarrier into the LockManager.
+// This is a dependency-injection point for FIPS Phase 2 barrier algorithm
+// enforcement: once configured, downstream code can retrieve it via
+// GetCryptoBarrier and delegate barrier-level operations to it instead of
+// operating on transit keys directly. Passing a nil CryptoBarrier (or
+// omitting this option entirely) leaves the LockManager's existing,
+// barrier-independent behavior unchanged.
+func WithCryptoBarrier(cb CryptoBarrier) LockManagerOption {
+	return func(lm *LockManager) {
+		lm.cryptoBarrier = cb
+	}
+}
+
+func NewLockManager(useCache bool, cacheSize int, opts ...LockManagerOption) (*LockManager, error) {
 	// determine the type of cache to create
 	var cache Cache
 	switch {
@@ -113,7 +139,19 @@ func NewLockManager(useCache bool, cacheSize int) (*LockManager, error) {
 		keyLocks: locksutil.CreateLocks(),
 	}
 
+	for _, opt := range opts {
+		opt(lm)
+	}
+
 	return lm, nil
+}
+
+// GetCryptoBarrier returns the CryptoBarrier configured on this
+// LockManager via WithCryptoBarrier, or nil if none was configured. This
+// enables downstream FIPS Phase 2 enforcement code to detect and use a
+// barrier dependency without requiring every LockManager to have one.
+func (lm *LockManager) GetCryptoBarrier() CryptoBarrier {
+	return lm.cryptoBarrier
 }
 
 func (lm *LockManager) GetCacheSize() int {
