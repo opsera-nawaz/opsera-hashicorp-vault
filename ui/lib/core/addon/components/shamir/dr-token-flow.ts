@@ -8,6 +8,13 @@ import { action } from '@ember/object';
 import { service } from '@ember/service';
 import ShamirFlowComponent from './flow';
 
+import type ApiService from 'vault/services/api';
+import type { ShamirRequestData, ShamirFlowArgs, ShamirAttemptResponse } from './flow';
+
+interface ShamirDrTokenFlowArgs extends ShamirFlowArgs {
+  onCancel?: () => void;
+}
+
 /**
  * @module ShamirDrTokenFlowComponent
  * ShamirDrTokenFlow is an extension of the ShamirFlow component that does the Generate Action Token workflow inside of a Modal.
@@ -20,22 +27,22 @@ import ShamirFlowComponent from './flow';
  * @param {string} action - required kebab-case-string which refers to an action within the cluster adapter
  * @param {function} onCancel - if provided, function will be triggered on Cancel
  */
-export default class ShamirDrTokenFlowComponent extends ShamirFlowComponent {
-  @service api;
+export default class ShamirDrTokenFlowComponent extends ShamirFlowComponent<ShamirDrTokenFlowArgs> {
+  @service declare readonly api: ApiService;
 
   @tracked generateWithPGP = false; // controls which form shows
-  @tracked savedPgpKey = null;
+  @tracked savedPgpKey: string | null = null;
   @tracked otp = '';
   @tracked askForPrimaryToken = false; // controls whether to show primary token input
-  @tracked primaryRootToken = null; // stores the primary root token
+  @tracked primaryRootToken: string | null = null; // stores the primary root token
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: ShamirDrTokenFlowArgs) {
+    super(owner, args);
     // Don't fetch status on init - we'll check it after the user provides the primary token
     // Fetching status here would start an unauthenticated generation attempt
   }
 
-  reset() {
+  reset(): void {
     this.generateWithPGP = false;
     this.savedPgpKey = null;
     this.otp = '';
@@ -47,19 +54,19 @@ export default class ShamirDrTokenFlowComponent extends ShamirFlowComponent {
   }
 
   // Values calculated from the attempt response
-  get encodedToken() {
+  get encodedToken(): string | undefined {
     return this.attemptResponse?.encoded_token;
   }
-  get started() {
+  get started(): boolean | undefined {
     return this.attemptResponse?.started;
   }
-  get nonce() {
+  get nonce(): string | undefined {
     return this.attemptResponse?.nonce;
   }
-  get progress() {
+  get progress(): number | undefined {
     return this.attemptResponse?.progress;
   }
-  get threshold() {
+  get threshold(): number | undefined {
     return this.attemptResponse?.required;
   }
   get pgpText() {
@@ -70,7 +77,7 @@ export default class ShamirDrTokenFlowComponent extends ShamirFlowComponent {
   }
 
   // Methods which override those in Shamir/Flow
-  extractData(data) {
+  extractData(data: ShamirRequestData): ShamirRequestData {
     if (this.started) {
       if (this.nonce) {
         data.nonce = this.nonce;
@@ -88,19 +95,19 @@ export default class ShamirDrTokenFlowComponent extends ShamirFlowComponent {
     };
   }
 
-  updateProgress(response) {
-    if (response.otp) {
+  updateProgress(response: ShamirAttemptResponse | undefined): void {
+    if (response?.otp) {
       // OTP is sticky -- once we get one we don't want to remove it
       // even if the current response doesn't include one.
       // See PR #5818
       this.otp = response.otp;
     }
-    this.attemptResponse = response;
+    this.attemptResponse = response ?? null;
     return;
   }
 
   @action
-  usePgpKey(keyfile) {
+  usePgpKey(keyfile: string): void {
     this.savedPgpKey = keyfile;
     // Don't start generation yet - show primary token form first
     this.generateWithPGP = false;
@@ -108,25 +115,25 @@ export default class ShamirDrTokenFlowComponent extends ShamirFlowComponent {
   }
 
   @action
-  onSubmitKey(data) {
+  onSubmitKey(data: ShamirRequestData): void {
     // Override parent to pass primaryToken
-    this.attemptProgress(this.extractData(data), this.primaryRootToken);
+    this.attemptProgress(this.extractData(data), this.primaryRootToken ?? undefined);
   }
 
   @action
-  startGenerate(evt) {
+  startGenerate(evt: Event): void {
     evt.preventDefault();
     // Show the primary token input form first
     this.askForPrimaryToken = true;
   }
 
   @action
-  updatePrimaryRootToken(evt) {
-    this.primaryRootToken = evt.target.value;
+  updatePrimaryRootToken(evt: Event): void {
+    this.primaryRootToken = (evt.target as HTMLInputElement).value;
   }
 
   @action
-  async validatePrimaryRootToken() {
+  async validatePrimaryRootToken(): Promise<void> {
     if (!this.primaryRootToken) {
       this.errors = ['Primary root token is required'];
       return;
@@ -151,16 +158,17 @@ export default class ShamirDrTokenFlowComponent extends ShamirFlowComponent {
       // Only hide the primary token form if there were no errors
       this.askForPrimaryToken = false;
     } catch (e) {
-      if (e.httpStatus === 403) {
+      const err = e as { httpStatus?: number; message?: string };
+      if (err.httpStatus === 403) {
         this.errors = ['Invalid primary root token. Please check the token and try again.'];
       } else {
-        this.errors = [e.message || 'An error occurred while validating the token'];
+        this.errors = [err.message || 'An error occurred while validating the token'];
       }
     }
   }
 
   @action
-  backToPgpForm() {
+  backToPgpForm(): void {
     // Go back to PGP form and clear the saved PGP key
     this.askForPrimaryToken = false;
     this.generateWithPGP = true;
@@ -169,7 +177,7 @@ export default class ShamirDrTokenFlowComponent extends ShamirFlowComponent {
   }
 
   @action
-  async onCancelClose() {
+  async onCancelClose(): Promise<void> {
     if (!this.encodedToken && this.started) {
       // if primaryRootToken is not defined then make unauthenticated request
       const headers = this.api.buildHeaders({ token: this.primaryRootToken || '' });
