@@ -38,24 +38,31 @@ import { pluralize } from 'ember-inflector';
  * empty set.
  *
  */
-export default class ListView extends Component {
-  get itemNoun() {
+interface ListViewArgs {
+  items?: unknown[] | null;
+  itemNoun?: string;
+  message?: string | null;
+  paginationRouteName?: string;
+}
+
+export default class ListView extends Component<ListViewArgs> {
+  get itemNoun(): string {
     return this.args.itemNoun || 'item';
   }
 
-  get emptyTitle() {
+  get emptyTitle(): string {
     const items = pluralize(this.itemNoun);
     return `No ${items} yet`;
   }
 
-  get emptyMessage() {
+  get emptyMessage(): string {
     const items = pluralize(this.itemNoun);
     return `Your ${items} will be listed here. Add your first ${this.itemNoun} to get started.`;
   }
 
   // callback from HDS pagination to set the queryParams page
   get paginationQueryParams() {
-    return (page) => {
+    return (page: number) => {
       return {
         page,
       };

@@ -5,6 +5,11 @@
 
 import Component from '@glimmer/component';
 
+export interface ExternalLinkArgs {
+  href?: string;
+  sameTab?: boolean;
+}
+
 /**
  * @deprecated
  * @module ExternalLink
@@ -20,8 +25,10 @@ import Component from '@glimmer/component';
  * @param {boolean} [sameTab=false] - by default, these links open in new tab. To override, pass @sameTab={{true}}
  *
  */
-export default class ExternalLinkComponent extends Component {
-  get href() {
+export default class ExternalLinkComponent<
+  Args extends ExternalLinkArgs = ExternalLinkArgs,
+> extends Component<Args> {
+  get href(): string | undefined {
     return this.args.href;
   }
 }

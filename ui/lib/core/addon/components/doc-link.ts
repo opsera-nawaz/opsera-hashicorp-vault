@@ -3,7 +3,11 @@
  * SPDX-License-Identifier: BUSL-1.1
  */
 
-import ExternalLink from './external-link';
+import ExternalLink, { type ExternalLinkArgs } from './external-link';
+
+interface DocLinkArgs extends ExternalLinkArgs {
+  path?: string;
+}
 
 /**
  * @deprecated
@@ -19,10 +23,10 @@ import ExternalLink from './external-link';
  * @param {string} path=/ - The path to documentation on developer.hashicorp.com that the component should link to.
  *
  */
-export default class DocLinkComponent extends ExternalLink {
+export default class DocLinkComponent extends ExternalLink<DocLinkArgs> {
   host = 'https://developer.hashicorp.com';
 
-  get href() {
+  get href(): string {
     return `${this.host}${this.args.path}`;
   }
 }

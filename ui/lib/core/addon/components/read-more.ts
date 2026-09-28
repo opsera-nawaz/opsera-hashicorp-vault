@@ -25,8 +25,10 @@ import { tracked } from '@glimmer/tracking';
 
 export default class ReadMoreComponent extends Component {
   @action
-  calculateOverflow(e) {
-    const spanText = e.querySelector('.description-block');
+  calculateOverflow(e: HTMLElement): void {
+    // non-null: preserves original behavior of trusting '.description-block'
+    // always exists in this component's own template
+    const spanText = e.querySelector<HTMLElement>('.description-block')!;
     if (spanText.offsetWidth > e.offsetWidth) {
       this.hasOverflow = true;
     }

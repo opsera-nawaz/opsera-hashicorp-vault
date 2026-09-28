@@ -24,8 +24,17 @@ import Component from '@glimmer/component';
  *
  */
 
-export default class FormSaveButtons extends Component {
-  get cancelLink() {
+interface FormSaveButtonsArgs {
+  saveButtonText?: string;
+  cancelButtonText?: string;
+  isSaving?: boolean;
+  cancelLinkParams?: unknown[];
+  onCancel?: () => void;
+  includeBox?: boolean;
+}
+
+export default class FormSaveButtons extends Component<FormSaveButtonsArgs> {
+  get cancelLink(): { route: unknown; models: unknown[] } | null {
     const { cancelLinkParams } = this.args;
     if (!Array.isArray(cancelLinkParams) || !cancelLinkParams.length) return null;
     const [route, ...models] = cancelLinkParams;

@@ -18,8 +18,16 @@ import Component from '@glimmer/component';
  * @param {boolean} [showHelpText] - Passed through to formField.
  * @param {string} [groupName=fieldGroups] - option to override key on the model where groups are located
  */
-export default class FormFieldGroupsLoopComponent extends Component {
-  get fieldGroups() {
+interface FormFieldGroupsLoopArgs {
+  model: object;
+  mode: string;
+  modelValidations?: unknown;
+  showHelpText?: boolean;
+  groupName?: string;
+}
+
+export default class FormFieldGroupsLoopComponent extends Component<FormFieldGroupsLoopArgs> {
+  get fieldGroups(): string {
     return this.args.groupName || 'fieldGroups';
   }
 }

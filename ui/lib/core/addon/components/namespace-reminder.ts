@@ -6,6 +6,13 @@
 import Component from '@glimmer/component';
 import { service } from '@ember/service';
 
+import type NamespaceService from 'vault/services/namespace';
+
+interface NamespaceReminderArgs {
+  noun: string;
+  mode?: string;
+}
+
 /**
  * @module NamespaceReminder
  * Renders a namespace reminder, typically used when creating a new item.
@@ -22,18 +29,18 @@ import { service } from '@ember/service';
  * @param {string} noun - item being created by form
  * @param {string} [mode=edit] - action happening in form
  */
-export default class NamespaceReminder extends Component {
-  @service namespace;
+export default class NamespaceReminder extends Component<NamespaceReminderArgs> {
+  @service declare readonly namespace: NamespaceService;
 
-  get showMessage() {
+  get showMessage(): boolean {
     return !this.namespace.inRootNamespace;
   }
 
-  get mode() {
+  get mode(): string {
     return this.args.mode || 'edit';
   }
 
-  get modeVerb() {
+  get modeVerb(): string {
     if (!this.mode) {
       return '';
     }

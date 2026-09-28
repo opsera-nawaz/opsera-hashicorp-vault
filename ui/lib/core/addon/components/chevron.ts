@@ -22,8 +22,13 @@ const DIRECTIONS = ['right', 'left', 'up', 'down'];
  *
  */
 
-export default class Chevron extends Component {
-  get direction() {
+interface ChevronArgs {
+  direction?: string;
+  isButton?: boolean;
+}
+
+export default class Chevron extends Component<ChevronArgs> {
+  get direction(): string {
     return this.args.direction || 'right';
   }
 

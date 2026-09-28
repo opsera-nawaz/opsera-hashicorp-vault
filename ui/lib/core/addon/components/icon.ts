@@ -21,9 +21,14 @@ import { assert } from '@ember/debug';
  *
  */
 
+interface IconArgs {
+  name: string;
+  size?: string;
+}
+
 // TODO - deprecate and remove this after migrating all `<Icon />` instances to `<Hds::Icon />`
-export default class IconComponent extends Component {
-  constructor(owner, args) {
+export default class IconComponent extends Component<IconArgs> {
+  constructor(owner: unknown, args: IconArgs) {
     super(owner, args);
 
     const { name, size = '16' } = args;

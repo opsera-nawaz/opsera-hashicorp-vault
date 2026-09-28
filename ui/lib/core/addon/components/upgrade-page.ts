@@ -12,15 +12,20 @@ import Component from '@glimmer/component';
  *
  */
 
-export default class UpgradePage extends Component {
-  get minimumEdition() {
+interface UpgradePageArgs {
+  title?: string;
+  minimumEdition?: string;
+}
+
+export default class UpgradePage extends Component<UpgradePageArgs> {
+  get minimumEdition(): string {
     return this.args.minimumEdition || 'Vault Enterprise';
   }
-  get title() {
+  get title(): string {
     return this.args.title || 'Vault Enterprise';
   }
 
-  get featureName() {
+  get featureName(): string {
     return this.title === 'Vault Enterprise' ? 'this feature' : this.title;
   }
 }

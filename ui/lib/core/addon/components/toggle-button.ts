@@ -24,11 +24,18 @@ import Component from '@glimmer/component';
  * @param {string} [openLabel=Hide options] - The message to display when the toggle is open.
  * @param {string} [closedLabel=More options] - The message to display when the toggle is closed.
  */
-export default class ToggleButtonComponent extends Component {
-  get openLabel() {
+interface ToggleButtonArgs {
+  isOpen: boolean;
+  onClick: () => void;
+  openLabel?: string;
+  closedLabel?: string;
+}
+
+export default class ToggleButtonComponent extends Component<ToggleButtonArgs> {
+  get openLabel(): string {
     return this.args.openLabel || 'Hide options';
   }
-  get closedLabel() {
+  get closedLabel(): string {
     return this.args.closedLabel || 'More options';
   }
 }

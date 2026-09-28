@@ -28,8 +28,18 @@ import Component from '@glimmer/component';
  * @param {string} [buttonText=Confirm] - Button text on the confirm button
  */
 
-export default class ConfirmationModal extends Component {
-  get confirmText() {
+interface ConfirmationModalArgs {
+  onConfirm: () => void;
+  onClose: () => void;
+  isActive: boolean;
+  title: string;
+  confirmText?: string;
+  toConfirmMsg?: string;
+  buttonText?: string;
+}
+
+export default class ConfirmationModal extends Component<ConfirmationModalArgs> {
+  get confirmText(): string {
     return this.args.confirmText || 'Yes';
   }
 }
