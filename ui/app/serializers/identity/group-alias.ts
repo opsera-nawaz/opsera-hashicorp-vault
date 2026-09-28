@@ -4,4 +4,5 @@
  */
 
 import IdentitySerializer from './_base';
-export default IdentitySerializer.extend();
+
+export default class GroupAliasSerializer extends IdentitySerializer {}
