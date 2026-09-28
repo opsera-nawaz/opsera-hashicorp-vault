@@ -7,15 +7,17 @@ import Component from '@glimmer/component';
 import { cached } from '@glimmer/tracking';
 import { OrdersOrderRouteModel } from 'pki/routes/external/orders/order';
 
+import type { ChallengeStatusName } from 'pki/helpers/map-status-badge';
+
 interface Challenge {
-  challenge_status: string;
+  challenge_status: ChallengeStatusName;
   challenge_type: string;
   expires: string;
   requires_manual_fulfillment: 'true' | 'false'; // yes this is a boolean as a string, also not currently rendered
 }
 
 interface ChallengeRow {
-  challenge_status: string;
+  challenge_status: ChallengeStatusName;
   challenge_type: string;
   expires: string;
   requires_manual_fulfillment: string;
@@ -23,7 +25,7 @@ interface ChallengeRow {
 
 interface IdentifierRow {
   identifier: string;
-  challenge_status: string;
+  challenge_status: ChallengeStatusName;
   challenge_type: string;
   isOpen: boolean;
   children: ChallengeRow[];
@@ -103,7 +105,7 @@ export default class ExternalPkiOrderCertDetailsComponent extends Component<Args
 
   // Returns 'valid' if any challenge is valid, 'invalid' only if the order errored and
   // an invalid challenge exists, otherwise 'pending'.
-  computeChallengeStatus = (challenges: Challenge[]): string => {
+  computeChallengeStatus = (challenges: Challenge[]): ChallengeStatusName => {
     if (challenges.some((c) => c.challenge_status === 'valid')) {
       return 'valid';
     }

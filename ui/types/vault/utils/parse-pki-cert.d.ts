@@ -34,3 +34,9 @@ interface ParsedCertificateData {
   ttl: Duration;
 }
 export function parseCertificate(certificateContent: string): ParsedCertificateData;
+
+// Verifies certA/certB chain to (are signed by) each other; pass the same certificate as both
+// arguments to check if it is self-signed (i.e. a root certificate). When `leaf` is provided,
+// verifies that both certA and certB signed leaf and that their subjects match leaf's issuer,
+// used to confirm a cross-sign completed correctly.
+export function verifyCertificates(certA: string, certB: string, leaf?: string): Promise<boolean>;
