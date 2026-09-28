@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -1230,4 +1231,122 @@ func TestHandler_JSONLimitQuotaWrappers(t *testing.T) {
 			require.NotNil(t, resp)
 		})
 	}
+}
+
+// TestHandlerRegistry_SealEndpoints verifies that the seal-lifecycle
+// endpoints (sys/seal, sys/unseal, sys/seal-status, sys/seal-backend-status,
+// sys/step-down) work the same way when served through a HandlerRegistry as
+// they do through the direct mux.Handle wiring in handlerWithSettings, and
+// that the registry's declarative metadata reflects the intended
+// authorization boundary for each one. sys/unseal in particular must remain
+// reachable without authentication: the vault is sealed when it is called,
+// so there is no unsealed token store to validate a token against.
+func TestHandlerRegistry_SealEndpoints(t *testing.T) {
+	core := vault.TestCore(t)
+	keys, _ := vault.TestCoreInit(t, core)
+
+	registrations := []HandlerRegistration{
+		{
+			Path:          "/v1/sys/seal-status",
+			Methods:       []string{http.MethodGet},
+			AuthRequired:  false,
+			FIPSSensitive: false,
+			Handler:       handleSysSealStatus(core),
+		},
+		{
+			Path:          "/v1/sys/seal-backend-status",
+			Methods:       []string{http.MethodGet},
+			AuthRequired:  false,
+			FIPSSensitive: false,
+			Handler:       handleSysSealBackendStatus(core),
+		},
+		{
+			Path:          "/v1/sys/seal",
+			Methods:       []string{http.MethodPut, http.MethodPost},
+			AuthRequired:  true,
+			FIPSSensitive: true,
+			Handler:       handleSysSeal(core),
+		},
+		{
+			Path:          "/v1/sys/step-down",
+			Methods:       []string{http.MethodPut, http.MethodPost},
+			AuthRequired:  true,
+			FIPSSensitive: false,
+			Handler:       handleRequestForwarding(core, handleSysStepDown(core)),
+		},
+		{
+			Path:          "/v1/sys/unseal",
+			Methods:       []string{http.MethodPut, http.MethodPost},
+			AuthRequired:  false,
+			FIPSSensitive: true,
+			Handler:       handleSysUnseal(core),
+		},
+	}
+
+	registry := NewHandlerRegistry()
+	for _, reg := range registrations {
+		require.NoError(t, registry.Register(reg))
+	}
+
+	props := &vault.HandlerProperties{
+		Core:           core,
+		ListenerConfig: &configutil.Listener{},
+	}
+	built := registry.Build(props)
+	require.NotNil(t, built)
+
+	srv := httptest.NewServer(built)
+	defer srv.Close()
+
+	// (1) GET /v1/sys/seal-status must return seal status without any
+	// Authorization header, matching AuthRequired=false.
+	statusResp, err := http.Get(srv.URL + "/v1/sys/seal-status")
+	require.NoError(t, err)
+	defer statusResp.Body.Close()
+	require.Equal(t, http.StatusOK, statusResp.StatusCode)
+
+	var status map[string]interface{}
+	require.NoError(t, json.NewDecoder(statusResp.Body).Decode(&status))
+	require.Equal(t, true, status["sealed"], "vault should still be sealed before any unseal key is supplied")
+
+	// (2) PUT /v1/sys/unseal must accept a valid unseal key without any
+	// Authorization header, matching AuthRequired=false, and progress the
+	// vault towards unsealed.
+	for _, key := range keys {
+		body, err := json.Marshal(map[string]interface{}{
+			"key": hex.EncodeToString(key),
+		})
+		require.NoError(t, err)
+
+		req, err := http.NewRequest(http.MethodPut, srv.URL+"/v1/sys/unseal", bytes.NewReader(body))
+		require.NoError(t, err)
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		resp.Body.Close()
+	}
+	require.False(t, core.Sealed(), "vault should be unsealed after supplying all keys via the registry-served endpoint")
+
+	// (3) Inventory() must report every seal-lifecycle registration with
+	// the AuthRequired and FIPSSensitive metadata declared above, so the
+	// authorization boundary is auditable without inspecting handler code.
+	inventory := registry.Inventory()
+	require.Len(t, inventory, len(registrations))
+
+	type metadata struct {
+		authRequired  bool
+		fipsSensitive bool
+	}
+	got := make(map[string]metadata, len(inventory))
+	for _, reg := range inventory {
+		got[reg.Path] = metadata{authRequired: reg.AuthRequired, fipsSensitive: reg.FIPSSensitive}
+	}
+	require.Equal(t, map[string]metadata{
+		"/v1/sys/seal-status":         {authRequired: false, fipsSensitive: false},
+		"/v1/sys/seal-backend-status": {authRequired: false, fipsSensitive: false},
+		"/v1/sys/seal":                {authRequired: true, fipsSensitive: true},
+		"/v1/sys/step-down":           {authRequired: true, fipsSensitive: false},
+		"/v1/sys/unseal":              {authRequired: false, fipsSensitive: true},
+	}, got)
 }
