@@ -26,25 +26,37 @@ import { assert } from '@ember/debug';
  * @param {string} [backend] - To specify which backend to point the link to.
  * @param {boolean} [doNotTruncate=false] - Determines whether to show the View all "roles" link. Otherwise uses the ReadMore component's "See More" toggle
  */
-export default class InfoTableItemArray extends Component {
-  constructor() {
-    super(...arguments);
-    assert('@label is required for InfoTableItemArray components', this.args.label);
+interface InfoTableItemArrayArgs {
+  label: string;
+  displayArray?: unknown[];
+  isLink?: boolean;
+  rootRoute?: string | string[];
+  itemRoute?: string | string[];
+  arrayOptions?: unknown[];
+  wildcardLabel?: string;
+  backend?: string;
+  doNotTruncate?: boolean;
+}
+
+export default class InfoTableItemArray extends Component<InfoTableItemArrayArgs> {
+  constructor(owner: unknown, args: InfoTableItemArrayArgs) {
+    super(owner, args);
+    assert('@label is required for InfoTableItemArray components', !!this.args.label);
   }
 
-  get rootRoute() {
+  get rootRoute(): string | string[] {
     return this.args.rootRoute || 'vault.cluster.secrets.backend.list-root';
   }
 
-  get itemRoute() {
+  get itemRoute(): string | string[] {
     return this.args.itemRoute || 'vault.cluster.secrets.backend.show';
   }
 
-  get doNotTruncate() {
+  get doNotTruncate(): boolean {
     return this.args.doNotTruncate || false;
   }
 
-  get displayArrayTruncated() {
+  get displayArrayTruncated(): unknown[] | null {
     const { displayArray } = this.args;
     if (!displayArray) return null;
     if (displayArray.length >= 10 && !this.args.doNotTruncate) {
@@ -54,7 +66,7 @@ export default class InfoTableItemArray extends Component {
     return displayArray;
   }
 
-  get wildcardLabel() {
+  get wildcardLabel(): string {
     return this.args.wildcardLabel || '';
   }
 }

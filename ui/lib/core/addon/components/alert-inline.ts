@@ -30,11 +30,17 @@ import { assert } from '@ember/debug';
  * @param {string} message - The message to display within the alert.
  */
 
-export default class AlertInlineComponent extends Component {
+interface AlertInlineArgs {
+  type?: string;
+  color?: string;
+  message?: string;
+}
+
+export default class AlertInlineComponent extends Component<AlertInlineArgs> {
   @tracked isRefreshing = false;
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: AlertInlineArgs) {
+    super(owner, args);
     assert('@type arg is deprecated, pass @color="critical" instead', this.args.type !== 'critical');
     if (this.args.color) {
       const possibleColors = ['critical', 'warning', 'success', 'highlight', 'neutral'];
@@ -45,7 +51,7 @@ export default class AlertInlineComponent extends Component {
     }
   }
 
-  get color() {
+  get color(): string {
     if (this.args.color) return this.args.color;
     // @type arg is deprecated, this is for backward compatibility of old implementation
     switch (this.args.type) {

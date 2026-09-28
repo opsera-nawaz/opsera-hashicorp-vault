@@ -25,27 +25,39 @@ import Component from '@glimmer/component';
 import { tracked } from '@glimmer/tracking';
 import { service } from '@ember/service';
 
-export default class SecretListHeaderTab extends Component {
-  @service capabilities;
+import type CapabilitiesService from 'vault/services/capabilities';
+import type { PATH_MAP } from 'vault/utils/constants/capabilities';
 
-  @tracked dontShowTab;
+interface SecretListHeaderTabArgs {
+  displayName?: string;
+  id?: string;
+  path?: string;
+  label: string;
+  tab?: string;
+  link?: string;
+}
 
-  constructor() {
-    super(...arguments);
+export default class SecretListHeaderTab extends Component<SecretListHeaderTabArgs> {
+  @service declare readonly capabilities: CapabilitiesService;
+
+  @tracked dontShowTab?: boolean;
+
+  constructor(owner: unknown, args: SecretListHeaderTabArgs) {
+    super(owner, args);
     this.fetchCapabilities();
   }
 
-  pathQuery(backend, path) {
+  pathQuery(backend: string | undefined, path: string | undefined) {
     return {
       id: `${backend}/${path}/`,
     };
   }
 
-  async fetchCapabilities() {
+  async fetchCapabilities(): Promise<void> {
     // For now only check capabilities for the Database Secrets Engine
     if (this.args.displayName === 'Database') {
       const { path, id: backend } = this.args;
-      const pathKey = path === 'config' ? 'databaseConfig' : 'databaseRoles';
+      const pathKey: keyof typeof PATH_MAP = path === 'config' ? 'databaseConfig' : 'databaseRoles';
       const { canList, canCreate, canUpdate } = await this.capabilities.for(pathKey, { backend });
       this.dontShowTab = !canList && !canCreate && !canUpdate;
     }
