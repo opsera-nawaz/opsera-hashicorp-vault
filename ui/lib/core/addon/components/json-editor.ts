@@ -7,6 +7,23 @@ import Component from '@glimmer/component';
 import { action } from '@ember/object';
 import { assert } from '@ember/debug';
 
+import type { EditorView } from '@codemirror/view';
+
+interface JsonEditorArgs {
+  title?: string;
+  value?: string;
+  valueUpdated?: (value: string | null) => void;
+  onBlur?: () => void;
+  helpText?: string;
+  extraKeys?: Record<string, unknown>;
+  mode?: string;
+  readOnly?: boolean;
+  example?: string;
+  onSetup?: (editor: EditorView) => void;
+  onRestoreExample?: () => void;
+  showToolbar?: boolean;
+}
+
 /**
  * @module JsonEditor
  *
@@ -28,47 +45,47 @@ import { assert } from '@ember/debug';
  *
  */
 
-export default class JsonEditorComponent extends Component {
-  _codemirrorEditor = null;
+export default class JsonEditorComponent extends Component<JsonEditorArgs> {
+  _codemirrorEditor: EditorView | null = null;
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: JsonEditorArgs) {
+    super(owner, args);
 
     const hasValueUpdated = !this.args.readOnly ? !!this.args.valueUpdated : true;
     assert('@valueUpdated callback is required when component is not @readOnly', hasValueUpdated);
   }
 
-  get mode() {
+  get mode(): string {
     return this.args.mode ?? 'json';
   }
 
-  get getShowToolbar() {
+  get getShowToolbar(): boolean {
     return this.args.showToolbar ?? true;
   }
 
-  get ariaLabel() {
+  get ariaLabel(): string {
     return this.args.title ?? 'JSON Editor';
   }
 
-  get cspNonce() {
+  get cspNonce(): string | null {
     // Read the CSP nonce from the meta tag injected by the server
     const metaTag = document.querySelector('meta[name="csp-nonce"]');
     return metaTag ? metaTag.getAttribute('content') : null;
   }
 
   @action
-  onSetup(editor) {
+  onSetup(editor: EditorView): void {
     this._codemirrorEditor = editor;
 
     this.args.onSetup?.(editor);
   }
 
   @action
-  restoreExample() {
+  restoreExample(): void {
     if (this.args.onRestoreExample) {
       // Override to reset the @value of the code editor to something other than `null`
       this.args.onRestoreExample();
-    } else {
+    } else if (this._codemirrorEditor) {
       // Display @example in the editor but reset @value to `null` because
       // sometimes @example is not valid to set and submit as the actual input value.
       this._codemirrorEditor.dispatch({
@@ -80,7 +97,7 @@ export default class JsonEditorComponent extends Component {
           },
         ],
       });
-      this.args.valueUpdated(null);
+      this.args.valueUpdated?.(null);
     }
   }
 }
