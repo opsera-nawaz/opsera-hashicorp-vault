@@ -21,17 +21,27 @@ import Component from '@glimmer/component';
  * @param {Object} replicationDetails=null - An Ember data object computed off the Ember Model.  It combines the Model.dr and Model.performance objects into one and contains details specific to the mode replication.
  */
 
-export default class ReplicationSummaryCard extends Component {
-  get key() {
+interface ReplicationSummaryCardArgs {
+  title?: string;
+  replicationDetails?: Record<string, unknown>;
+}
+
+export default class ReplicationSummaryCard extends Component<ReplicationSummaryCardArgs> {
+  get key(): 'performance' | 'dr' {
     return this.args.title === 'Performance' ? 'performance' : 'dr';
   }
-  get lastWAL() {
-    return get(this.args.replicationDetails, `${this.key}.lastWAL`) || 0;
+  get lastWAL(): unknown {
+    return get(this.args.replicationDetails as Record<string, unknown>, `${this.key}.lastWAL`) || 0;
   }
-  get merkleRoot() {
-    return get(this.args.replicationDetails, `${this.key}.merkleRoot`) || 'no hash found';
+  get merkleRoot(): unknown {
+    return (
+      get(this.args.replicationDetails as Record<string, unknown>, `${this.key}.merkleRoot`) ||
+      'no hash found'
+    );
   }
-  get knownSecondariesCount() {
-    return get(this.args.replicationDetails, `${this.key}.knownSecondaries.length`) || 0;
+  get knownSecondariesCount(): unknown {
+    return (
+      get(this.args.replicationDetails as Record<string, unknown>, `${this.key}.knownSecondaries.length`) || 0
+    );
   }
 }

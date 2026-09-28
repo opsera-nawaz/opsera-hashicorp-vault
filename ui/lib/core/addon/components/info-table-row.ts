@@ -37,21 +37,42 @@ import { action } from '@ember/object';
  * @param {boolean} [doNotTruncate=false] - Passed through to InfoTableItemArray to disable truncation and use ReadMore instead.
  */
 
-export default class InfoTableRowComponent extends Component {
+interface InfoTableRowArgs {
+  label?: string;
+  helperText?: string;
+  value?: unknown;
+  alwaysRender?: boolean;
+  truncateValue?: boolean;
+  defaultShown?: string;
+  tooltipText?: string;
+  formatDate?: string;
+  formatTtl?: boolean;
+  type?: string;
+  isLink?: boolean;
+  queryParam?: string;
+  arrayOptions?: unknown[];
+  wildcardLabel?: string;
+  backend?: string;
+  rootRoute?: string | unknown[];
+  itemRoute?: string | unknown[];
+  doNotTruncate?: boolean;
+}
+
+export default class InfoTableRowComponent extends Component<InfoTableRowArgs> {
   @tracked
   hasLabelOverflow = false; // is calculated and set in didInsertElement
 
-  get isVisible() {
-    return this.args.alwaysRender || !this.valueIsEmpty;
+  get isVisible(): boolean {
+    return !!this.args.alwaysRender || !this.valueIsEmpty;
   }
 
-  get valueIsBoolean() {
+  get valueIsBoolean(): boolean {
     return typeOf(this.args.value) === 'boolean';
   }
 
-  get valueIsEmpty() {
+  get valueIsEmpty(): boolean {
     const { value } = this.args;
-    if (typeOf(value) === 'array' && value.length === 0) {
+    if (typeOf(value) === 'array' && (value as unknown[]).length === 0) {
       return true;
     }
     switch (value) {
@@ -67,9 +88,9 @@ export default class InfoTableRowComponent extends Component {
   }
 
   @action
-  calculateLabelOverflow(el) {
+  calculateLabelOverflow(el: HTMLElement): void {
     const labelDiv = el;
-    const labelText = el.querySelector('.is-label');
+    const labelText = el.querySelector<HTMLElement>('.is-label');
     if (labelDiv && labelText) {
       if (labelText.offsetWidth > labelDiv.offsetWidth) {
         this.hasLabelOverflow = true;

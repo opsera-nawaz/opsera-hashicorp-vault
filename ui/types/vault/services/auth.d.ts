@@ -39,6 +39,9 @@ export default class AuthService extends Service {
   authData: AuthData;
   currentToken: string;
   mfaErrors: null | Errors[];
+  isRenewing: boolean;
+  renew(): Promise<unknown>;
+  revokeCurrentToken(): Promise<unknown>;
   setLastFetch: (time: number) => void;
   authSuccess(clusterId: string, authData: NormalizedAuthData): Promise<AuthSuccessResponse>;
   ajax: (

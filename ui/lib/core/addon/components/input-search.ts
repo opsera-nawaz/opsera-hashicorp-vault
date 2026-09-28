@@ -22,7 +22,17 @@ import { tracked } from '@glimmer/tracking';
  * @param {string} [subtext] - displays below the label
  */
 
-export default class InputSearch extends Component {
+interface InputSearchArgs {
+  id?: string;
+  initialValue?: string;
+  changeEvent?: string;
+  placeholder?: string;
+  label?: string;
+  subtext?: string;
+  onChange: (value: string) => void;
+}
+
+export default class InputSearch extends Component<InputSearchArgs> {
   /*
    * @public
    * @param Function
@@ -32,13 +42,13 @@ export default class InputSearch extends Component {
    */
   @tracked searchInput = '';
 
-  constructor() {
-    super(...arguments);
-    this.searchInput = this.args?.initialValue;
+  constructor(owner: unknown, args: InputSearchArgs) {
+    super(owner, args);
+    this.searchInput = args?.initialValue ?? '';
   }
 
   @action
-  inputChanged(event) {
-    this.args.onChange(event.target.value);
+  inputChanged(event: Event): void {
+    this.args.onChange((event.target as HTMLInputElement).value);
   }
 }

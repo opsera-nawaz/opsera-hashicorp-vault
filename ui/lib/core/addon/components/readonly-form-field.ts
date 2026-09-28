@@ -18,8 +18,18 @@ import Component from '@glimmer/component';
 import { capitalize, dasherize } from '@ember/string';
 import { humanize } from 'vault/helpers/humanize';
 
-export default class ReadonlyFormField extends Component {
-  get labelString() {
+interface AttrMeta {
+  name?: string;
+  options?: { label?: string };
+}
+
+interface ReadonlyFormFieldArgs {
+  attr?: AttrMeta;
+  value?: unknown;
+}
+
+export default class ReadonlyFormField extends Component<ReadonlyFormFieldArgs> {
+  get labelString(): string {
     if (!this.args.attr) {
       return '';
     }

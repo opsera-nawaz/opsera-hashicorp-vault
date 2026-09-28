@@ -7,6 +7,16 @@ import Component from '@glimmer/component';
 import { action } from '@ember/object';
 import { service } from '@ember/service';
 
+import type FlashMessageService from 'vault/services/flash-messages';
+
+interface CopySecretDropdownArgs {
+  clipboardText: string;
+  onWrap?: () => void;
+  isWrapping?: boolean;
+  wrappedData?: string;
+  onClose?: () => void;
+}
+
 /**
  * @module CopySecretDropdown
  * Renders the toolbar "Copy" menu for a secret. @onWrap is recommended to be a
@@ -18,11 +28,11 @@ import { service } from '@ember/service';
  * @param {string} wrappedData - when present, replaces the wrap item with the wrapped token
  * @param {function} onClose - fires when the dropdown closes
  */
-export default class CopySecretDropdown extends Component {
-  @service flashMessages;
+export default class CopySecretDropdown extends Component<CopySecretDropdownArgs> {
+  @service declare readonly flashMessages: FlashMessageService;
 
   @action
-  async copyJson(close) {
+  async copyJson(close: () => void): Promise<void> {
     try {
       await navigator.clipboard.writeText(this.args.clipboardText);
       this.flashMessages.success('JSON copied!');

@@ -9,10 +9,14 @@ import { later } from '@ember/runloop';
 import { action } from '@ember/object';
 import { tracked } from '@glimmer/tracking';
 
+import type AuthService from 'vault/services/auth';
+import type CurrentClusterService from 'vault/services/current-cluster';
+import type RouterService from '@ember/routing/router-service';
+
 export default class SidebarUserMenuComponent extends Component {
-  @service auth;
-  @service currentCluster;
-  @service router;
+  @service declare readonly auth: AuthService;
+  @service declare readonly currentCluster: CurrentClusterService;
+  @service declare readonly router: RouterService;
 
   @tracked fakeRenew = false;
   @tracked showRevokeModal = false;
@@ -30,8 +34,8 @@ export default class SidebarUserMenuComponent extends Component {
     return this.fakeRenew || this.auth.isRenewing;
   }
 
-  transitionToRoute() {
-    this.router.transitionTo(...arguments);
+  transitionToRoute(...args: Parameters<RouterService['transitionTo']>) {
+    this.router.transitionTo(...args);
   }
 
   @action

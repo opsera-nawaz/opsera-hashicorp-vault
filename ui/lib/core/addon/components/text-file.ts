@@ -22,22 +22,29 @@ import { buildWaiter } from '@ember/test-waiters';
  * @param {string} [label=File]  - Text to use as the label for the file input. If none, default of 'File' is rendered
  */
 
+interface TextFileArgs {
+  onChange: (result: { value: string; filename: string }) => void;
+  uploadOnly?: boolean;
+  helpText?: string;
+  label?: string;
+}
+
 const waiter = buildWaiter('text-file');
 
-export default class TextFileComponent extends Component {
+export default class TextFileComponent extends Component<TextFileArgs> {
   @tracked content = '';
   @tracked filename = '';
   @tracked uploadError = '';
   @tracked showTextArea = false;
   elementId = guidFor(this);
 
-  async readFile(file) {
+  async readFile(file: File): Promise<void> {
     const waiterToken = waiter.beginAsync();
     try {
       this.content = await file.text();
       this.filename = file.name;
       this.handleChange();
-    } catch (error) {
+    } catch {
       this.clearFile();
       this.uploadError = 'There was a problem uploading. Please try again.';
     } finally {
@@ -46,28 +53,28 @@ export default class TextFileComponent extends Component {
   }
 
   @action
-  handleFileUpload(e) {
+  handleFileUpload(e: Event): void {
     e.preventDefault();
-    const { files } = e.target;
-    if (!files.length) return;
-    this.readFile(files[0]);
+    const { files } = e.target as HTMLInputElement;
+    if (!files || !files.length) return;
+    this.readFile(files[0] as File);
   }
 
   @action
-  handleTextInput(e) {
+  handleTextInput(e: Event): void {
     e.preventDefault();
-    this.content = e.target.value;
+    this.content = (e.target as HTMLTextAreaElement).value;
     this.handleChange();
   }
 
   @action
-  clearFile() {
+  clearFile(): void {
     this.content = '';
     this.filename = '';
     this.handleChange();
   }
 
-  handleChange() {
+  handleChange(): void {
     this.args.onChange({ value: this.content, filename: this.filename });
     this.uploadError = '';
   }
