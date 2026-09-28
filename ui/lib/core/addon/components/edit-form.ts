@@ -9,26 +9,44 @@ import Component from '@ember/component';
 import { task } from 'ember-concurrency';
 import { next } from '@ember/runloop';
 import { waitFor } from '@ember/test-waiters';
+import { tracked } from '@glimmer/tracking';
 
-export default Component.extend({
-  flashMessages: service(),
+import type FlashMessageService from 'vault/services/flash-messages';
+
+interface EditFormModel {
+  validate?: () => { isValid: boolean; state: unknown; invalidFormMessage: string };
+  isDirty?: boolean;
+  isDestroyed?: boolean;
+  isDestroying?: boolean;
+  rollbackAttributes(): void;
+  save(): Promise<unknown>;
+  destroyRecord(): Promise<unknown>;
+  [key: string]: unknown;
+}
+
+interface SaveOptions {
+  method?: 'save' | 'destroyRecord';
+}
+
+export default class EditForm extends Component {
+  @service declare readonly flashMessages: FlashMessageService;
 
   // internal validations
-  invalidFormAlert: '',
+  @tracked invalidFormAlert = '';
 
-  modelValidations: null,
+  @tracked modelValidations: unknown = null;
 
   // public API
-  model: null,
+  model: EditFormModel | null = null;
 
-  successMessage: 'Saved!',
-  deleteSuccessMessage: 'Deleted!',
-  deleteButtonText: 'Delete',
-  saveButtonText: 'Save',
-  cancelButtonText: 'Cancel',
-  cancelLink: null,
-  flashEnabled: true,
-  includeBox: true,
+  successMessage = 'Saved!';
+  deleteSuccessMessage = 'Deleted!';
+  deleteButtonText = 'Delete';
+  saveButtonText = 'Save';
+  cancelButtonText = 'Cancel';
+  cancelLink = null;
+  flashEnabled = true;
+  includeBox = true;
 
   /*
    * @param Function
@@ -36,26 +54,26 @@ export default Component.extend({
    *
    * Optional param to call a function upon successfully saving a model
    */
-  onSave: () => {},
+  onSave: (data: { saveType: string; model: EditFormModel }) => void = () => {};
 
   // onSave may need values updated in render in a helper - if this
   // is the case, set this value to true
-  callOnSaveAfterRender: false,
+  callOnSaveAfterRender = false;
 
-  checkModelValidity(model) {
+  checkModelValidity(model: EditFormModel): boolean {
     if (model.validate) {
       const { isValid, state, invalidFormMessage } = model.validate();
-      this.set('modelValidations', state);
-      this.set('invalidFormAlert', invalidFormMessage);
+      this.modelValidations = state;
+      this.invalidFormAlert = invalidFormMessage;
       return isValid;
     }
     // no validations on model; return true
     return true;
-  },
+  }
 
-  save: task(
-    waitFor(function* (model, options = { method: 'save' }) {
-      const { method } = options;
+  save = task(
+    waitFor(function* (this: EditForm, model: EditFormModel, options: SaveOptions = { method: 'save' }) {
+      const { method = 'save' } = options;
       const messageKey = method === 'save' ? 'successMessage' : 'deleteSuccessMessage';
       if (method === 'save' && !this.checkModelValidity(model)) {
         // if saving and model invalid, don't continue
@@ -66,7 +84,7 @@ export default Component.extend({
       } catch (err) {
         // err will display via model state
         // AdapterErrors are handled by the error-message component
-        if (err instanceof AdapterError === false) {
+        if (!(err instanceof AdapterError)) {
           throw err;
         }
         return;
@@ -82,17 +100,17 @@ export default Component.extend({
       }
       this.onSave({ saveType: method, model });
     })
-  ).drop(),
+  ).drop();
 
-  willDestroy() {
+  willDestroy(): void {
     try {
       const { model } = this;
       if (model && model.isDirty && !model.isDestroyed && !model.isDestroying) {
         model.rollbackAttributes();
       }
-    } catch (e) {
+    } catch {
       // silent catch if component is torn down after store is unloaded
     }
-    this._super(...arguments);
-  },
-});
+    super.willDestroy();
+  }
+}
