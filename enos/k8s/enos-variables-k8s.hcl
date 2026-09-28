@@ -42,3 +42,33 @@ variable "vault_version" {
   type        = string
   default     = "1.18.0"
 }
+
+# WO-059 FIPS-CONTAINER-001: a FIPS-capable container image (WO-046) is necessary but not
+# sufficient -- it must also be scheduled onto a host that is actually running in FIPS mode. These
+# three variables let the ce.fips scenario variant constrain scheduling accordingly; they default
+# to disabled/empty so every existing edition (ce, ent, ent.fips1403, ent.hsm, ent.hsm.fips1403) is
+# unaffected.
+variable "vault_fips_node_selector" {
+  description = "Node selector for FIPS-path Vault pods"
+  type        = map(string)
+  default = {
+    "vault.hashicorp.com/fips" = "true"
+  }
+}
+
+variable "vault_fips_node_affinity_enabled" {
+  description = "Enable FIPS node affinity scheduling"
+  type        = bool
+  default     = false
+}
+
+variable "vault_fips_tolerations" {
+  description = "Tolerations for FIPS-tainted nodes"
+  type = list(object({
+    key      = string
+    operator = string
+    value    = string
+    effect   = string
+  }))
+  default = []
+}

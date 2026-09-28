@@ -17,8 +17,7 @@ terraform {
 }
 
 locals {
-  chart_settings = {
-    "server.affinity"                                                       = ""
+  base_chart_settings = {
     "server.dataStorage.size"                                               = "100m"
     "server.ha.enabled"                                                     = "true"
     "server.ha.raft.config"                                                 = file("${abspath(path.module)}/raft-config.hcl")
@@ -37,6 +36,21 @@ locals {
     "server.statefulSet.securityContext.pod.runAsUser"                      = "100"
     "server.statefulSet.securityContext.pod.fsGroup"                        = "1000"
   }
+
+  # The Helm chart's default server.affinity value is a templated podAntiAffinity block that
+  # assumes multiple candidate nodes; on this scenario's single-node kind cluster that default
+  # would block scheduling multiple replicas, so non-FIPS callers still clear it exactly as
+  # before (via `set`, a scalar overwrite). WO-059 FIPS callers need the default cleared AND a
+  # hard nodeAffinity requirement added instead (see fips_node_affinity_values below), so for
+  # those callers "server.affinity" is left out of `set` entirely and set once, as a whole
+  # object, via the `values` block -- a `set` scalar and a `values` map for the same key would
+  # otherwise collide, with `set` always winning and silently discarding the nodeAffinity.
+  affinity_chart_setting = var.vault_fips_node_affinity_enabled ? {} : {
+    "server.affinity" = ""
+  }
+
+  chart_settings = merge(local.base_chart_settings, local.affinity_chart_setting)
+
   all_chart_settings = var.ent_license == null ? local.chart_settings : merge(local.chart_settings, {
     "server.extraEnvironmentVars.VAULT_LICENSE" = var.ent_license
   })
@@ -45,6 +59,36 @@ locals {
       "IPC_LOCK",
     ],
   }
+
+  # WO-059 FIPS-CONTAINER-001: expressed as a `values` YAML block, not `set`, because nodeAffinity
+  # is deeply nested and tolerations is a list of objects -- both awkward and fragile to express
+  # via dotted `--set` keys, especially since node selector label keys (e.g.
+  # "vault.hashicorp.com/fips") contain literal dots that `--set` would otherwise require escaping.
+  # nodeAffinity's requiredDuringSchedulingIgnoredDuringExecution makes the scheduling constraint a
+  # hard requirement, not a preference, per this story's edge_cases.
+  fips_node_affinity_values = var.vault_fips_node_affinity_enabled ? [yamlencode({
+    server = {
+      nodeSelector = var.vault_fips_node_selector
+      tolerations  = var.vault_fips_tolerations
+      affinity = {
+        nodeAffinity = {
+          requiredDuringSchedulingIgnoredDuringExecution = {
+            nodeSelectorTerms = [
+              {
+                matchExpressions = [
+                  for k, v in var.vault_fips_node_selector : {
+                    key      = k
+                    operator = "In"
+                    values   = [v]
+                  }
+                ]
+              },
+            ]
+          }
+        }
+      }
+    }
+  })] : []
 
   vault_address = "http://127.0.0.1:8200"
 
@@ -62,6 +106,7 @@ resource "helm_release" "vault" {
 
   set      = [for k, v in local.all_chart_settings : { name : k, value : v }]
   set_list = [for k, v in local.chart_list_settings : { name : k, value : v }]
+  values   = local.fips_node_affinity_values
 }
 
 data "enos_kubernetes_pods" "vault_pods" {

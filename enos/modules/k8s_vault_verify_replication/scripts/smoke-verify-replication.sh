@@ -12,8 +12,10 @@ fail() {
   exit 1
 }
 
-# Replication STATUS endpoint should have data.mode disabled for CE release
-if [ "$VAULT_EDITION" == "ce" ]; then
+# Replication STATUS endpoint should have data.mode disabled for CE release. WO-059: ce.fips is
+# still Community Edition (only the container/host FIPS posture differs), so it's checked the same
+# way as plain "ce".
+if [ "$VAULT_EDITION" == "ce" ] || [ "$VAULT_EDITION" == "ce.fips" ]; then
   if [ "$(echo "${STATUS}" | jq -r '.data.mode')" != "disabled" ]; then
     fail "replication data mode is not disabled for CE release!"
   fi

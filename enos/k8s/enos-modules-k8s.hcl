@@ -33,6 +33,10 @@ module "k8s_verify_ui" {
   vault_instance_count = var.instance_count
 }
 
+module "verify_fips_node_scheduling" {
+  source = "../modules/verify_fips_node_scheduling"
+}
+
 module "k8s_verify_version" {
   source = "../modules/k8s_vault_verify_version"
 
