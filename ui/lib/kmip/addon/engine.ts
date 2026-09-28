@@ -9,10 +9,16 @@ import Resolver from 'ember-resolver';
 import config from './config/environment';
 
 const { modulePrefix } = config;
+
+interface KmipEngineDependencies {
+  services: string[];
+  externalRoutes: string[];
+}
+
 export default class KmipEngine extends Engine {
-  modulePrefix = modulePrefix;
-  Resolver = Resolver;
-  dependencies = {
+  modulePrefix: string = modulePrefix;
+  Resolver: typeof Resolver = Resolver;
+  dependencies: KmipEngineDependencies = {
     services: [
       'api',
       'auth',

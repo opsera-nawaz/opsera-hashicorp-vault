@@ -158,3 +158,46 @@ files where `.some()` was clearly intended; one call site passing a wrapped
 `{ headers }` object where raw `HeadersInit` was expected;
 `dasherize(val)` receiving a bare string where its real `[string]`-tuple
 signature expected an array).
+
+## Update — WO-051: `ui/lib/kmip/` and `ui/lib/sync/` engine files converted
+
+**Date:** 2026-09-28
+
+`git mv`'d `addon/engine.js` -> `addon/engine.ts` and `addon/routes.js` ->
+`addon/routes.ts` for both `kmip` and `sync` (4 files, both libraries had no
+`resolver.js` to convert). `ember-engines`, unlike `ember-resolver` and
+`ember-load-initializers`, ships no `.d.ts` at all, so `ember-engines/engine`
+and `ember-engines/routes` needed ambient shims in `ui/types/global.d.ts`
+(added, following the file's existing pattern for untyped packages):
+`ember-engines/engine` aliases straight to the real `@ember/engine` Engine
+class it re-exports at runtime; `ember-engines/routes` types its
+`buildRoutes()` callback against Ember's own `DSL`/`DSLCallback` from
+`@ember/routing/lib/dsl` rather than a hand-rolled stub. Each engine's
+`import config from './config/environment'` also needed a same-directory
+`addon/config/environment.d.ts` ambient declaration (mirroring
+`app/config/environment.d.ts`'s existing pattern) because `ui/tsconfig.json`'s
+`"kmip/*"`/`"sync/*"` path mappings point at `addon/*`, not the sibling
+`lib/{kmip,sync}/config/` directory where the real (untouched,
+`.js`-and-staying-that-way) build-time config factory lives.
+
+```sh
+find ui/lib/kmip -name '*.js' -not -name index.js | wc -l   # 0 (was 2 before WO-051)
+find ui/lib/sync -name '*.js' -not -name index.js | wc -l   # 0 (was 2 before WO-051)
+npx tsc --noEmit                                             # 0 errors, run from ui/
+```
+
+`ui/lib/kmip/index.js` and `ui/lib/sync/index.js` (each library's
+`ember-engines` addon package entry point, calling `buildEngine({...})` via
+bare CommonJS `require()`) are intentionally left as `.js`, for the same
+reason WO-034 left `ui/lib/core/index.js` untouched: Ember CLI's addon
+discovery loads an addon by `require()`-ing its package directory *before*
+any TypeScript/Babel transform pipeline exists, and Node's directory-index
+module resolution only ever looks for `index.js`/`index.json`/`index.node`
+— never `index.ts`. Verified empirically for this story: renaming
+`lib/kmip/index.js` to `index.ts` and running
+`node -e "require('./lib/kmip')"` from `ui/` fails with `Cannot find module
+'./lib/kmip'`, confirming the rename would break Ember's build, not just
+change its output. `ui/lib/kmip/addon/config/environment.d.ts` and
+`ui/lib/sync/addon/config/environment.d.ts` (new files, no `.js` counterpart)
+are excluded from both counts above for the same "type-only, zero runtime
+footprint" reason `app/config/environment.d.ts` already is.

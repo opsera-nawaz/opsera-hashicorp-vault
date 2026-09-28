@@ -5,7 +5,9 @@
 
 import buildRoutes from 'ember-engines/routes';
 
-export default buildRoutes(function () {
+import type { DSL } from '@ember/routing/lib/dsl';
+
+export default buildRoutes(function (this: DSL): void {
   this.route('secrets', function () {
     this.route('overview');
     this.route('destinations', function () {
