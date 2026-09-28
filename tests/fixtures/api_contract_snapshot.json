@@ -1,0 +1,1018 @@
+{
+  "schema_version": 1,
+  "generated_by": "tools/generate_api_snapshot (go run ./tools/generate_api_snapshot, or `make api-snapshot`)",
+  "source_file": "http/handler.go",
+  "endpoint_count": 65,
+  "json_dos_limits": {
+    "default_max_request_size": 33554432,
+    "default_max_token_header_size": 8192,
+    "custom_max_json_depth": 300,
+    "custom_max_json_string_value_length": 1048576,
+    "custom_max_json_object_entry_count": 10000,
+    "custom_max_json_array_element_count": 10000,
+    "custom_max_json_token": 500000
+  },
+  "known_headers": {
+    "request": [
+      "X-Vault-Token"
+    ],
+    "response": [
+      "X-Vault-Index",
+      "X-Vault-Forward",
+      "X-Vault-Wrap-TTL",
+      "X-Vault-Namespace"
+    ]
+  },
+  "forwarding_paths": {
+    "always_redirect": [
+      "sys/storage/raft/snapshot",
+      "sys/storage/raft/snapshot-force"
+    ],
+    "always_redirect_excluded": [
+      "sys/storage/raft/snapshot-auto/config",
+      "sys/storage/raft/snapshot-auto/snapshot-load",
+      "sys/storage/raft/snapshot-load"
+    ],
+    "per_method_always_redirect": {
+      "POST": [
+        "sys/storage/raft/snapshot-load"
+      ],
+      "PUT": [
+        "sys/storage/raft/snapshot-load"
+      ]
+    }
+  },
+  "endpoints": [
+    {
+      "path": "/",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleUIRedirect",
+      "content_type": "text/html",
+      "category": "ui"
+    },
+    {
+      "path": "/robots.txt",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "gziphandler.GzipHandler",
+      "content_type": "text/html",
+      "category": "ui",
+      "conditional_on_setting": "uiBuiltIn"
+    },
+    {
+      "path": "/ui",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleUIRedirect",
+      "content_type": "text/html",
+      "category": "ui"
+    },
+    {
+      "path": "/ui/",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "http.StripPrefix",
+      "content_type": "text/html",
+      "category": "ui",
+      "conditional_on_setting": "uiBuiltIn"
+    },
+    {
+      "path": "/ui/",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleUIHeaders",
+      "content_type": "text/html",
+      "category": "ui"
+    },
+    {
+      "path": "/v1/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/audit",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/audit-hash/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/audit/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/auth",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/auth/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/capabilities",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/capabilities-accessor",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/capabilities-self",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/config/auditing/request-headers",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/config/auditing/request-headers/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/config/cors",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/config/state/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "no_forward",
+      "handler_name": "handleLogicalNoForward",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/generate-recovery-token/attempt",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE"
+      ],
+      "auth_required": false,
+      "fips_sensitive": true,
+      "forwarding_behavior": "recovery_mode",
+      "handler_name": "handleSysGenerateRootAttempt",
+      "content_type": "application/json",
+      "category": "recovery_mode"
+    },
+    {
+      "path": "/v1/sys/generate-recovery-token/update",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": false,
+      "fips_sensitive": true,
+      "forwarding_behavior": "recovery_mode",
+      "handler_name": "handleSysGenerateRootUpdate",
+      "content_type": "application/json",
+      "category": "recovery_mode"
+    },
+    {
+      "path": "/v1/sys/generate-root/attempt",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE"
+      ],
+      "auth_required": false,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "api",
+      "conditional_on_setting": "unauthGenerateRoot"
+    },
+    {
+      "path": "/v1/sys/generate-root/update",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": false,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "api",
+      "conditional_on_setting": "unauthGenerateRoot"
+    },
+    {
+      "path": "/v1/sys/ha-status",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/health",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleSysHealth",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/host-info",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "no_forward",
+      "handler_name": "handleLogicalNoForward",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/in-flight-req",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleUnAuthenticatedInFlightRequest",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/in-flight-req",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "no_forward",
+      "handler_name": "handleLogicalNoForward",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/init",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleSysInit",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/internal/ui/feature-flags",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleSysInternalFeatureFlags",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/key-status",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/leader",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleSysLeader",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/metrics",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleMetricsUnauthenticated",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/metrics",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "no_forward",
+      "handler_name": "handleLogicalNoForward",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/monitor",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "no_forward",
+      "handler_name": "handleLogicalNoForward",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/mounts",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/mounts/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/policy",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/policy/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/pprof/",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "http.HandlerFunc",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/pprof/",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "pprof.Handler",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/pprof/",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "PATCH",
+        "OPTIONS",
+        "LIST",
+        "RECOVER"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "no_forward",
+      "handler_name": "handleLogicalNoForward",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/pprof/cmdline",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "http.HandlerFunc",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/pprof/profile",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "http.HandlerFunc",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/pprof/symbol",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "http.HandlerFunc",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/pprof/trace",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "http.HandlerFunc",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/raw/",
+      "methods": [
+        "GET",
+        "PUT",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "recovery_mode",
+      "handler_name": "handleLogicalRecovery",
+      "content_type": "application/json",
+      "category": "recovery_mode"
+    },
+    {
+      "path": "/v1/sys/rekey-recovery-key/init",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE"
+      ],
+      "auth_required": false,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "api",
+      "conditional_on_setting": "unauthRekey"
+    },
+    {
+      "path": "/v1/sys/rekey-recovery-key/update",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": false,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "api",
+      "conditional_on_setting": "unauthRekey"
+    },
+    {
+      "path": "/v1/sys/rekey-recovery-key/verify",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE"
+      ],
+      "auth_required": false,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "api",
+      "conditional_on_setting": "unauthRekey"
+    },
+    {
+      "path": "/v1/sys/rekey/backup",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/rekey/init",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE"
+      ],
+      "auth_required": false,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "api",
+      "conditional_on_setting": "unauthRekey"
+    },
+    {
+      "path": "/v1/sys/rekey/recovery-key-backup",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/rekey/update",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": false,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "api",
+      "conditional_on_setting": "unauthRekey"
+    },
+    {
+      "path": "/v1/sys/rekey/verify",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE"
+      ],
+      "auth_required": false,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "api",
+      "conditional_on_setting": "unauthRekey"
+    },
+    {
+      "path": "/v1/sys/remount",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/rotate",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    },
+    {
+      "path": "/v1/sys/seal",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true,
+      "forwarding_behavior": "static",
+      "handler_name": "handleSysSeal",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/seal-backend-status",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleSysSealBackendStatus",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/seal-status",
+      "methods": [
+        "GET"
+      ],
+      "auth_required": false,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleSysSealStatus",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/step-down",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/storage/raft/bootstrap",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleSysRaftBootstrap",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/storage/raft/join",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": false,
+      "forwarding_behavior": "static",
+      "handler_name": "handleSysRaftJoin",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/unseal",
+      "methods": [
+        "PUT",
+        "POST"
+      ],
+      "auth_required": false,
+      "fips_sensitive": true,
+      "forwarding_behavior": "static",
+      "handler_name": "handleSysUnseal",
+      "content_type": "application/json",
+      "category": "api"
+    },
+    {
+      "path": "/v1/sys/wrapping/wrap",
+      "methods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "LIST"
+      ],
+      "auth_required": true,
+      "fips_sensitive": true,
+      "forwarding_behavior": "forwarded",
+      "handler_name": "handleRequestForwarding",
+      "content_type": "application/json",
+      "category": "inject_data_top_route"
+    }
+  ]
+}

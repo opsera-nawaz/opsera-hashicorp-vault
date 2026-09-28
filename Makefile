@@ -92,6 +92,23 @@ test: prep
 	VAULT_ACC= \
 	$(GO_CMD) test -tags='$(BUILD_TAGS)' $(TEST) $(TESTARGS) -timeout=$(TEST_TIMEOUT) -parallel=20
 
+.PHONY: api-snapshot
+# api-snapshot regenerates tests/fixtures/api_contract_snapshot.json from
+# http/handler.go (WO-040). Regeneration is an explicit, manual step by
+# design (see the WO's constraints) so a handler-registry refactor can't
+# silently drift the golden file it's supposed to be checked against -
+# review the diff before committing a regenerated snapshot.
+api-snapshot:
+	@$(GO_CMD) run ./tools/generate_api_snapshot > tests/fixtures/api_contract_snapshot.json
+
+.PHONY: layer-violations
+# layer-violations regenerates tests/fixtures/layer_violation_baseline.json
+# (WO-040), re-counting direct mux.Handle/mux.HandleFunc registrations that
+# bypass the HandlerRegistry. Also an explicit manual step: the baseline is
+# meant to decrease monotonically, and only a reviewed commit should move it.
+layer-violations:
+	@$(GO_CMD) run ./tools/layer_violations > tests/fixtures/layer_violation_baseline.json
+
 testcompile: BUILD_TAGS+=testonly
 testcompile: prep
 	@for pkg in $(TEST) ; do \
