@@ -95,6 +95,10 @@ func Backend(conf *logical.BackendConfig) (*backend, error) {
 	return &b, nil
 }
 
+// FIPS-CRYPTO-002 (WO-028): this backend has zero MD5 usage anywhere —
+// the salt below and the CA KeyID's public_key_hash template variable
+// (path_issue_sign.go calculateKeyID) both already use SHA-256. See
+// fips/wo028_md5_sha1_migration_disposition.yaml finding F4.
 func (b *backend) Salt(ctx context.Context) (*salt.Salt, error) {
 	b.saltMutex.RLock()
 	if b.salt != nil {

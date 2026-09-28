@@ -727,6 +727,12 @@ func nameToKey(name *pkix.Name) string {
 	return strings.Join(name.Country, ",") + "/" + strings.Join(name.Organization, ",") + "/" + strings.Join(name.OrganizationalUnit, ",") + "/" + name.CommonName
 }
 
+// FIPS-CRYPTO-002 (WO-028): every fixture below that historically used
+// SHA1-RSA has already been replaced with an ECDSA P-256 equivalent; zero
+// SHA-1-signed certificates remain in this file's security-relevant
+// verification paths. See fips/wo028_md5_sha1_migration_disposition.yaml
+// finding F3 for the full audit evidence.
+
 // geoTrustRoot is a test-only ECDSA P-256 replacement for the original
 // SHA1-RSA GeoTrust Global CA certificate, which is rejected by Go 1.15+.
 const geoTrustRoot = `-----BEGIN CERTIFICATE-----

@@ -446,6 +446,9 @@ func (b *backend) pathIssueSignCert(ctx context.Context, req *logical.Request, d
 	if useCSR {
 		parsedBundle, warnings, err = signCert(b.System(), input, signingBundle, false, useCSRValues)
 	} else {
+		// FIPS-CRYPTO-002 (WO-028): signature algorithm selection here delegates to
+		// selectSignatureAlgorithmForRSA/ECDSA (sdk/helper/certutil/helpers.go), which
+		// only ever produces SHA-256/384/512 — see fips/wo028_md5_sha1_migration_disposition.yaml.
 		parsedBundle, warnings, err = generateCert(sc, input, signingBundle, false, rand.Reader)
 	}
 	if err != nil {
