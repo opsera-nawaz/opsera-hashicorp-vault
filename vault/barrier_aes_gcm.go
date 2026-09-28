@@ -27,6 +27,7 @@ import (
 	"github.com/hashicorp/vault/sdk/helper/jsonutil"
 	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/hashicorp/vault/sdk/physical"
+	"github.com/hashicorp/vault/vault/interfaces"
 	"github.com/hashicorp/vault/vault/seal"
 	"go.uber.org/atomic"
 )
@@ -99,6 +100,12 @@ type AESGCMBarrier struct {
 
 	bestEffortKeyringTimeout time.Duration
 }
+
+// Validate AESGCMBarrier satisfies the CryptoBarrier interface from
+// vault/interfaces, so that storage-encryption consumers (e.g.
+// sdk/helper/keysutil, vault/seal) can depend on the interface instead of
+// importing the concrete AESGCMBarrier type.
+var _ interfaces.CryptoBarrier = (*AESGCMBarrier)(nil)
 
 func (b *AESGCMBarrier) RotationConfig() (kc KeyRotationConfig, err error) {
 	if b.keyring == nil {
@@ -1165,6 +1172,15 @@ func (b *AESGCMBarrier) Decrypt(_ context.Context, key string, ciphertext []byte
 	}
 
 	return plain, nil
+}
+
+// RotateKey implements interfaces.CryptoBarrier. It is a thin adapter over
+// Rotate that supplies a cryptographically secure random source and drops
+// the new key term, since CryptoBarrier callers only need to trigger a
+// rotation and observe whether it succeeded.
+func (b *AESGCMBarrier) RotateKey(ctx context.Context) error {
+	_, err := b.Rotate(ctx, rand.Reader)
+	return err
 }
 
 func (b *AESGCMBarrier) Keyring() (*Keyring, error) {
