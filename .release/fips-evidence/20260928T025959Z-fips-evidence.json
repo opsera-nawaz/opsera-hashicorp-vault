@@ -1,0 +1,114 @@
+{
+  "generated_at": "2026-09-28T02:59:59Z",
+  "release_version": "2.2.0-beta1",
+  "cmvp_certificates": [
+    {
+      "provider": "AWS KMS",
+      "certificate_number": "5146",
+      "module_name": "AWS-LC Cryptographic Module (dynamic)",
+      "validation_status": "active",
+      "expiry_date": "2031-01-25",
+      "fips_endpoint_url": "https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5146",
+      "product_binding_status": "requires_external_lookup",
+      "notes": "Overall Level 1, Amazon Web Services, Inc. This is AWS's software crypto library (BoringSSL/OpenSSL-derived); per WO-030 it is NOT confirmed to be the AWS CloudHSM hardware module backing the kms-fips.\u003cregion\u003e.amazonaws.com endpoints, and must not be cited as the CloudHSM certificate. Vault's seal \"awskms\" requires an explicit --endpoint/kms-fips override to reach a FIPS-designated AWS KMS endpoint; see docs/fips/kms-hsm-seal-cmvp-certificates.md section 1."
+    },
+    {
+      "provider": "Azure Key Vault",
+      "certificate_number": "3718",
+      "module_name": "NITROXIII CNN35XX-NFBE HSM Family",
+      "validation_status": "historical",
+      "expiry_date": "",
+      "fips_endpoint_url": "https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/3718",
+      "product_binding_status": "requires_external_lookup",
+      "notes": "Marvell Semiconductor Inc., Overall Level 3. Historical status (SP 800-56Arev3 transition, superseded by certificate #4399); the NIST certificate page does not publish a sunset date and does not reference Microsoft or Azure by name, so per WO-030 it must not be cited as \"the Azure Managed HSM certificate.\" Vault's seal \"azurekeyvault\" requires the referenced vault to be a Managed HSM instance or Premium tier with HSM-backed keys; see docs/fips/kms-hsm-seal-cmvp-certificates.md section 2."
+    },
+    {
+      "provider": "GCP Cloud KMS",
+      "certificate_number": "5272",
+      "module_name": "Google HSM",
+      "validation_status": "active",
+      "expiry_date": "2031-05-18",
+      "fips_endpoint_url": "https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5272",
+      "product_binding_status": "requires_external_lookup",
+      "notes": "Google, LLC, Overall Level 3, hardware SingleChip embodiment. A plausible candidate for the module underlying Cloud HSM / protection_level=HSM keys, but per WO-030 the certificate page does not explicitly bind the module to the Cloud KMS product name, so it is not cited as confirmed. Vault's seal \"gcpckms\" requires crypto_key to be created with protection_level=HSM; see docs/fips/kms-hsm-seal-cmvp-certificates.md section 3."
+    }
+  ],
+  "configuration_diffs": {
+    "tls_listener": {
+      "source_file": ".release/linux/package/etc/vault.d/vault.hcl",
+      "listener_type": "tcp",
+      "tls_min_version_explicit": false,
+      "cipher_suites_explicit": false,
+      "approved_cipher_suites_baseline": [
+        "TLS_AES_128_GCM_SHA256",
+        "TLS_AES_256_GCM_SHA384",
+        "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+        "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+        "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+        "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+      ]
+    }
+  },
+  "verification_log": [
+    {
+      "check_id": "FIPS-CRYPTO-001",
+      "status": "PASS",
+      "evidence_source": "fips/crypto_inventory.yaml",
+      "timestamp": "2026-09-28T02:59:59Z",
+      "notes": "Phase 1 consolidated cryptographic inventory is present and version-controlled."
+    },
+    {
+      "check_id": "FIPS-CRYPTO-002",
+      "status": "REVIEW",
+      "evidence_source": "docs/fips/residual-crypto-risk-register.md#RR-004",
+      "timestamp": "2026-09-28T02:59:59Z",
+      "notes": "Approved-algorithm allowlist gate is declared (.golangci.yml, tools/semgrep/ci/fips-crypto-imports.yml) but is not yet wired into a CI workflow and does not currently cover sdk/helper/keysutil/policy.go; see RR-004."
+    },
+    {
+      "check_id": "FIPS-CRYPTO-005",
+      "status": "PASS",
+      "evidence_source": ".release/fips-data/cmvp-certificates.json",
+      "timestamp": "2026-09-28T02:59:59Z",
+      "notes": "Key management evaluation artifacts (docs/fips/key-management-assessment.md, docs/fips/kms-hsm-seal-cmvp-certificates.md) are present; CMVP certificate references loaded without a lapsed-expiry finding."
+    },
+    {
+      "check_id": "FIPS-DEP-001",
+      "status": "PASS",
+      "evidence_source": "fips/crypto_inventory.yaml",
+      "timestamp": "2026-09-28T02:59:59Z",
+      "notes": "Cryptographic dependency identification (Phase 1) is present and version-controlled."
+    },
+    {
+      "check_id": "FIPS-CONTAINER-001",
+      "status": "PASS",
+      "evidence_source": "fips/crypto_inventory.yaml",
+      "timestamp": "2026-09-28T02:59:59Z",
+      "notes": "Container base image classification (Phase 1) is present and version-controlled."
+    },
+    {
+      "check_id": "FIPS-TLS-001",
+      "status": "REVIEW",
+      "evidence_source": ".release/linux/package/etc/vault.d/vault.hcl",
+      "timestamp": "2026-09-28T02:59:59Z",
+      "notes": "tls_min_version_explicit=false, cipher_suites_explicit=false in .release/linux/package/etc/vault.d/vault.hcl; an unset value must not be assumed to default to a FIPS-Approved configuration"
+    },
+    {
+      "check_id": "FIPS-RUNTIME-001",
+      "status": "REVIEW",
+      "evidence_source": ".release/fips-data/fips-exceptions.json",
+      "timestamp": "2026-09-28T02:59:59Z",
+      "notes": "exception records file not found at \".release/fips-data/fips-exceptions.json\"; treating as no active exceptions"
+    },
+    {
+      "check_id": "FIPS-RUNTIME-001",
+      "status": "PASS",
+      "evidence_source": "fips evidence generation pipeline (.release/scripts/generate-fips-evidence.sh)",
+      "timestamp": "2026-09-28T02:59:59Z",
+      "notes": "Dated FIPS evidence package generated, aggregating CMVP certificate references, a TLS listener configuration snapshot, exception records, and SBOM/provenance/risk-register sub-artifact references."
+    }
+  ],
+  "exceptions": [],
+  "risk_register_ref": "docs/fips/residual-crypto-risk-register.md",
+  "sbom_ref": ".release/sbom/2.2.0-beta1-annotated-sbom.json",
+  "build_provenance_ref": ".release/provenance/2.2.0-beta1-provenance.json"
+}

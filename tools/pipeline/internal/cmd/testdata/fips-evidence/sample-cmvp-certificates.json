@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "generated_from": [
+    "test fixture for generate_fips_evidence_test.go -- mirrors the real .release/fips-data/cmvp-certificates.json shape"
+  ],
+  "certificates": [
+    {
+      "provider": "AWS KMS",
+      "certificate_number": "5146",
+      "module_name": "AWS-LC Cryptographic Module (dynamic)",
+      "validation_status": "active",
+      "expiry_date": "2020-01-01",
+      "fips_endpoint_url": "https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5146",
+      "product_binding_status": "requires_external_lookup",
+      "notes": "test fixture: expiry_date is deliberately in the past to exercise the expired-certificate edge case"
+    },
+    {
+      "provider": "Azure Key Vault",
+      "certificate_number": "4700",
+      "module_name": "NITROXIII CNN35XX-NFBE HSM Family",
+      "validation_status": "active",
+      "expiry_date": "2029-05-29",
+      "fips_endpoint_url": "https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/4700",
+      "product_binding_status": "confirmed",
+      "notes": "test fixture: expiry_date is in the future, validation_status must remain active"
+    },
+    {
+      "provider": "GCP Cloud KMS",
+      "certificate_number": "4399",
+      "module_name": "NITROXIII CNN35XX-NFBE HSM Family",
+      "validation_status": "historical",
+      "expiry_date": "2026-09-21",
+      "fips_endpoint_url": "https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/4399",
+      "product_binding_status": "requires_external_lookup",
+      "notes": "test fixture: expiry_date has passed, validation_status must be overridden to expired even though it started as historical"
+    }
+  ]
+}

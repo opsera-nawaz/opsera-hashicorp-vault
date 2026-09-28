@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "generated_from": [
+    "docs/fips/kms-hsm-seal-cmvp-certificates.md (WO-030 CMVP certificate reference)",
+    "fips/inventory/container_kms_inventory.yaml (WO-010 kms_hsm_seal_integrations / cmvp_lookup_notes)",
+    "NIST CMVP Validated Modules Search (csrc.nist.gov/projects/cryptographic-module-validation-program), re-checked 2026-09-27"
+  ],
+  "notes": "This file intentionally reuses the exact certificate numbers already vetted in WO-030/WO-010 rather than re-deriving new ones, so that this evidence package never contradicts the already-landed CMVP reference document. See docs/fips/kms-hsm-seal-cmvp-certificates.md for the full per-provider seal configuration guidance and re-verification requirement before citing any of these numbers outside this repository.",
+  "certificates": [
+    {
+      "provider": "AWS KMS",
+      "certificate_number": "5146",
+      "module_name": "AWS-LC Cryptographic Module (dynamic)",
+      "validation_status": "active",
+      "expiry_date": "2031-01-25",
+      "fips_endpoint_url": "https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5146",
+      "product_binding_status": "requires_external_lookup",
+      "notes": "Overall Level 1, Amazon Web Services, Inc. This is AWS's software crypto library (BoringSSL/OpenSSL-derived); per WO-030 it is NOT confirmed to be the AWS CloudHSM hardware module backing the kms-fips.<region>.amazonaws.com endpoints, and must not be cited as the CloudHSM certificate. Vault's seal \"awskms\" requires an explicit --endpoint/kms-fips override to reach a FIPS-designated AWS KMS endpoint; see docs/fips/kms-hsm-seal-cmvp-certificates.md section 1."
+    },
+    {
+      "provider": "Azure Key Vault",
+      "certificate_number": "3718",
+      "module_name": "NITROXIII CNN35XX-NFBE HSM Family",
+      "validation_status": "historical",
+      "expiry_date": "",
+      "fips_endpoint_url": "https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/3718",
+      "product_binding_status": "requires_external_lookup",
+      "notes": "Marvell Semiconductor Inc., Overall Level 3. Historical status (SP 800-56Arev3 transition, superseded by certificate #4399); the NIST certificate page does not publish a sunset date and does not reference Microsoft or Azure by name, so per WO-030 it must not be cited as \"the Azure Managed HSM certificate.\" Vault's seal \"azurekeyvault\" requires the referenced vault to be a Managed HSM instance or Premium tier with HSM-backed keys; see docs/fips/kms-hsm-seal-cmvp-certificates.md section 2."
+    },
+    {
+      "provider": "GCP Cloud KMS",
+      "certificate_number": "5272",
+      "module_name": "Google HSM",
+      "validation_status": "active",
+      "expiry_date": "2031-05-18",
+      "fips_endpoint_url": "https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5272",
+      "product_binding_status": "requires_external_lookup",
+      "notes": "Google, LLC, Overall Level 3, hardware SingleChip embodiment. A plausible candidate for the module underlying Cloud HSM / protection_level=HSM keys, but per WO-030 the certificate page does not explicitly bind the module to the Cloud KMS product name, so it is not cited as confirmed. Vault's seal \"gcpckms\" requires crypto_key to be created with protection_level=HSM; see docs/fips/kms-hsm-seal-cmvp-certificates.md section 3."
+    }
+  ]
+}
