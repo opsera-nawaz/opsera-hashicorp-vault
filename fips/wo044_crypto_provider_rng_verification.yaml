@@ -1,0 +1,207 @@
+# FIPS 140-3 Phase 2 — Approved-Algorithm Configuration and Enforcement
+# WO-044: Verify runtime crypto provider and RNG/DRBG compliance
+#
+# This record is the structured evidence companion to
+# docs/fips/crypto-provider-verification.md. It documents FIPS-CRYPTO-003
+# (runtime crypto provider verification) and FIPS-CRYPTO-004 (RNG/DRBG
+# compliance) findings with file:line evidence gathered directly against
+# this repository. This WO is verification/documentation only: it does not
+# implement a new crypto provider and does not modify the RNG/DRBG chain.
+# Two residual gaps (RG-8, RG-9) extend the residual_gaps already recorded
+# in fips/crypto_inventory.yaml (WO-019); they are additive, not a rewrite
+# of that capstone artifact, which its own header states must be regenerated
+# only by fips/scripts/merge_inventory.py from the fixed WO-005..WO-011
+# source set.
+
+verification_id: WO-044
+verification_title: "Verify runtime crypto provider and RNG/DRBG compliance"
+verification_date: "2026-09-28"
+verified_by: "nawaz@opsera.io (Forge automated verification agent)"
+repository: "opsera-nawaz/opsera-hashicorp-vault"
+branch: "feature/WO-044"
+depends_on:
+  - "WO-019 (fips/crypto_inventory.yaml) — Phase 1 consolidated inventory"
+  - "WO-011 (fips/inventory/ce_fips_build_tag_verification.yaml) — CE build-tag/GOEXPERIMENT evidence reused in section 1"
+  - "WO-027 — established the FIPS-mode gating pattern (isFIPSMode()/IsFIPS()) this WO's unit test relies on"
+evidence_document: "docs/fips/crypto-provider-verification.md"
+
+overall_result: >-
+  PASS for application-code correctness (crypto/rand.Reader used exclusively
+  on every security-relevant randomness path found; zero custom RNG/DRBG
+  implementations; Entropy Augmentation correctly disabled under FIPS mode).
+  ENVIRONMENT-DEPENDENT / NOT CMVP-VALIDATED for the underlying crypto
+  provider and DRBG boundary in the Community/OSS build specifically — this
+  is a documented residual gap (RG-8), not a code defect, per this WO's own
+  framing that "PASS" for FIPS-CRYPTO-003/004 depends on the build/runtime
+  environment (GOEXPERIMENT=boringcrypto + FIPS-mode host kernel), not on
+  this source tree.
+
+findings:
+
+  - id: F1
+    ac_ref: "AC-1: crypto provider verification for sdk/helper/keysutil/policy.go"
+    title: "policy.go imports only Go stdlib crypto/* and golang.org/x/crypto"
+    evidence:
+      - "sdk/helper/keysutil/policy.go:9-19 imports crypto, crypto/aes, crypto/cipher, crypto/ecdsa, crypto/ed25519, crypto/elliptic, crypto/hmac, crypto/rand, crypto/rsa, crypto/sha256, crypto/x509 — all Go stdlib."
+      - "sdk/helper/keysutil/policy.go:44-46 imports golang.org/x/crypto/chacha20poly1305, golang.org/x/crypto/ed25519, golang.org/x/crypto/hkdf for algorithms stdlib does not provide."
+      - "No vendored/hand-rolled/third-party crypto implementation (OpenSSL binding, libsodium, etc.) is imported in this file."
+    disposition: "PASS — source-level provider selection confirmed. Runtime provider selection is a separate question; see F2."
+
+  - id: F2
+    ac_ref: "AC-1/AC-5: runtime provider is Go pure-Go stdlib in CE, not a CMVP-validated module"
+    title: "GOEXPERIMENT=boringcrypto is never set for CE builds; go.mod/Makefile pin no FIPS toolchain"
+    evidence:
+      - "go.mod:13 — 'go 1.27.1', no toolchain directive to a FIPS-branded Go distribution."
+      - "Makefile — grep -in 'fips|boringcrypto|GOEXPERIMENT' Makefile returns zero matches."
+      - ".github/workflows/ci.yml:290,294 — GOEXPERIMENT=boringcrypto and go-tags fips,fips_140_3 are set only inside the test-go-fips job, which fips/inventory/ce_fips_build_tag_verification.yaml (WO-011, findings F4/F5) already proved is gated by needs.setup.outputs.is-ent-branch=='true', hardcoded false for any non-vault-enterprise repository."
+      - ".release/security-scan.hcl:39-41,85-87 — vulnerability-scanner suppressions explicitly scoped to 'the boringcrypto suffix for the FIPS 140-3 builds' (PSP-3913), confirming a real Enterprise GOEXPERIMENT=boringcrypto build pipeline exists but is Enterprise-only, consistent with F row above."
+    disposition: >-
+      Confirmed residual gap, not a defect: the Community/OSS build's
+      runtime crypto provider is Go's pure-Go stdlib implementation, which
+      has no NIST CMVP validation certificate. Recorded as RG-8 below.
+
+  - id: F3
+    ac_ref: "AC-2: crypto/rand.Reader call-chain trace"
+    title: "application -> crypto/rand.Reader -> Go runtime -> getrandom()/urandom -> kernel DRBG"
+    evidence:
+      - "vault/core.go:695-696,1129-1130 — Core.secureRandomReader defaults to crypto/rand.Reader when CoreConfig.SecureRandomReader is nil."
+      - "command/server.go:1958,2989 — secureRandomReader is produced by configutil.CreateSecureRandomReaderFunc and threaded into CoreConfig.SecureRandomReader."
+      - "internalshared/configutil/kms.go:38,482-484 — createSecureRandomReader (the CE implementation behind CreateSecureRandomReaderFunc) unconditionally returns crypto/rand.Reader."
+      - "Consumers of c.secureRandomReader confirmed by grep: vault/init.go:125,292; vault/rekey.go:450,560,699; vault/raft.go:135,446,603,781; vault/wrapping.go:41; vault/token_store.go:1139; vault/login_mfa.go:1178; vault/logical_system.go:5519,6537; vault/cluster.go:229."
+      - "helper/random/string_generator.go:8,88-89,151,189 — the dynamic-secret password/credential generator defaults its rng io.Reader parameter to crypto/rand.Reader (stdlib import at line 8) when the caller supplies none."
+      - "Go runtime -> kernel step (Linux: getrandom(2) syscall, falling back to /dev/urandom on kernels predating 3.17; kernel-side SP 800-90A CTR_DRBG on RHEL/UBI) is documented behavior of the Go crypto/rand package and the Linux kernel, external to this repository, and is cited in docs/fips/crypto-provider-verification.md section 2.1 as such rather than re-derived from source in this repo."
+    disposition: >-
+      PASS for the application-to-Go-runtime segment of the chain (fully
+      verified in-repo). The Go-runtime-to-kernel-DRBG segment is correct
+      per Go/Linux documentation but is an environment property, not
+      independently verifiable via grep against this source tree — see
+      docs/fips/crypto-provider-verification.md section 2.2 and RG-8.
+
+  - id: F4
+    ac_ref: "AC-3: no custom RNG/DRBG implementations"
+    title: "Zero custom rand.Source, DRBG, or PRNG implementations found repo-wide"
+    evidence:
+      - "grep -rln 'rand.Source\\b' --include='*.go' vault/ sdk/ builtin/ internalshared/ helper/ | grep -v _test.go -> no matches"
+      - "grep -rniE 'xorshift|mersenne|lcg|type.*DRBG|type.*PRNG|CustomRand' --include='*.go' vault/ sdk/ builtin/ helper/ internalshared/ | grep -v _test.go -> two apparent hits (internalshared/pgpkeys/test_keys.go, builtin/credential/aws/certificates.go) are base64 PGP test-key material coincidentally containing the substring, not RNG/DRBG code"
+    disposition: "PASS — no custom randomness implementation exists anywhere in vault/, sdk/, builtin/, helper/, or internalshared/."
+
+  - id: F5
+    ac_ref: "AC-4: Entropy Augmentation disablement under FIPS mode is correct"
+    title: "command/server.go FIPS guard, plus two independently-discovered CE-only reinforcing layers"
+    evidence:
+      - "command/server.go:453-457 (pre-refactor location; logic preserved verbatim, now in (*ServerCommand).applyFIPSEntropyOverride) — if config.Entropy.Mode == EntropyAugmentation && constants.IsFIPS(), config.Entropy is set to nil with a UI.Warn."
+      - "internalshared/configutil/config_util.go:4,18-20 — ParseEntropy is a //go:build !enterprise no-op (return nil, never assigns result.Entropy); the only ParseEntropy implementation in this repository (grep -rln 'func ParseEntropy' --include='*.go' . -> one match)."
+      - "helper/serverconfig/config_test_helpers.go:352-390 (testParseEntropy, oss branch) independently confirms: 'parsing Entropy should not be possible in oss' — config.Entropy is always nil after a real CE parseConfig() run regardless of HCL content."
+      - "vault/core_util.go:238-248 — GetConfigurableRNG (backing the separate sys/policies/password entropy_source knob) only accepts '' and 'platform' (both returning the crypto/rand-backed defaultSource unchanged); 'seal' returns an explicit error, never a substituted weaker source."
+    disposition: >-
+      PASS — the guard is correct FIPS behavior, and in the CE build it is
+      reinforced by two independent structural facts that make an
+      augmented entropy source unreachable even without it. All three
+      layers documented together for the first time in this record.
+
+  - id: F6
+    ac_ref: "AC-6: unit test for the FIPS entropy-augmentation guard"
+    title: "Guard extracted to applyFIPSEntropyOverride; two new tests added; execution blocked by pre-existing sandbox limitation"
+    evidence:
+      - "command/server.go — parseConfig()'s inline guard extracted verbatim into (*ServerCommand).applyFIPSEntropyOverride(config *server.Config), called from parseConfig() with identical behavior (pure refactor, zero behavior change)."
+      - "command/server_test.go — TestParseConfig_EntropyAugmentation_FIPSOverride constructs a *server.Config with Entropy set to EntropyAugmentation, calls applyFIPSEntropyOverride, and asserts (a) under constants.IsFIPS()==true: Entropy is cleared and the UI warning is emitted on cli.MockUi.ErrorWriter; (b) under constants.IsFIPS()==false (this CE build's actual, only-compilable state): Entropy is left untouched and no warning is emitted."
+      - "command/server_test.go — TestParseConfig_EntropyAugmentation_FIPSOverride_NoEntropyConfigured asserts the guard is a true no-op when no entropy stanza is configured (the only state reachable via real CE HCL parsing, per F5)."
+      - "gofmt -l command/server.go command/server_test.go -> no output, exit 0 (both files are syntactically valid, correctly formatted Go)."
+      - "go vet ./command/... fails with the same pre-existing, out-of-scope error fips/inventory/ce_fips_build_tag_verification.yaml (WO-011) already documented: git ls-remote cannot resolve the private module github.com/hashicorp/releases-api@v0.4.14, blocking module resolution for every package depending on sdk/, including command/ in its entirety (not specific to this WO's changes)."
+    disposition: >-
+      Test source added and manually verified against real type/field
+      definitions read directly from this repository and the cached
+      github.com/hashicorp/cli@v1.1.7 module; could not be executed
+      end-to-end (go test) in this sandbox due to the pre-existing
+      releases-api module-resolution gap. This is an environmental
+      limitation, not a skipped step — same class of gap WO-011 already
+      recorded and recommended be re-run once resolved.
+
+acceptance_criteria_results:
+  - ac: "AC-1 (docs/fips/crypto-provider-verification.md confirms stdlib crypto/x/crypto usage in policy.go)"
+    result: PASS
+    evidence_ref: [F1]
+  - ac: "AC-2 (document traces crypto/rand.Reader through the full call chain to kernel DRBG)"
+    result: PASS
+    evidence_ref: [F3]
+  - ac: "AC-3 (grep-based audit confirms no custom RNG/DRBG implementations)"
+    result: PASS
+    evidence_ref: [F4]
+  - ac: "AC-4 (Entropy Augmentation disablement in command/server.go:453 documented as correct FIPS behavior)"
+    result: PASS
+    evidence_ref: [F5]
+  - ac: "AC-5 (document states CE/OSS build does not use GOEXPERIMENT=boringcrypto and lacks a CMVP-validated provider — documented residual gap)"
+    result: PASS
+    evidence_ref: [F2]
+  - ac: "AC-6 (unit test in command/server_test.go verifies IsFIPS()==true + EntropyAugmentation -> Entropy set to nil with warning)"
+    result: "PARTIAL — test written and calls real production code correctly; execution blocked by pre-existing sandbox module-resolution gap (see F6)"
+    evidence_ref: [F6]
+  - ac: "AC-7 (N/A — system integration tests; verification/documentation task)"
+    result: "N/A"
+    evidence_ref: "Per this WO's own acceptance criteria wording"
+  - ac: "AC-8 (N/A — mock data/fixtures; verification/documentation task)"
+    result: "N/A"
+    evidence_ref: "Per this WO's own acceptance criteria wording"
+
+residual_gaps_added:
+  - id: RG-8
+    title: "Community/OSS build has no CMVP-validated crypto provider or DRBG boundary"
+    phase: "Phase 2/3"
+    evidence:
+      - "docs/fips/crypto-provider-verification.md section 1 and section 6"
+      - ".github/workflows/ci.yml:265-299 (enterprise-gated test-go-fips job)"
+      - ".release/security-scan.hcl:39-41,85-87 (boringcrypto-suffix scanner exemptions scoped to Enterprise FIPS pipeline)"
+      - "go.mod:13, Makefile (no FIPS toolchain pin or reference)"
+    description: >-
+      The Community/OSS build executes crypto/rand.Reader and all crypto/*
+      operations through Go's pure-Go stdlib implementation plus the host
+      kernel's DRBG, neither of which carries a NIST CMVP certificate in
+      this build configuration. A validated boundary requires
+      GOEXPERIMENT=boringcrypto (Enterprise-only, per WO-011) plus a
+      FIPS-mode host kernel — both outside this repository's CE build path.
+      Build/distribution-model gap, not a source-code defect.
+  - id: RG-9
+    title: "vault/cluster.go:256 uses math/rand for an X.509 certificate serial number"
+    phase: "Phase 2"
+    evidence:
+      - "vault/cluster.go:229 (key gen via c.secureRandomReader), :256 (mathrand.Int63() serial number), :264 (x509.CreateCertificate via rand.Reader)"
+    description: >-
+      The internal cluster mTLS self-signed certificate's key material and
+      signature correctly use crypto/rand (via c.secureRandomReader); only
+      the SerialNumber field uses math/rand's non-cryptographic generator.
+      Low severity (serial numbers are not secret) but inconsistent with
+      the crypto/rand posture everywhere else audited; recommend a one-line
+      fix in a future Phase 2 WO.
+
+math_rand_audit:
+  description: >-
+    Every non-test math/rand / math/rand/v2 call site in vault/, sdk/, and
+    builtin/ was individually reviewed for security relevance. Full table
+    with disposition rationale is in
+    docs/fips/crypto-provider-verification.md section 4.
+  security_relevant_flagged: 1
+  security_relevant_files:
+    - file: "vault/cluster.go"
+      line: 256
+      reason: "X.509 certificate serial number — see RG-9"
+  non_security_relevant_count: 17
+  non_security_relevant_categories:
+    - "scheduling/rotation jitter (vault/identity_store_oidc.go:1554, vault/seal/seal_wrapper.go:115)"
+    - "discarded password-policy validation string (vault/logical_system.go:4431-4459)"
+    - "retry backoff / fault-injection timing (vault/expiration.go:337, sdk/helper/backoff/backoff.go:102, sdk/physical/error.go, sdk/physical/path_error.go, sdk/physical/latency.go, builtin/logical/pki/path_tidy.go:132)"
+    - "non-crypto probability jitter (builtin/credential/cert/path_login.go:828)"
+    - "test-only helpers (vault/identity_store_util.go, vault/identity_store_injector_testonly.go, vault/expiration_testing_util_common.go, vault/activity_log_testing_util.go, vault/identity_store_test_stubs_oss.go, sdk/helper/testcluster/docker/environment.go)"
+
+code_changes_made: >-
+  command/server.go: extracted the existing FIPS entropy-augmentation guard
+  (previously inline in parseConfig(), lines 453-457) into a new named
+  method (*ServerCommand).applyFIPSEntropyOverride, called from
+  parseConfig() with byte-identical logic and behavior — a pure,
+  behavior-preserving refactor made solely to satisfy AC-6's unit-test
+  requirement, since constants.IsFIPS() is a compile-time constant that
+  cannot be mocked and the guard needed to be callable independently of the
+  file-loading plumbing around it. command/server_test.go: added
+  TestParseConfig_EntropyAugmentation_FIPSOverride and
+  TestParseConfig_EntropyAugmentation_FIPSOverride_NoEntropyConfigured. No
+  crypto provider, RNG, or DRBG code was added, removed, or modified by
+  this work order, per its own explicit scope.
