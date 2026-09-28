@@ -145,7 +145,13 @@ const usePolicies = `rules:
   - <list of policies to authorize>
 `;
 
-export const getRules = () => [
+export interface RoleRuleTemplate {
+  id: string;
+  label: string;
+  rules: string;
+}
+
+export const getRules = (): RoleRuleTemplate[] => [
   { id: '1', label: 'No template', rules: example },
   { id: '2', label: 'Read resources in a namespace', rules: readResources },
   { id: '3', label: 'Edit resources in a namespace', rules: editResources },

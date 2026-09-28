@@ -12,10 +12,15 @@ import config from './config/environment';
 
 const { modulePrefix } = config;
 
+interface KubernetesEngineDependencies {
+  services: string[];
+  externalRoutes: string[];
+}
+
 export default class KubernetesEngine extends Engine {
-  modulePrefix = modulePrefix;
-  Resolver = Resolver;
-  dependencies = {
+  modulePrefix: string = modulePrefix;
+  Resolver: typeof Resolver = Resolver;
+  dependencies: KubernetesEngineDependencies = {
     services: ['app-router', 'secret-mount-path', 'flash-messages', 'api', 'capabilities'],
     externalRoutes: ['secrets', 'secretsGeneralSettingsConfiguration', 'vault'],
   };
