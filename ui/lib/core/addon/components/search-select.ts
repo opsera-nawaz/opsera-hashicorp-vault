@@ -13,6 +13,53 @@ import { filterOptions, defaultMatcher } from 'ember-power-select/utils/group-ut
 import { removeFromArray } from 'vault/helpers/remove-from-array';
 import { addToArray } from 'vault/helpers/add-to-array';
 import { assert, debug } from '@ember/debug';
+
+import type ApiService from 'vault/services/api';
+import type { ApiErrorResponse } from 'vault/api';
+
+interface SelectOption {
+  id: string;
+  name?: string;
+  searchText?: string;
+  new?: boolean;
+  isNew?: boolean;
+  __isSuggestion__?: boolean;
+  __value__?: string;
+  groupName?: string;
+  options?: SelectOption[];
+  [key: string]: unknown;
+}
+
+interface SearchSelectArgs {
+  onChange: (value: unknown[]) => void;
+  onCreate?: (searchTerm: string) => void;
+  inputValue?: string[];
+  disallowNewItems?: boolean;
+  shouldRenderName?: boolean;
+  nameKey?: string;
+  parentManageSelected?: SelectOption[];
+  passObject?: boolean;
+  objectKeys?: string[];
+  selectLimit?: number;
+  models?: string[];
+  backend?: string;
+  id?: string;
+  label?: string;
+  labelClass?: string;
+  ariaLabel?: string;
+  subText?: string;
+  fallbackComponent?: string;
+  helpText?: string;
+  wildcardLabel?: string;
+  placeholder?: string;
+  displayInherit?: boolean;
+  renderTooltip?: (inputValue: string, dropdownOptions: SelectOption[]) => unknown;
+  disabled?: boolean;
+  options?: SelectOption[];
+  search?: (term: string, select: unknown) => unknown;
+  searchEnabled?: boolean;
+}
+
 /**
  * @module SearchSelect
  * The `SearchSelect` is an implementation of the [ember-power-select](https://github.com/cibernox/ember-power-select) used for form elements where options come dynamically from the API.
@@ -57,18 +104,18 @@ import { assert, debug } from '@ember/debug';
  *
  */
 
-export default class SearchSelect extends Component {
-  @service api;
+export default class SearchSelect extends Component<SearchSelectArgs> {
+  @service declare readonly api: ApiService;
   @tracked shouldUseFallback = false;
-  @tracked selectedOptions = []; // array of selected options (initially set by @inputValue)
-  @tracked dropdownOptions = []; // options that will render in dropdown, updates as selections are added/discarded
-  @tracked allOptions = []; // both selected and unselected options, used for wildcard filter
+  @tracked selectedOptions: SelectOption[] = []; // array of selected options (initially set by @inputValue)
+  @tracked dropdownOptions: SelectOption[] = []; // options that will render in dropdown, updates as selections are added/discarded
+  @tracked allOptions: string[] = []; // both selected and unselected options, used for wildcard filter
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: SearchSelectArgs) {
+    super(owner, args);
     assert(
       'one of @id, @label, or @ariaLabel must be passed to search-select component',
-      this.args.id || this.args.label || this.args.ariaLabel
+      !!(this.args.id || this.args.label || this.args.ariaLabel)
     );
     if (this.args.models) {
       debug(
@@ -77,17 +124,17 @@ export default class SearchSelect extends Component {
     }
   }
 
-  get hidePowerSelect() {
-    return this.selectedOptions.length >= this.args.selectLimit;
+  get hidePowerSelect(): boolean {
+    return this.args.selectLimit !== undefined && this.selectedOptions.length >= this.args.selectLimit;
   }
 
-  get idKey() {
+  get idKey(): string {
     // if objectKeys exists, use the first element of the array as the identifier
     // make 'id' as the first element in objectKeys if you do not want to override the default of 'id'
-    return this.args.objectKeys ? this.args.objectKeys[0] : 'id';
+    return this.args.objectKeys ? (this.args.objectKeys[0] as string) : 'id';
   }
 
-  get shouldRenderName() {
+  get shouldRenderName(): boolean {
     return this.args.models?.some((model) => model.includes('identity')) ||
       this.idKey !== 'id' ||
       this.args.shouldRenderName
@@ -95,16 +142,16 @@ export default class SearchSelect extends Component {
       : false;
   }
 
-  get nameKey() {
+  get nameKey(): string {
     return this.args.nameKey || 'name';
   }
 
-  get searchEnabled() {
+  get searchEnabled(): boolean {
     if (typeof this.args.searchEnabled === 'boolean') return this.args.searchEnabled;
     return true;
   }
 
-  addSearchText(optionsToFormat) {
+  addSearchText(optionsToFormat: SelectOption[]): SelectOption[] {
     // maps over array of objects or response from query
     return optionsToFormat.map((option) => {
       const id = option[this.idKey] ? option[this.idKey] : option.id;
@@ -113,7 +160,7 @@ export default class SearchSelect extends Component {
     });
   }
 
-  formatInputAndUpdateDropdown(inputValues) {
+  formatInputAndUpdateDropdown(inputValues: string[]): SelectOption[] {
     // inputValues are initially an array of strings from @inputValue
     // map over so selectedOptions are objects
     return inputValues.map((option) => {
@@ -127,7 +174,7 @@ export default class SearchSelect extends Component {
       this.dropdownOptions = removeFromArray(this.dropdownOptions, matchingOption);
       return {
         id: option,
-        name: matchingOption ? matchingOption[this.nameKey] : option,
+        name: matchingOption ? (matchingOption[this.nameKey] as string) : option,
         searchText: matchingOption ? matchingOption.searchText : option,
         addTooltip,
         // add additional attrs if we're using a dynamic idKey
@@ -136,8 +183,7 @@ export default class SearchSelect extends Component {
     });
   }
 
-  @task
-  *fetchOptions() {
+  fetchOptions = task(function* (this: SearchSelect): Generator<unknown, void, unknown> {
     this.dropdownOptions = []; // reset dropdown anytime we re-fetch
 
     if (this.args.parentManageSelected) {
@@ -170,15 +216,18 @@ export default class SearchSelect extends Component {
             : [];
         }
       }
-      this.shouldUseFallback =
-        this.args.fallbackComponent && !this.args.options?.length && this.args.disallowNewItems;
+      this.shouldUseFallback = !!(
+        this.args.fallbackComponent &&
+        !this.args.options?.length &&
+        this.args.disallowNewItems
+      );
       return;
     }
 
     for (const modelType of this.args.models) {
       try {
         // fetch options from api
-        const options = yield this.fetchWithApiClient(modelType, this.args.backend);
+        const options = (yield this.fetchWithApiClient(modelType, this.args.backend)) as SelectOption[];
 
         // store both select + unselected options in tracked property used by wildcard filter
         this.allOptions = [...this.allOptions, ...options.map((option) => option.id)];
@@ -186,7 +235,10 @@ export default class SearchSelect extends Component {
         // add to dropdown options
         this.dropdownOptions = [...this.dropdownOptions, ...this.addSearchText(options)];
       } catch (err) {
-        const { status, response } = yield this.api.parseError(err);
+        const { status, response } = (yield this.api.parseError(err)) as {
+          status?: number;
+          response?: ApiErrorResponse;
+        };
         if (status === 404) {
           // continue to query other models even if one 404s
           // and so selectedOptions will be set after for loop
@@ -204,14 +256,14 @@ export default class SearchSelect extends Component {
     this.selectedOptions = this.args.inputValue
       ? this.formatInputAndUpdateDropdown(this.args.inputValue)
       : [];
-  }
+  });
 
   /**
    * Temporary method to maintain backwards compatibility with original Ember Data model query functionality
    * The @models argument is deprecated and the remaining usages need to be converted to fetch options from the route and pass them via the @options arg
    */
-  async fetchWithApiClient(modelType, backend) {
-    const apiServicePath = {
+  async fetchWithApiClient(modelType: string, backend?: string): Promise<SelectOption[]> {
+    const apiServicePathMap: Record<string, string> = {
       transform: 'secrets.transformListTransformations',
       'transform/alphabet': 'secrets.transformListAlphabets',
       'transform/template': 'secrets.transformListTemplates',
@@ -225,7 +277,8 @@ export default class SearchSelect extends Component {
       'keymgmt/provider': 'secrets.keyManagementListKmsProviders',
       'policy/acl': 'sys.policiesListAclPolicies',
       'policy/rgp': 'sys.systemListPoliciesRgp',
-    }[modelType];
+    };
+    const apiServicePath = apiServicePathMap[modelType];
     // if model is not recognized in map log error to console, return empty array and use fallback component if it exists
     if (!apiServicePath) {
       debug(
@@ -237,16 +290,23 @@ export default class SearchSelect extends Component {
       return [];
     }
     const args = backend ? [backend, true] : [true];
-    const [api, method] = apiServicePath.split('.');
-    const response = await this.api[api][method](...args);
+    const [api, method] = apiServicePath.split('.') as [string, string];
+    // this.api[api][method] is fully dynamic (built from the modelType->path
+    // map above), so the generated ApiService's strongly typed sub-clients
+    // can't be threaded through statically here.
+    const apiClient = this.api as unknown as Record<
+      string,
+      Record<string, (...args: unknown[]) => Promise<{ key_info?: unknown; keys?: string[] }>>
+    >;
+    const response = await apiClient[api]![method]!(...args);
     if (response.key_info) {
-      return this.api.keyInfoToArray(response);
+      return this.api.keyInfoToArray<SelectOption>(response);
     }
-    return response.keys.map((key) => ({ id: key, name: key }));
+    return (response.keys ?? []).map((key) => ({ id: key, name: key }));
   }
 
   @action
-  handleChange() {
+  handleChange(): void {
     if (this.selectedOptions.length && typeof this.selectedOptions[0] === 'object') {
       this.args.onChange(
         Array.from(this.selectedOptions, (option) =>
@@ -258,9 +318,9 @@ export default class SearchSelect extends Component {
     }
   }
 
-  shouldShowCreate(id, searchResults) {
-    if (searchResults && searchResults.length && searchResults[0].groupName) {
-      return !searchResults.some((group) => group.options.find((opt) => opt.id === id));
+  shouldShowCreate(id: string, searchResults: SelectOption[]): boolean {
+    if (searchResults && searchResults.length && searchResults[0]?.groupName) {
+      return !searchResults.some((group) => group.options?.find((opt) => opt.id === id));
     }
     const existingOption =
       this.dropdownOptions && this.dropdownOptions.find((opt) => opt.id === id || opt.name === id);
@@ -271,10 +331,10 @@ export default class SearchSelect extends Component {
   }
 
   // ----- adapted from ember-power-select-with-create
-  addCreateOption(term, results) {
+  addCreateOption(term: string, results: SelectOption[]): void {
     if (this.shouldShowCreate(term, results)) {
       const name = `Click to add new item: ${term}`;
-      const suggestion = {
+      const suggestion: SelectOption = {
         __isSuggestion__: true,
         __value__: term,
         name,
@@ -284,24 +344,24 @@ export default class SearchSelect extends Component {
     }
   }
 
-  filter(options, searchText) {
-    const matcher = (option, text) => defaultMatcher(option.searchText, text);
+  filter(options: SelectOption[], searchText: string): SelectOption[] {
+    const matcher = (option: SelectOption, text: string) => defaultMatcher(option.searchText ?? '', text);
     return filterOptions(options || [], searchText, matcher);
   }
   // -----
 
-  customizeObject(option) {
+  customizeObject(option?: SelectOption): SelectOption | undefined {
     if (!option) return;
 
-    let additionalKeys;
+    let additionalKeys: Record<string, unknown> | undefined;
     if (this.args.objectKeys) {
       // pull attrs corresponding to objectKeys from model record, add to the selection
       additionalKeys = Object.fromEntries(this.args.objectKeys.map((key) => [key, option[key]]));
       // filter any undefined attrs, which could mean the model was not hydrated,
       // the record is new or the model doesn't have that attribute
       Object.keys(additionalKeys).forEach((key) => {
-        if (additionalKeys[key] === undefined) {
-          delete additionalKeys[key];
+        if (additionalKeys?.[key] === undefined) {
+          delete additionalKeys?.[key];
         }
       });
     }
@@ -313,7 +373,7 @@ export default class SearchSelect extends Component {
   }
 
   @action
-  discardSelection(selected) {
+  discardSelection(selected: SelectOption): void {
     this.selectedOptions = removeFromArray(this.selectedOptions, selected);
     if (!selected.new) {
       this.dropdownOptions = addToArray(this.dropdownOptions, selected);
@@ -323,13 +383,13 @@ export default class SearchSelect extends Component {
 
   // ----- adapted from ember-power-select-with-create
   @action
-  searchAndSuggest(term, select) {
+  searchAndSuggest(term: string, select: unknown) {
     if (term.length === 0) {
       return this.dropdownOptions;
     }
     if (this.args.search) {
       return resolve(this.args.search(term, select)).then((results) => {
-        this.addCreateOption(term, results);
+        this.addCreateOption(term, results as SelectOption[]);
         return results;
       });
     }
@@ -339,9 +399,9 @@ export default class SearchSelect extends Component {
   }
 
   @action
-  selectOrCreate(selection) {
+  selectOrCreate(selection: SelectOption): void {
     if (selection && selection.__isSuggestion__) {
-      const name = selection.__value__;
+      const name = selection.__value__ as string;
       this.selectedOptions = addToArray(this.selectedOptions, { name, id: name, new: true });
       this.args.onCreate?.(name);
     } else {
