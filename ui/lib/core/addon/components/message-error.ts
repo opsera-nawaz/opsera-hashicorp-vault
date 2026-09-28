@@ -19,8 +19,31 @@ import Component from '@glimmer/component';
  * @param {array} [errorDetails=null] - Renders a list of errors when error is not from the API. Helpful for rendering a list of client-side validation errors.
  */
 
-export default class MessageError extends Component {
-  get displayErrors() {
+interface AdapterErrorItem {
+  title?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
+interface AdapterError {
+  errors?: (AdapterErrorItem | string)[];
+  message?: string;
+}
+
+interface MessageErrorModel {
+  isError?: boolean;
+  adapterError?: AdapterError;
+}
+
+interface MessageErrorArgs {
+  model?: MessageErrorModel | null;
+  errors?: string[] | null;
+  errorMessage?: string | null;
+  errorDetails?: string[] | null;
+}
+
+export default class MessageError extends Component<MessageErrorArgs> {
+  get displayErrors(): unknown[] | null {
     const { errorMessage, errors, model } = this.args;
     if (errorMessage) {
       return [errorMessage];
@@ -35,7 +58,7 @@ export default class MessageError extends Component {
       if (!adapterError) {
         return null;
       }
-      if (adapterError.errors?.length > 0) {
+      if (adapterError.errors && adapterError.errors.length > 0) {
         return adapterError.errors.map((e) => {
           if (typeof e === 'object') return e.title || e.message || JSON.stringify(e);
           return e;
@@ -46,11 +69,11 @@ export default class MessageError extends Component {
     return null;
   }
 
-  get formattedError() {
+  get formattedError(): { message: string; details: string[] } | null {
     if (this.args.errorMessage?.includes('*') && this.args.errorMessage?.includes('error: ')) {
       try {
         const lines = this.args.errorMessage.split('\n');
-        const [message] = lines[0].split('. error:');
+        const [message] = (lines[0] as string).split('. error:');
         const details = lines
           .filter((line) => line.includes('* '))
           .map((line) => line.replace(/\t\* /, ''))

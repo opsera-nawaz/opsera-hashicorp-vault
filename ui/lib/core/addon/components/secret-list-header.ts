@@ -5,8 +5,29 @@
 
 import Component from '@glimmer/component';
 import engineDisplayData from 'vault/helpers/engines-display-data';
-import { supportedSecretBackends } from 'vault/helpers/supported-secret-backends';
+import {
+  supportedSecretBackends,
+  SupportedSecretBackendsEnum,
+} from 'vault/helpers/supported-secret-backends';
 import { getEffectiveEngineType } from 'vault/utils/external-plugin-helpers';
+
+interface SecretEngineModel {
+  id: string;
+  engineType: string;
+}
+
+interface SecretListHeaderArgs {
+  model: SecretEngineModel;
+  isConfigure?: boolean;
+}
+
+interface Breadcrumb {
+  label: string;
+  route?: string;
+  icon?: string;
+  model?: string;
+  current?: boolean;
+}
 
 /**
  * @module SecretListHeader
@@ -22,9 +43,9 @@ import { getEffectiveEngineType } from 'vault/utils/external-plugin-helpers';
  * @param {boolean} [isConfigure=false] - Boolean to determine if the configure tab should be shown.
  */
 
-export default class SecretListHeader extends Component {
-  get breadcrumbs() {
-    const breadcrumbs = [
+export default class SecretListHeader extends Component<SecretListHeaderArgs> {
+  get breadcrumbs(): Breadcrumb[] {
+    const breadcrumbs: Breadcrumb[] = [
       { label: 'Vault', route: 'vault.cluster', icon: 'vault' },
       { label: 'Secrets engines', route: 'vault.cluster.secrets' },
       {
@@ -36,7 +57,7 @@ export default class SecretListHeader extends Component {
     ];
 
     if (this.args.isConfigure) {
-      breadcrumbs.push([{ label: 'Configure' }]);
+      breadcrumbs.push({ label: 'Configure' });
 
       return breadcrumbs;
     }
@@ -44,20 +65,21 @@ export default class SecretListHeader extends Component {
     return breadcrumbs;
   }
 
-  get effectiveEngineType() {
+  get effectiveEngineType(): string {
     return getEffectiveEngineType(this.args.model.engineType);
   }
 
-  get isKV() {
+  get isKV(): boolean {
     const effectiveType = getEffectiveEngineType(this.args.model.engineType);
     return ['kv', 'generic'].includes(effectiveType);
   }
 
-  get showListTab() {
+  get showListTab(): boolean {
     // only show the list tab if the engine is not a configuration only engine and the UI supports it
     const effectiveType = getEffectiveEngineType(this.args.model.engineType);
     return (
-      supportedSecretBackends().includes(effectiveType) && !engineDisplayData(effectiveType)?.isOnlyMountable
+      supportedSecretBackends().includes(effectiveType as SupportedSecretBackendsEnum) &&
+      !engineDisplayData(effectiveType)?.isOnlyMountable
     );
   }
 }
