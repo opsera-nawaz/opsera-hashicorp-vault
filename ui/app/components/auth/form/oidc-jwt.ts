@@ -39,10 +39,6 @@ interface JwtLoginData {
   jwt?: string;
 }
 
-interface UrlParseData {
-  hostname: string;
-}
-
 export default class AuthFormOidcJwt extends AuthBase {
   @service declare readonly router: RouterService;
 
@@ -70,7 +66,7 @@ export default class AuthFormOidcJwt extends AuthBase {
   }
 
   get provider() {
-    const { hostname } = parseURL(this.authUrl) as UrlParseData;
+    const hostname = parseURL(this.authUrl)['hostname'];
     if (hostname) {
       const firstMatch = Object.keys(DOMAIN_PROVIDER_MAP).find((name) => hostname.includes(name));
       return firstMatch ? DOMAIN_PROVIDER_MAP[firstMatch as keyof typeof DOMAIN_PROVIDER_MAP] : null;
