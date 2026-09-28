@@ -10,12 +10,12 @@ scenario "fips" {
     (module.seal_awskms, var.kms_fips_endpoint), builds and deploys the
     "ce.fips" edition's UBI/BoringCrypto Vault container image via Docker
     (module.cloud_docker_vault_cluster), and runs FIPS-aligned-posture
-    verification checks (module.verify_fips_runtime).
+    verification checks (module.verify_fips_runtime_ec2).
 
     This scenario never claims Vault -- or any host, image, or algorithm it
     provisions -- is "FIPS certified" or "FIPS validated"; it reports only
     the raw, re-verifiable observations documented in
-    enos/modules/verify_fips_runtime/scripts/verify-fips.sh.
+    enos/modules/verify_fips_runtime_ec2/scripts/verify-fips.sh.
 
     # Design note: where each check runs
 
@@ -43,7 +43,7 @@ scenario "fips" {
     RHEL 9 host is reachable and correctly configured -- and runs the TLS
     negotiation check locally against the actual deployed Vault listener,
     built from the same "ce.fips" UBI/BoringCrypto image. See
-    enos/modules/verify_fips_runtime/main.tf for exactly how both paths are
+    enos/modules/verify_fips_runtime_ec2/main.tf for exactly how both paths are
     implemented.
 
     # How to run this scenario
@@ -135,9 +135,9 @@ scenario "fips" {
     }
   }
 
-  step "verify_fips_runtime" {
+  step "verify_fips_runtime_ec2" {
     description = "Verify OS-level FIPS mode + OpenSSL FIPS provider on the provisioned RHEL 9 hosts, and Approved-only TLS negotiation against the deployed Vault listener"
-    module      = module.verify_fips_runtime
+    module      = module.verify_fips_runtime_ec2
     depends_on  = [step.create_fips_targets, step.deploy_vault]
 
     verifies = [
@@ -164,11 +164,11 @@ scenario "fips" {
 
   output "os_fips_check_results" {
     description = "Per-host OS-level FIPS mode + OpenSSL FIPS provider verification output"
-    value       = step.verify_fips_runtime.os_fips_check_results
+    value       = step.verify_fips_runtime_ec2.os_fips_check_results
   }
 
   output "tls_negotiation_result" {
     description = "Vault listener TLS negotiation verification output"
-    value       = step.verify_fips_runtime.tls_negotiation_result
+    value       = step.verify_fips_runtime_ec2.tls_negotiation_result
   }
 }

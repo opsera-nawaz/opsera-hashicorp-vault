@@ -476,8 +476,8 @@ module "vault_wait_for_seal_rewrap" {
   vault_install_dir = var.vault_install_dir
 }
 
-module "verify_fips_runtime" {
-  source = "./modules/verify_fips_runtime"
+module "verify_fips_runtime_ec2" {
+  source = "./modules/verify_fips_runtime_ec2"
 }
 
 module "verify_fips_startup" {
