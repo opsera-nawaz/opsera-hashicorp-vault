@@ -5,6 +5,7 @@ package diagnose
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/pem"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	pkihelper "github.com/hashicorp/vault/helper/testhelpers/pki"
 	"github.com/hashicorp/vault/internalshared/configutil"
+	"github.com/hashicorp/vault/internalshared/listenerutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -589,4 +591,69 @@ func TestTLSSelfSignedCert(t *testing.T) {
 	if !strings.Contains(errs[0].Error(), "No root certificate found") {
 		t.Fatalf("Bad error message: %s", errs[0])
 	}
+}
+
+// TestTLSFIPSCipherSuiteCheck covers WO-029 (FIPS-TLS-002): ListenerChecks
+// must fail a FIPS-mode listener whose explicit tls_cipher_suites include a
+// non-Approved suite (e.g. ChaCha20-Poly1305), and must leave non-FIPS
+// listeners and FIPS listeners with no explicit tls_cipher_suites
+// unaffected. FIPS mode is simulated via
+// listenerutil.OverrideFIPSModeForTesting since this CE checkout has no
+// fips-tagged build that makes helper/constants.IsFIPS() return true.
+func TestTLSFIPSCipherSuiteCheck(t *testing.T) {
+	testCaFiles := pkihelper.GenerateCertWithRoot(t)
+
+	nonApprovedSuite := tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+	approvedSuite := tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+
+	newListener := func(cipherSuites []uint16) []*configutil.Listener {
+		return []*configutil.Listener{
+			{
+				Type:                  "tcp",
+				Address:               "127.0.0.1:443",
+				ClusterAddress:        "127.0.0.1:8201",
+				TLSCertFile:           testCaFiles.Leaf.CertFile,
+				TLSKeyFile:            testCaFiles.Leaf.KeyFile,
+				TLSMinVersion:         "tls12",
+				TLSDisableClientCerts: true,
+				TLSCipherSuites:       cipherSuites,
+			},
+		}
+	}
+
+	t.Run("fips mode with non-Approved cipher suite fails the diagnostic check", func(t *testing.T) {
+		restore := listenerutil.OverrideFIPSModeForTesting(true)
+		defer restore()
+
+		_, errs := ListenerChecks(context.Background(), newListener([]uint16{nonApprovedSuite}))
+		require.NotEmpty(t, errs, "expected a FIPS cipher suite diagnostic error")
+		found := false
+		for _, err := range errs {
+			if strings.Contains(err.Error(), "non-FIPS-Approved") {
+				found = true
+			}
+		}
+		require.True(t, found, "expected a non-FIPS-Approved cipher suite error, got: %v", errs)
+	})
+
+	t.Run("fips mode with Approved cipher suite passes the diagnostic check", func(t *testing.T) {
+		restore := listenerutil.OverrideFIPSModeForTesting(true)
+		defer restore()
+
+		_, errs := ListenerChecks(context.Background(), newListener([]uint16{approvedSuite}))
+		require.Empty(t, errs)
+	})
+
+	t.Run("fips mode with no explicit cipher suites passes the diagnostic check", func(t *testing.T) {
+		restore := listenerutil.OverrideFIPSModeForTesting(true)
+		defer restore()
+
+		_, errs := ListenerChecks(context.Background(), newListener(nil))
+		require.Empty(t, errs)
+	})
+
+	t.Run("non-fips mode with non-Approved cipher suite passes the diagnostic check unchanged", func(t *testing.T) {
+		_, errs := ListenerChecks(context.Background(), newListener([]uint16{nonApprovedSuite}))
+		require.Empty(t, errs)
+	})
 }
