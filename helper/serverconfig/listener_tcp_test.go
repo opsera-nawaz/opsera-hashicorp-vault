@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/cli"
 	"github.com/hashicorp/go-sockaddr"
 	"github.com/hashicorp/vault/internalshared/configutil"
+	"github.com/hashicorp/vault/internalshared/listenerutil"
 	"github.com/pires/go-proxyproto"
 	"github.com/stretchr/testify/require"
 )
@@ -185,6 +186,133 @@ func TestTCPListener_tls13(t *testing.T) {
 	require.NoError(t, err)
 
 	testListenerImpl(t, ln, connFn(false), "foo.example.com", tls.VersionTLS12, "127.0.0.1", false)
+}
+
+// fipsListenerConfig returns a valid TCP listener config using the shared
+// reload test-fixtures, with the given cipher suites and minimum TLS
+// version overrides applied. It is used by TestTCPListener_fipsCipherSuites
+// below to exercise listenerutil.TLSConfig() directly (rather than through
+// tcpListenerFactory) so the resulting *tls.Config can be inspected.
+func fipsListenerConfig(cipherSuites []uint16, minVersion string) *configutil.Listener {
+	wd, _ := os.Getwd()
+	wd += "/test-fixtures/reload/"
+	return &configutil.Listener{
+		Address:               "127.0.0.1:0",
+		TLSCertFile:           wd + "reload_foo.pem",
+		TLSKeyFile:            wd + "reload_foo.key",
+		TLSDisableClientCerts: true,
+		TLSCipherSuites:       cipherSuites,
+		TLSMinVersion:         minVersion,
+	}
+}
+
+// TestTCPListener_fipsCipherSuites covers WO-029: FIPS-140-3 TLS 1.2
+// minimum enforcement and Approved cipher suite allowlisting in
+// listenerutil.TLSConfig(). Because this CE checkout has no fips-tagged
+// implementation of helper/constants.IsFIPS that returns true (see
+// fips/inventory/ce_fips_build_tag_verification.yaml), FIPS mode is
+// simulated via listenerutil.OverrideFIPSModeForTesting instead of a
+// fips-tagged build.
+func TestTCPListener_fipsCipherSuites(t *testing.T) {
+	approvedSuites := []uint16{
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	}
+	nonApprovedSuite := tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+
+	// (a) FIPS mode, no cipher config configured -> Approved defaults.
+	t.Run("fips mode with no cipher config uses Approved defaults", func(t *testing.T) {
+		restore := listenerutil.OverrideFIPSModeForTesting(true)
+		defer restore()
+
+		tlsConf, _, err := listenerutil.TLSConfig(fipsListenerConfig(nil, ""), map[string]string{}, cli.NewMockUi())
+		require.NoError(t, err)
+		require.ElementsMatch(t, approvedSuites, tlsConf.CipherSuites)
+	})
+
+	// (b) FIPS mode, explicit Approved cipher config -> succeeds unchanged.
+	t.Run("fips mode with Approved cipher config succeeds", func(t *testing.T) {
+		restore := listenerutil.OverrideFIPSModeForTesting(true)
+		defer restore()
+
+		configured := approvedSuites[:2]
+		tlsConf, _, err := listenerutil.TLSConfig(fipsListenerConfig(configured, ""), map[string]string{}, cli.NewMockUi())
+		require.NoError(t, err)
+		require.Equal(t, configured, tlsConf.CipherSuites)
+	})
+
+	// (c) FIPS mode, explicit non-Approved cipher config -> descriptive error.
+	t.Run("fips mode with non-Approved cipher config returns error", func(t *testing.T) {
+		restore := listenerutil.OverrideFIPSModeForTesting(true)
+		defer restore()
+
+		_, _, err := listenerutil.TLSConfig(fipsListenerConfig([]uint16{nonApprovedSuite}, ""), map[string]string{}, cli.NewMockUi())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "non-FIPS-Approved")
+		require.Contains(t, err.Error(), "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305")
+	})
+
+	// Edge case: a mix of Approved and non-Approved suites must reject the
+	// entire configuration, not silently filter out the bad ones.
+	t.Run("fips mode with mixed Approved and non-Approved cipher config rejects entire config", func(t *testing.T) {
+		restore := listenerutil.OverrideFIPSModeForTesting(true)
+		defer restore()
+
+		mixed := []uint16{approvedSuites[0], nonApprovedSuite}
+		_, _, err := listenerutil.TLSConfig(fipsListenerConfig(mixed, ""), map[string]string{}, cli.NewMockUi())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305")
+	})
+
+	// (d) non-FIPS mode, any cipher config (including non-Approved) ->
+	// unchanged legacy behavior, no enforcement.
+	t.Run("non-fips mode with non-Approved cipher config succeeds unchanged", func(t *testing.T) {
+		tlsConf, _, err := listenerutil.TLSConfig(fipsListenerConfig([]uint16{nonApprovedSuite}, ""), map[string]string{}, cli.NewMockUi())
+		require.NoError(t, err)
+		require.Equal(t, []uint16{nonApprovedSuite}, tlsConf.CipherSuites)
+	})
+
+	t.Run("non-fips mode with no cipher config leaves CipherSuites unset", func(t *testing.T) {
+		tlsConf, _, err := listenerutil.TLSConfig(fipsListenerConfig(nil, ""), map[string]string{}, cli.NewMockUi())
+		require.NoError(t, err)
+		require.Empty(t, tlsConf.CipherSuites)
+	})
+
+	// implementation_steps #6: tls_min_version below tls12 must be
+	// rejected outright under FIPS mode, not merely left at the tls12/tls13
+	// defaults.
+	t.Run("fips mode rejects tls10 minimum version", func(t *testing.T) {
+		restore := listenerutil.OverrideFIPSModeForTesting(true)
+		defer restore()
+
+		_, _, err := listenerutil.TLSConfig(fipsListenerConfig(nil, "tls10"), map[string]string{}, cli.NewMockUi())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "FIPS")
+	})
+
+	t.Run("fips mode rejects tls11 minimum version", func(t *testing.T) {
+		restore := listenerutil.OverrideFIPSModeForTesting(true)
+		defer restore()
+
+		_, _, err := listenerutil.TLSConfig(fipsListenerConfig(nil, "tls11"), map[string]string{}, cli.NewMockUi())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "FIPS")
+	})
+
+	t.Run("fips mode allows tls12 minimum version", func(t *testing.T) {
+		restore := listenerutil.OverrideFIPSModeForTesting(true)
+		defer restore()
+
+		_, _, err := listenerutil.TLSConfig(fipsListenerConfig(nil, "tls12"), map[string]string{}, cli.NewMockUi())
+		require.NoError(t, err)
+	})
+
+	t.Run("non-fips mode allows tls10 minimum version unchanged", func(t *testing.T) {
+		_, _, err := listenerutil.TLSConfig(fipsListenerConfig(nil, "tls10"), map[string]string{}, cli.NewMockUi())
+		require.NoError(t, err)
+	})
 }
 
 func TestTCPListener_proxyProtocol(t *testing.T) {

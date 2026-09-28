@@ -17,6 +17,7 @@ import (
 
 	"github.com/hashicorp/go-secure-stdlib/tlsutil"
 	"github.com/hashicorp/vault/internalshared/configutil"
+	"github.com/hashicorp/vault/internalshared/listenerutil"
 )
 
 const (
@@ -78,8 +79,17 @@ func ListenerChecks(ctx context.Context, listeners []*configutil.Listener) ([]st
 		// Perform checks on the Client CA Cert
 		warnings, err = TLSClientCAFileCheck(l)
 		listenerWarnings, listenerErrors = outputError(ctx, warnings, listenerWarnings, err, listenerErrors, listenerID)
-		// TODO: Use listenerutil.TLSConfig to warn on incorrect protocol specified
-		// Alternatively, use tlsutil.SetupTLSConfig.
+
+		// FIPS-TLS-002: in FIPS mode, an explicit tls_cipher_suites
+		// configuration must only contain suites from the FIPS-Approved
+		// allowlist (see listenerutil.TLSConfig, which enforces the same
+		// rule at listener-startup time). Listeners with no explicit
+		// tls_cipher_suites are not flagged here, since TLSConfig applies
+		// the Approved allowlist as the default in that case.
+		if err := listenerutil.ValidateFIPSCipherSuites(listenerutil.IsFIPSMode(), l.TLSCipherSuites); err != nil {
+			listenerErrors = append(listenerErrors, fmt.Errorf("%s: %w", listenerID, err))
+			Fail(ctx, fmt.Sprintf("%s: %s", listenerID, err.Error()))
+		}
 	}
 	return listenerWarnings, listenerErrors
 }

@@ -12,15 +12,124 @@ import (
 	"os"
 	osuser "os/user"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/cli"
 	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/go-secure-stdlib/reloadutil"
 	"github.com/hashicorp/go-secure-stdlib/tlsutil"
+	"github.com/hashicorp/vault/helper/constants"
 	"github.com/hashicorp/vault/internalshared/configutil"
 	"github.com/jefferai/isbadcipher"
 )
+
+// fipsApprovedCipherSuites is the FIPS-Approved TLS 1.2 cipher suite
+// allowlist per SP 800-52 Rev. 2 and FIPS-TLS-002. It is applied as the
+// default (when no tls_cipher_suites are configured) and used to validate
+// any explicitly configured suites, whenever FIPS mode is active. TLS 1.3
+// cipher suites are intentionally excluded from this list: Go's crypto/tls
+// does not allow TLS 1.3 suites to be individually configured via
+// tls.Config.CipherSuites, and all three of Go's built-in TLS 1.3 suites
+// are themselves FIPS-Approved.
+var fipsApprovedCipherSuites = []uint16{
+	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+}
+
+// fipsModeFunc reports whether Vault is currently operating in FIPS-140
+// mode, for the purpose of the TLS cipher suite enforcement in TLSConfig()
+// below. It defaults to helper/constants.IsFIPS.
+//
+// This CE (open-source) checkout has no positive `//go:build fips`
+// implementation of constants.IsFIPS -- that implementation lives only in
+// the closed-source hashicorp/vault-enterprise repository (see
+// fips/inventory/ce_fips_build_tag_verification.yaml, finding F3) -- so
+// constants.IsFIPS() always returns false here, even when built with
+// -tags fips. OverrideFIPSModeForTesting exists so tests in this and
+// dependent packages can still exercise the FIPS-gated code paths below
+// without requiring an enterprise build.
+var fipsModeFunc = constants.IsFIPS
+
+// IsFIPSMode reports whether TLSConfig() will enforce the FIPS-Approved
+// cipher suite allowlist. It is exported so that other FIPS-relevant TLS
+// validation (e.g. vault/diagnose's listener checks) can apply the same
+// enforcement decision as TLSConfig() itself.
+func IsFIPSMode() bool {
+	return fipsModeFunc()
+}
+
+// OverrideFIPSModeForTesting swaps the FIPS-mode detection used by
+// TLSConfig and IsFIPSMode for the duration of a test. The caller must
+// invoke the returned restore function (typically via defer or
+// t.Cleanup) once the override is no longer needed.
+func OverrideFIPSModeForTesting(enabled bool) (restore func()) {
+	orig := fipsModeFunc
+	fipsModeFunc = func() bool { return enabled }
+	return func() { fipsModeFunc = orig }
+}
+
+// isFIPSApprovedCipherSuite reports whether suite is a member of
+// fipsApprovedCipherSuites.
+func isFIPSApprovedCipherSuite(suite uint16) bool {
+	for _, approved := range fipsApprovedCipherSuites {
+		if suite == approved {
+			return true
+		}
+	}
+	return false
+}
+
+// fipsApprovedCipherSuiteNames returns the human-readable names of
+// fipsApprovedCipherSuites, for use in error messages.
+func fipsApprovedCipherSuiteNames() []string {
+	names := make([]string, 0, len(fipsApprovedCipherSuites))
+	for _, suite := range fipsApprovedCipherSuites {
+		name, err := tlsutil.GetCipherName(suite)
+		if err != nil {
+			name = fmt.Sprintf("0x%04x", suite)
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
+// ValidateFIPSCipherSuites checks cipherSuites against the FIPS-Approved
+// allowlist (fipsApprovedCipherSuites). It is a no-op when fipsMode is
+// false or cipherSuites is empty (TLSConfig applies the allowlist as the
+// default in that case, so there is nothing to validate). When fipsMode is
+// true and cipherSuites contains one or more suites outside the allowlist,
+// it returns a descriptive error naming every non-Approved suite along
+// with the Approved alternatives.
+func ValidateFIPSCipherSuites(fipsMode bool, cipherSuites []uint16) error {
+	if !fipsMode || len(cipherSuites) == 0 {
+		return nil
+	}
+
+	var nonApproved []string
+	for _, suite := range cipherSuites {
+		if isFIPSApprovedCipherSuite(suite) {
+			continue
+		}
+		name, err := tlsutil.GetCipherName(suite)
+		if err != nil {
+			name = fmt.Sprintf("0x%04x", suite)
+		}
+		nonApproved = append(nonApproved, name)
+	}
+	if len(nonApproved) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"'tls_cipher_suites' includes non-FIPS-Approved cipher suite(s) [%s]; "+
+			"FIPS mode requires 'tls_cipher_suites' to only contain suites from the Approved allowlist: [%s]",
+		strings.Join(nonApproved, ", "),
+		strings.Join(fipsApprovedCipherSuiteNames(), ", "),
+	)
+}
 
 type Listener struct {
 	net.Listener
@@ -134,7 +243,19 @@ PASSPHRASECORRECT:
 		return nil, nil, fmt.Errorf("'tls_max_version' must be greater than or equal to 'tls_min_version'")
 	}
 
+	fipsMode := IsFIPSMode()
+
+	if fipsMode && tlsConf.MinVersion < tls.VersionTLS12 {
+		return nil, nil, fmt.Errorf(
+			"'tls_min_version' value %q is not permitted in FIPS mode; FIPS 140-3 requires a minimum of 'tls12'",
+			l.TLSMinVersion)
+	}
+
 	if len(l.TLSCipherSuites) > 0 {
+		if err := ValidateFIPSCipherSuites(fipsMode, l.TLSCipherSuites); err != nil {
+			return nil, nil, err
+		}
+
 		// HTTP/2 with TLS 1.2 blacklists several cipher suites.
 		// https://tools.ietf.org/html/rfc7540#appendix-A
 		//
@@ -163,6 +284,12 @@ blacklisted by the HTTP/2 specification:
 Please see https://tools.ietf.org/html/rfc7540#appendix-A for further information.`, badCiphers))
 		}
 		tlsConf.CipherSuites = l.TLSCipherSuites
+	} else if fipsMode {
+		// No explicit tls_cipher_suites were configured. In FIPS mode, do
+		// not fall back to Go's full crypto/tls default suite set (which
+		// includes non-Approved suites such as ChaCha20-Poly1305) -- apply
+		// the FIPS-Approved allowlist as the default instead.
+		tlsConf.CipherSuites = append([]uint16(nil), fipsApprovedCipherSuites...)
 	}
 
 	if l.TLSRequireAndVerifyClientCert {
