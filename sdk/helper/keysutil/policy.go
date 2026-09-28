@@ -1452,14 +1452,34 @@ func (p *Policy) SignWithOptions(ver int, context, input []byte, options *Signin
 		return nil, errutil.UserError{Err: "requested version for signing does not contain a private part"}
 	}
 
+	// FIPS enforcement (WO-043, extending the isFIPSMode()/IsFIPSApproved()
+	// gate WO-027 added for key generation/rotation to the sign path too): a
+	// non-Approved key type -- currently ChaCha20-Poly1305 and Ed25519 -- may
+	// still be used to sign outside FIPS mode, but under FIPS mode new
+	// signatures may only be produced with an Approved algorithm such as
+	// ECDSA P-256/P-384/P-521. This intentionally covers every signing mode
+	// for the key type (e.g. Ed25519ctx/Ed25519ph via options.SigContext),
+	// since the gate is on the key type itself, not on how it's invoked. It
+	// does not affect VerifySignatureWithOptions below, which has no FIPS
+	// check: existing Ed25519 signatures (created before FIPS mode was
+	// enabled, or under a non-FIPS build) must remain verifiable
+	// indefinitely.
+	keyType := p.KeyVersionType(ver)
+	if isFIPSMode() && !keyType.IsFIPSApproved() {
+		return nil, errutil.UserError{Err: fmt.Sprintf(
+			"key type %s is not allowed in FIPS mode; use %s instead",
+			keyType, fipsApprovedAlternative(keyType),
+		)}
+	}
+
 	hashAlgorithm := options.HashAlgorithm
 	marshaling := options.Marshaling
 	saltLength := options.SaltLength
 	sigAlgorithm := options.SigAlgorithm
 
-	switch p.KeyVersionType(ver) {
+	switch keyType {
 	case KeyType_ECDSA_P256, KeyType_ECDSA_P384, KeyType_ECDSA_P521:
-		sig, err = signWithECDSA(p.KeyVersionType(ver), keyParams, input, marshaling)
+		sig, err = signWithECDSA(keyType, keyParams, input, marshaling)
 	case KeyType_ED25519:
 		sig, pubKey, err = p.signWithEd25519(ver, input, context, options, keyParams)
 		if err != nil {

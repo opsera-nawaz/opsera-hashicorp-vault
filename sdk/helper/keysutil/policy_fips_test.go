@@ -13,6 +13,7 @@ import (
 
 	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/ed25519"
 )
 
 // This file only compiles when the test binary is built with the fips
@@ -85,18 +86,47 @@ func TestPolicy_FIPS_AllowsExistingChaCha20Decrypt(t *testing.T) {
 	require.Equal(t, []byte("pre-fips-plaintext"), decoded)
 }
 
-// TestPolicy_FIPS_AllowsExistingEd25519Verify covers AC4: a pre-existing
-// Ed25519 key (created before FIPS mode was turned on) must still verify
-// signatures without error.
+// TestPolicy_FIPS_AllowsExistingEd25519Verify covers AC4 (WO-027) and
+// WO-043's AC2/AC6: a pre-existing Ed25519 key (created before FIPS mode
+// was turned on) must still verify signatures without error, even though
+// Sign() itself is now rejected for Ed25519 under FIPS mode (see
+// TestPolicy_FIPS_RejectsEd25519Sign below). The signature is therefore
+// produced directly with the stdlib/x-crypto ed25519 primitive rather than
+// via p.Sign(), simulating a signature that was generated -- by this same
+// key -- before the binary was built with the fips tag (or on a non-FIPS
+// build), per AC8/testing_strategy's "pre-generated signature fixture"
+// requirement. Ed25519 signing is deterministic, so this produces the
+// exact same bytes p.Sign() would have produced when it was still
+// permitted to sign with this key.
 func TestPolicy_FIPS_AllowsExistingEd25519Verify(t *testing.T) {
 	p := newExistingEd25519Fixture(t)
 
-	sig, err := p.Sign(0, nil, []byte("pre-fips-message"), HashTypeNone, "", MarshalingTypeASN1)
-	require.NoError(t, err)
+	message := []byte("pre-fips-message")
+	priv := ed25519.PrivateKey(p.Keys["1"].Key)
+	rawSig := ed25519.Sign(priv, message)
+	sig := p.getVersionPrefix(1) + base64.StdEncoding.EncodeToString(rawSig)
 
-	verified, err := p.VerifySignature(nil, []byte("pre-fips-message"), HashTypeNone, "", MarshalingTypeASN1, sig.Signature)
-	require.NoError(t, err, "verifying with a pre-existing ed25519 key must succeed under FIPS mode")
+	verified, err := p.VerifySignature(nil, message, HashTypeNone, "", MarshalingTypeASN1, sig)
+	require.NoError(t, err, "verifying a pre-existing ed25519 signature must succeed under FIPS mode")
 	require.True(t, verified)
+}
+
+// TestPolicy_FIPS_RejectsEd25519Sign covers WO-043's AC1/AC6: signing new
+// data with an Ed25519 key -- even one that already exists and was usable
+// before FIPS mode was enabled -- must be rejected under FIPS mode, with an
+// error that identifies Ed25519 as non-Approved and recommends ECDSA
+// P-256/P-384/P-521. This is the counterpart to
+// TestPolicy_FIPS_AllowsExistingEd25519Verify: verification of existing
+// signatures keeps working, but producing new ones does not.
+func TestPolicy_FIPS_RejectsEd25519Sign(t *testing.T) {
+	p := newExistingEd25519Fixture(t)
+
+	sig, err := p.Sign(0, nil, []byte("new-fips-message"), HashTypeNone, "", MarshalingTypeASN1)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not allowed in FIPS mode")
+	require.Contains(t, err.Error(), "ed25519")
+	require.Contains(t, err.Error(), "ecdsa-p256")
+	require.Nil(t, sig)
 }
 
 // TestPolicy_FIPS_RejectsChaCha20Rotation covers AC5: rotating an existing
