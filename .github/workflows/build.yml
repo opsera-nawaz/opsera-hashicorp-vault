@@ -541,14 +541,6 @@ jobs:
   test:
     # Test all of the testable artifacts if our repo isn't a fork. We don't test when the PR is
     # created from a fork because secrets are not passed in and they are required.
-    #
-    # WO-038: the "raft_regression" Enos scenario (enos/enos-scenario-raft-regression.hcl) is
-    # wired into this matrix via the "raft_regression" subset in enos/enos-samples-ce-build.hcl,
-    # so it runs here as part of the required "test" check on any PR whose changed files match
-    # the "go_app" (any *.go file, e.g. vault/, physical/raft/, http/, sdk/) or "test_enos"
-    # (enos/**) changed-file groups defined in .release/pipeline.hcl -- see the setup job's
-    # `artifacts-ce`/`artifacts-ent` gating above, which this job's testable-packages matrix
-    # is derived from.
     if: |
       always() &&
       needs.setup.outputs.is-fork == 'false' &&
