@@ -34,16 +34,34 @@ import { capitalize } from '@ember/string';
  * @param {Object} reindexingDetails=null - An Ember data object used to show a reindexing progress bar.
  */
 
-export default class ReplicationDashboard extends Component {
-  get isSyncing() {
+interface ReplicationDetails {
+  state?: string;
+  reindex_in_progress?: boolean;
+  reindex_stage?: string;
+  reindex_building_progress?: number;
+  reindex_building_total?: number;
+}
+
+interface ReplicationDashboardArgs {
+  componentToRender?: string;
+  isSecondary?: boolean;
+  isSummaryDashboard?: boolean;
+  replicationDetailsSummary?: { dr: { state?: string }; performance: { state?: string } };
+  replicationDetails: ReplicationDetails;
+  clusterMode?: string;
+  reindexingDetails?: unknown;
+}
+
+export default class ReplicationDashboard extends Component<ReplicationDashboardArgs> {
+  get isSyncing(): boolean {
     const { state } = this.args.replicationDetails;
     const isSecondary = this.args.isSecondary;
-    return isSecondary && state && clusterStates([state]).isSyncing;
+    return !!(isSecondary && state && clusterStates([state]).isSyncing);
   }
-  get isReindexing() {
+  get isReindexing(): boolean {
     return !!this.args.replicationDetails.reindex_in_progress;
   }
-  get reindexingStage() {
+  get reindexingStage(): string {
     const stage = this.args.replicationDetails.reindex_stage;
     // specify the stage if we have one
     if (stage) {
@@ -51,7 +69,7 @@ export default class ReplicationDashboard extends Component {
     }
     return '';
   }
-  get progressBar() {
+  get progressBar(): { value: number; max: number } | null {
     const { reindex_building_progress, reindex_building_total } = this.args.replicationDetails;
     let progressBar = null;
 
@@ -64,10 +82,10 @@ export default class ReplicationDashboard extends Component {
 
     return progressBar;
   }
-  get summaryState() {
+  get summaryState(): string | undefined {
     const { replicationDetailsSummary } = this.args;
-    const drState = replicationDetailsSummary.dr.state;
-    const performanceState = replicationDetailsSummary.performance.state;
+    const drState = replicationDetailsSummary?.dr.state;
+    const performanceState = replicationDetailsSummary?.performance.state;
 
     if (drState !== performanceState) {
       // when DR and Performance is enabled on the same cluster,
@@ -78,7 +96,7 @@ export default class ReplicationDashboard extends Component {
 
     return drState;
   }
-  get reindexMessage() {
+  get reindexMessage(): string {
     if (!this.args.isSecondary) {
       return 'This can cause a delay depending on the size of the data store. You can <b>not</b> use Vault during this time.';
     }

@@ -30,29 +30,41 @@ import { tracked } from '@glimmer/tracking';
  *
  */
 
-export default class ConfirmActionComponent extends Component {
+interface ConfirmActionArgs {
+  onConfirmAction: () => void | Promise<void>;
+  confirmTitle?: string;
+  confirmMessage?: string;
+  isInDropdown?: boolean;
+  buttonText: string;
+  buttonColor?: string;
+  modalColor?: string;
+  isRunning?: boolean;
+  disabledMessage?: string;
+}
+
+export default class ConfirmActionComponent extends Component<ConfirmActionArgs> {
   @tracked showConfirmModal = false;
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: ConfirmActionArgs) {
+    super(owner, args);
     assert(
       '<ConfirmAction> component expects @onConfirmAction arg to be a function',
       typeof this.args.onConfirmAction === 'function'
     );
-    assert(`@buttonText is required for ConfirmAction components`, this.args.buttonText);
+    assert(`@buttonText is required for ConfirmAction components`, !!this.args.buttonText);
   }
 
-  get confirmMessage() {
+  get confirmMessage(): string {
     return this.args.confirmMessage || 'You will not be able to recover it later.';
   }
 
-  get modalColor() {
+  get modalColor(): string {
     if (this.args.disabledMessage) return 'neutral';
     return this.args.modalColor || 'critical';
   }
 
   @action
-  async onConfirm() {
+  async onConfirm(): Promise<void> {
     await this.args.onConfirmAction();
     // close modal after destructive operation
     this.showConfirmModal = false;

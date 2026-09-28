@@ -16,12 +16,26 @@ const DEFAULTS = {
   force: false,
 };
 
+// `Component.extend(ReplicationActions, DEFAULTS, {...})`'s resulting `this`
+// inside these methods doesn't pick up either the base Component (isDestroyed,
+// isDestroying, setProperties) or the composed mixin's own contributed
+// properties (submitHandler) — Mixin.create()'s type is opaque outside of a
+// generic parameter — so `this` is explicitly typed per-method instead. See
+// mixins/replication-actions.ts's ReplicationActionsMixinThis comment.
+interface ReplicationActionsThis {
+  isDestroyed: boolean;
+  isDestroying: boolean;
+  setProperties(hash: Record<string, unknown>): void;
+  reset(): void;
+  submitHandler: { perform: (...args: unknown[]) => unknown };
+}
+
 export default Component.extend(ReplicationActions, DEFAULTS, {
   replicationMode: null,
   model: null,
   cluster: alias('model'),
 
-  reset() {
+  reset(this: ReplicationActionsThis) {
     if (!this || this.isDestroyed || this.isDestroying) {
       return;
     }
@@ -29,10 +43,10 @@ export default Component.extend(ReplicationActions, DEFAULTS, {
   },
 
   actions: {
-    onSubmit() {
-      return this.submitHandler.perform(...arguments);
+    onSubmit(this: ReplicationActionsThis, ...args: unknown[]) {
+      return this.submitHandler.perform(...args);
     },
-    clear() {
+    clear(this: ReplicationActionsThis) {
       this.reset();
       this.setProperties({
         token: null,

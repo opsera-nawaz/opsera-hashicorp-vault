@@ -7,7 +7,18 @@ import { action } from '@ember/object';
 import Component from '@glimmer/component';
 import { tracked } from '@glimmer/tracking';
 
-const pgpKeyFileDefault = () => ({ value: '' });
+interface PgpKeyFile {
+  value: string;
+}
+
+const pgpKeyFileDefault = (): PgpKeyFile => ({ value: '' });
+
+interface ChoosePgpKeyFormArgs {
+  onCancel: () => void;
+  onSubmit: (pgpKey: string) => void;
+  buttonText?: string;
+  formText?: string;
+}
 
 /**
  * @module ChoosePgpKeyForm
@@ -22,35 +33,35 @@ const pgpKeyFileDefault = () => ({ value: '' });
  * @param {string} buttonText - Button text for onSubmit. Defaults to "Continue with key"
  * @param {string} formText - Form text above where the users uploads or pastes the key. Has default
  */
-export default class ChoosePgpKeyForm extends Component {
+export default class ChoosePgpKeyForm extends Component<ChoosePgpKeyFormArgs> {
   @tracked pgpKeyFile = pgpKeyFileDefault();
   @tracked selectedPgp = '';
 
-  get pgpKey() {
+  get pgpKey(): string {
     return this.pgpKeyFile.value;
   }
 
-  get buttonText() {
+  get buttonText(): string {
     return this.args.buttonText || 'Continue with key';
   }
 
-  get formText() {
+  get formText(): string {
     return (
       this.args.formText ||
       'Choose a PGP Key from your computer or paste the contents of one in the form below.'
     );
   }
 
-  @action setKey(_, keyFile) {
+  @action setKey(_: unknown, keyFile: PgpKeyFile): void {
     this.pgpKeyFile = keyFile;
   }
 
   // Form submit actions:
-  @action usePgpKey(evt) {
+  @action usePgpKey(evt: Event): void {
     evt.preventDefault();
     this.selectedPgp = this.pgpKey;
   }
-  @action handleSubmit(evt) {
+  @action handleSubmit(evt: Event): void {
     evt.preventDefault();
     this.args.onSubmit(this.pgpKey);
   }

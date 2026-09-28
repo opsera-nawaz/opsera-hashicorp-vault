@@ -33,27 +33,37 @@ import { tracked } from '@glimmer/tracking';
  * @param {string} otp - if otp is present, it will show a section describing what to do with it
  *
  */
-export default class ShamirFormComponent extends Component {
+interface ShamirFormArgs {
+  onSubmit: (data: { key: string }) => Promise<void> | void;
+  threshold?: number;
+  progress?: number;
+  buttonText?: string;
+  inputLabel?: string;
+  alwaysShowProgress?: boolean;
+  otp?: string;
+}
+
+export default class ShamirFormComponent extends Component<ShamirFormArgs> {
   @tracked key = '';
   @tracked loading = false;
 
-  get buttonText() {
+  get buttonText(): string {
     return this.args.buttonText || 'Submit';
   }
-  get showProgress() {
-    return this.args.progress > 0 || this.args.alwaysShowProgress;
+  get showProgress(): boolean {
+    return !!(this.args.progress && this.args.progress > 0) || !!this.args.alwaysShowProgress;
   }
-  get inputLabel() {
+  get inputLabel(): string {
     return this.args.inputLabel || 'Shamir key portion';
   }
 
-  resetForm() {
+  resetForm(): void {
     this.key = '';
     this.loading = false;
   }
 
   @action
-  async onSubmit(key, evt) {
+  async onSubmit(key: string, evt: Event): Promise<void> {
     evt.preventDefault();
 
     if (!key) {
