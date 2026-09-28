@@ -30,21 +30,21 @@ export default class AwsCredential extends Model {
   @attr('object', {
     readOnly: true,
   })
-  role;
+  declare role: Record<string, unknown> | undefined;
 
   @attr('string', {
     defaultValue: 'iam_user',
     possibleValues: CREDENTIAL_TYPES,
     readOnly: true,
   })
-  credentialType;
+  declare credentialType: string;
 
   @attr('string', {
     label: 'Role ARN',
     helpText:
       'The ARN of the role to assume if credential_type on the Vault role is assumed_role. Optional if the role has a single role ARN; required otherwise.',
   })
-  roleArn;
+  declare roleArn: string | undefined;
 
   @attr({
     editType: 'ttl',
@@ -55,25 +55,26 @@ export default class AwsCredential extends Model {
     helpText:
       'Specifies the TTL for the use of the STS token. Valid only when credential_type is assumed_role, federation_token, or session_token.',
   })
-  ttl;
+  declare ttl: string | undefined;
 
-  @attr('string') leaseId;
-  @attr('boolean') renewable;
-  @attr('number') leaseDuration;
-  @attr('string') accessKey;
-  @attr('string', { masked: true }) secretKey;
-  @attr('string', { masked: true }) securityToken;
+  @attr('string') declare leaseId: string | undefined;
+  @attr('boolean') declare renewable: boolean | undefined;
+  @attr('number') declare leaseDuration: number | undefined;
+  @attr('string') declare accessKey: string | undefined;
+  @attr('string', { masked: true }) declare secretKey: string | undefined;
+  @attr('string', { masked: true }) declare securityToken: string | undefined;
 
-  get toCreds() {
-    const props = {
+  get toCreds(): string {
+    const props: Record<string, string | undefined> = {
       accessKey: this.accessKey,
       secretKey: this.secretKey,
       securityToken: this.securityToken,
       leaseId: this.leaseId,
     };
-    const propsWithVals = Object.keys(props).reduce((ret, prop) => {
-      if (props[prop]) {
-        ret[prop] = props[prop];
+    const propsWithVals = Object.keys(props).reduce((ret: Record<string, string>, prop) => {
+      const value = props[prop];
+      if (value) {
+        ret[prop] = value;
         return ret;
       }
       return ret;

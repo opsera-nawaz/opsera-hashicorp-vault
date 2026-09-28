@@ -4,9 +4,7 @@
  */
 
 import Model, { attr } from '@ember-data/model';
-import { alias } from '@ember/object/computed';
-import { computed } from '@ember/object';
-import lazyCapabilities, { apiPath } from 'vault/macros/lazy-capabilities';
+import lazyCapabilities, { apiPath, type CapabilitiesPathProxy } from 'vault/macros/lazy-capabilities';
 import { expandAttributeMeta } from 'vault/utils/field-to-attrs';
 
 const CREDENTIAL_TYPES = [
@@ -27,55 +25,81 @@ const CREDENTIAL_TYPES = [
     displayName: 'Session Token',
   },
 ];
-export default Model.extend({
-  backend: attr('string', {
+
+const KEYS_FOR_CREDENTIAL_TYPE: Record<string, string[]> = {
+  iam_user: ['name', 'credentialType', 'policyArns', 'policyDocument'],
+  assumed_role: ['name', 'credentialType', 'roleArns', 'policyDocument'],
+  federation_token: ['name', 'credentialType', 'policyDocument'],
+  session_token: ['name', 'credentialType'],
+};
+
+export default class RoleAwsModel extends Model {
+  @attr('string', {
     readOnly: true,
-  }),
-  name: attr('string', {
+  })
+  declare backend: string;
+
+  @attr('string', {
     label: 'Role name',
     readOnly: true,
-  }),
+  })
+  declare name: string;
+
   // credentialTypes are for backwards compatibility.
   // we use this to populate "credentialType" in
   // the serializer. if there is more than one, the
   // show and edit pages will show a warning
-  credentialTypes: attr('array', {
+  @attr('array', {
     readOnly: true,
-  }),
-  credentialType: attr('string', {
+  })
+  declare credentialTypes: string[] | undefined;
+
+  @attr('string', {
     defaultValue: 'iam_user',
     possibleValues: CREDENTIAL_TYPES,
-  }),
-  roleArns: attr({
+  })
+  declare credentialType: string;
+
+  @attr({
     editType: 'stringArray',
     label: 'Role ARNs',
-  }),
-  policyArns: attr({
+  })
+  declare roleArns: string[] | undefined;
+
+  @attr({
     editType: 'stringArray',
     label: 'Policy ARNs',
-  }),
-  policyDocument: attr('string', {
+  })
+  declare policyArns: string[] | undefined;
+
+  @attr('string', {
     editType: 'json',
     helpText:
       'A policy is an object in AWS that, when associated with an identity or resource, defines their permissions.',
     // Cannot have a default_value on policy_document because in some cases AWS expects this value to be empty.
-  }),
-  fields: computed('credentialType', function () {
-    const credentialType = this.credentialType;
-    const keysForType = {
-      iam_user: ['name', 'credentialType', 'policyArns', 'policyDocument'],
-      assumed_role: ['name', 'credentialType', 'roleArns', 'policyDocument'],
-      federation_token: ['name', 'credentialType', 'policyDocument'],
-      session_token: ['name', 'credentialType'],
-    };
+  })
+  declare policyDocument: string | undefined;
 
-    return expandAttributeMeta(this, keysForType[credentialType]);
-  }),
-  updatePath: lazyCapabilities(apiPath`${'backend'}/roles/${'id'}`, 'backend', 'id'),
-  canDelete: alias('updatePath.canDelete'),
-  canEdit: alias('updatePath.canUpdate'),
-  canRead: alias('updatePath.canRead'),
+  get fields() {
+    const keys = KEYS_FOR_CREDENTIAL_TYPE[this.credentialType] ?? [];
+    return expandAttributeMeta(this, keys);
+  }
 
-  generatePath: lazyCapabilities(apiPath`${'backend'}/creds/${'id'}`, 'backend', 'id'),
-  canGenerate: alias('generatePath.canUpdate'),
-});
+  @lazyCapabilities(apiPath`${'backend'}/roles/${'id'}`, 'backend', 'id')
+  declare updatePath: CapabilitiesPathProxy;
+  get canDelete(): boolean {
+    return this.updatePath.get('canDelete') ?? false;
+  }
+  get canEdit(): boolean {
+    return this.updatePath.get('canUpdate') ?? false;
+  }
+  get canRead(): boolean {
+    return this.updatePath.get('canRead') ?? false;
+  }
+
+  @lazyCapabilities(apiPath`${'backend'}/creds/${'id'}`, 'backend', 'id')
+  declare generatePath: CapabilitiesPathProxy;
+  get canGenerate(): boolean {
+    return this.generatePath.get('canUpdate') ?? false;
+  }
+}

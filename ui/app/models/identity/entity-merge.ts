@@ -4,22 +4,27 @@
  */
 
 import { attr } from '@ember-data/model';
-import { computed } from '@ember/object';
 import IdentityModel from './_base';
 
-export default IdentityModel.extend({
-  formFields: computed(function () {
+export default class EntityMergeModel extends IdentityModel {
+  get formFields(): string[] {
     return ['toEntityId', 'fromEntityIds', 'force'];
-  }),
-  toEntityId: attr('string', {
+  }
+
+  @attr('string', {
     label: 'Entity ID to merge to',
-  }),
-  fromEntityIds: attr({
+  })
+  declare toEntityId: string | undefined;
+
+  @attr({
     label: 'Entity IDs to merge from',
     editType: 'stringArray',
-  }),
-  force: attr('boolean', {
+  })
+  declare fromEntityIds: string[] | undefined;
+
+  @attr('boolean', {
     label: 'Keep MFA secrets from the "to" entity if there are merge conflicts',
     defaultValue: false,
-  }),
-});
+  })
+  declare force: boolean;
+}

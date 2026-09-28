@@ -12,12 +12,34 @@ import { filterEnginesByMountCategory } from 'core/utils/all-engines-metadata';
 import { withModelValidations } from 'vault/decorators/model-validations';
 import { addManyToArray, addToArray } from 'vault/helpers/add-to-array';
 
-const validations = {
+import type ApiService from 'vault/services/api';
+import type { Validations } from 'vault/app-types';
+import type MfaMethodModel from 'vault/models/mfa-method';
+import type EntityModel from 'vault/models/identity/entity';
+import type GroupModel from 'vault/models/identity/group';
+
+interface EnforcementTarget {
+  key?: string;
+  icon: string;
+  link?: string;
+  linkModels?: string[];
+  title: string | undefined;
+  subTitle: string | undefined;
+}
+
+interface AuthMethodSummary {
+  accessor: string;
+  path: string;
+  type: string;
+  [key: string]: unknown;
+}
+
+const validations: Validations = {
   name: [{ type: 'presence', message: 'Name is required' }],
   mfa_methods: [{ type: 'presence', message: 'At least one MFA method is required' }],
   targets: [
     {
-      validator(model) {
+      validator(model: MfaLoginEnforcementModel) {
         // avoid async fetch of records here and access relationship ids to check for presence
         const entityIds = model.hasMany('identity_entities').ids();
         const groupIds = model.hasMany('identity_groups').ids();
@@ -34,41 +56,49 @@ const validations = {
   ],
 };
 
+interface TargetsPromiseProxy {
+  create(init: { promise: Promise<EnforcementTarget[]> }): ArrayProxy<EnforcementTarget>;
+}
+
 @withModelValidations(validations)
 export default class MfaLoginEnforcementModel extends Model {
-  @service api;
+  @service declare api: ApiService;
 
-  @attr('string') name;
-  @hasMany('mfa-method', { async: true, inverse: null }) mfa_methods;
-  @attr('string') namespace_id;
-  @attr('array', { defaultValue: () => [] }) auth_method_accessors; // ["auth_approle_17a552c6"]
-  @attr('array', { defaultValue: () => [] }) auth_method_types; // ["userpass"]
-  @hasMany('identity/entity', { async: true, inverse: null }) identity_entities;
-  @hasMany('identity/group', { async: true, inverse: null }) identity_groups;
+  @attr('string') declare name: string | undefined;
+  @hasMany('mfa-method', { async: true, inverse: null }) declare mfa_methods: MfaMethodModel[];
+  @attr('string') declare namespace_id: string | undefined;
+  @attr('array', { defaultValue: () => [] }) declare auth_method_accessors: string[]; // ["auth_approle_17a552c6"]
+  @attr('array', { defaultValue: () => [] }) declare auth_method_types: string[]; // ["userpass"]
+  @hasMany('identity/entity', { async: true, inverse: null }) declare identity_entities: EntityModel[];
+  @hasMany('identity/group', { async: true, inverse: null }) declare identity_groups: GroupModel[];
 
-  get targets() {
-    return ArrayProxy.extend(PromiseProxyMixin).create({
+  get targets(): ArrayProxy<EnforcementTarget> {
+    const TargetsProxy = ArrayProxy.extend(PromiseProxyMixin) as unknown as TargetsPromiseProxy;
+    return TargetsProxy.create({
       promise: this.prepareTargets(),
     });
   }
 
-  async prepareTargets() {
-    let authMethods;
-    let targets = [];
+  async prepareTargets(): Promise<EnforcementTarget[]> {
+    let authMethods: AuthMethodSummary[] = [];
+    let targets: EnforcementTarget[] = [];
 
     if (this.auth_method_accessors.length || this.auth_method_types.length) {
       // fetch all auth methods and lookup by accessor to get mount path and type
       try {
         const { data } = await this.api.sys.authListEnabledMethods();
-        authMethods = this.api.responseObjectToArray(data, 'path');
+        authMethods = this.api.responseObjectToArray(
+          data as object | undefined,
+          'path'
+        ) as AuthMethodSummary[];
       } catch (error) {
         // swallow this error
       }
     }
 
     if (this.auth_method_accessors.length) {
-      const selectedAuthMethods = authMethods.filter((model) => {
-        return this.auth_method_accessors.includes(model.accessor);
+      const selectedAuthMethods = authMethods.filter((method) => {
+        return this.auth_method_accessors.includes(method.accessor);
       });
       targets = addManyToArray(
         targets,
@@ -84,7 +114,7 @@ export default class MfaLoginEnforcementModel extends Model {
 
     this.auth_method_types.forEach((type) => {
       const icon = this.iconForMount(type);
-      const mountCount = authMethods.filterBy('type', type).length;
+      const mountCount = authMethods.filter((method) => method.type === type).length;
       targets = addToArray(targets, {
         key: 'auth_method_types',
         icon,
@@ -93,8 +123,10 @@ export default class MfaLoginEnforcementModel extends Model {
       });
     });
 
-    for (const key of ['identity_entities', 'identity_groups']) {
-      (await this[key]).forEach((model) => {
+    for (const key of ['identity_entities', 'identity_groups'] as const) {
+      const relatedModels =
+        key === 'identity_entities' ? await this.identity_entities : await this.identity_groups;
+      relatedModels.forEach((model) => {
         targets = addToArray(targets, {
           key,
           icon: 'user',
@@ -109,9 +141,9 @@ export default class MfaLoginEnforcementModel extends Model {
     return targets;
   }
 
-  iconForMount(type) {
+  iconForMount(type: string): string {
     const mountableMethods = filterEnginesByMountCategory({ mountCategory: 'auth', isEnterprise: true });
-    const mount = mountableMethods.find((method) => method.type === type);
+    const mount = mountableMethods.find((method: { type: string }) => method.type === type);
     return mount ? mount.glyph || mount.type : 'token';
   }
 }

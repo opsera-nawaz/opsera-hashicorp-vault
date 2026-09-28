@@ -4,85 +4,104 @@
  */
 
 import { belongsTo, attr } from '@ember-data/model';
-import { alias } from '@ember/object/computed';
-import { computed } from '@ember/object';
 import IdentityModel from './_base';
 import lazyCapabilities, { apiPath } from 'vault/macros/lazy-capabilities';
 import identityCapabilities from 'vault/macros/identity-capabilities';
 
-export default IdentityModel.extend({
-  formFields: computed('type', function () {
+import type { CapabilitiesPathProxy } from 'vault/macros/lazy-capabilities';
+import type GroupAliasModel from './group-alias';
+
+export default class GroupModel extends IdentityModel {
+  get formFields(): string[] {
     const fields = ['name', 'type', 'policies', 'metadata'];
     if (this.type === 'internal') {
       return fields.concat(['memberGroupIds', 'memberEntityIds']);
     }
     return fields;
-  }),
-  name: attr('string'),
-  type: attr('string', {
+  }
+
+  @attr('string') declare name: string | undefined;
+  @attr('string', {
     defaultValue: 'internal',
     possibleValues: ['internal', 'external'],
-  }),
-  creationTime: attr('string', {
+  })
+  declare type: string;
+  @attr('string', {
     readOnly: true,
-  }),
-  lastUpdateTime: attr('string', {
+  })
+  declare creationTime: string | undefined;
+  @attr('string', {
     readOnly: true,
-  }),
-  numMemberEntities: attr('number', {
+  })
+  declare lastUpdateTime: string | undefined;
+  @attr('number', {
     readOnly: true,
-  }),
-  numParentGroups: attr('number', {
+  })
+  declare numMemberEntities: number | undefined;
+  @attr('number', {
     readOnly: true,
-  }),
-  metadata: attr('object', {
+  })
+  declare numParentGroups: number | undefined;
+  @attr('object', {
     editType: 'kv',
     isSectionHeader: true,
-  }),
-  policies: attr({
+  })
+  declare metadata: Record<string, unknown> | undefined;
+  @attr({
     editType: 'yield',
     isSectionHeader: true,
-  }),
-  memberGroupIds: attr({
+  })
+  declare policies: string[] | undefined;
+  @attr({
     label: 'Member Group IDs',
     editType: 'searchSelect',
     isSectionHeader: true,
     fallbackComponent: 'string-list',
     models: ['identity/group'],
-  }),
-  parentGroupIds: attr({
+  })
+  declare memberGroupIds: string[] | undefined;
+  @attr({
     label: 'Parent Group IDs',
     editType: 'searchSelect',
     isSectionHeader: true,
     fallbackComponent: 'string-list',
     models: ['identity/group'],
-  }),
-  memberEntityIds: attr({
+  })
+  declare parentGroupIds: string[] | undefined;
+  @attr({
     label: 'Member Entity IDs',
     editType: 'searchSelect',
     isSectionHeader: true,
     fallbackComponent: 'string-list',
     models: ['identity/entity'],
-  }),
-  hasMembers: computed(
-    'memberEntityIds',
-    'memberEntityIds.[]',
-    'memberGroupIds',
-    'memberGroupIds.[]',
-    function () {
-      const { memberEntityIds, memberGroupIds } = this;
-      const numEntities = (memberEntityIds && memberEntityIds.length) || 0;
-      const numGroups = (memberGroupIds && memberGroupIds.length) || 0;
-      return numEntities + numGroups > 0;
-    }
-  ),
-  policyPath: lazyCapabilities(apiPath`sys/policies`),
-  canCreatePolicies: alias('policyPath.canCreate'),
-  alias: belongsTo('identity/group-alias', { async: false, readOnly: true, inverse: 'group' }),
-  updatePath: identityCapabilities(),
-  canDelete: alias('updatePath.canDelete'),
-  canEdit: alias('updatePath.canUpdate'),
+  })
+  declare memberEntityIds: string[] | undefined;
 
-  aliasPath: lazyCapabilities(apiPath`identity/group-alias`),
-  canAddAlias: alias('aliasPath.canCreate'),
-});
+  get hasMembers(): boolean {
+    const { memberEntityIds, memberGroupIds } = this;
+    const numEntities = (memberEntityIds && memberEntityIds.length) || 0;
+    const numGroups = (memberGroupIds && memberGroupIds.length) || 0;
+    return numEntities + numGroups > 0;
+  }
+
+  @lazyCapabilities(apiPath`sys/policies`) declare policyPath: CapabilitiesPathProxy;
+  get canCreatePolicies(): boolean {
+    return this.policyPath.get('canCreate') ?? false;
+  }
+
+  @belongsTo('identity/group-alias', { async: false, readOnly: true, inverse: 'group' })
+  declare alias: GroupAliasModel;
+
+  @identityCapabilities() declare updatePath: CapabilitiesPathProxy;
+  get canDelete(): boolean {
+    return this.updatePath.get('canDelete') ?? false;
+  }
+  get canEdit(): boolean {
+    return this.updatePath.get('canUpdate') ?? false;
+  }
+
+  @lazyCapabilities(apiPath`identity/group-alias`) declare aliasPath: CapabilitiesPathProxy;
+  get canAddAlias(): boolean {
+    return this.aliasPath.get('canCreate') ?? false;
+  }
+}

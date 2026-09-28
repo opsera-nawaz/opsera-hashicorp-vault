@@ -4,40 +4,53 @@
  */
 
 import { belongsTo, attr } from '@ember-data/model';
-import { computed } from '@ember/object';
-import { alias } from '@ember/object/computed';
 import IdentityModel from './_base';
 import identityCapabilities from 'vault/macros/identity-capabilities';
 
-export default IdentityModel.extend({
-  parentType: 'group',
-  formFields: computed(function () {
+import type { CapabilitiesPathProxy } from 'vault/macros/lazy-capabilities';
+import type GroupModel from './group';
+
+export default class GroupAliasModel extends IdentityModel {
+  parentType = 'group';
+
+  get formFields(): string[] {
     return ['name', 'mountAccessor'];
-  }),
-  group: belongsTo('identity/group', { readOnly: true, async: false, inverse: 'alias' }),
+  }
 
-  name: attr('string'),
-  canonicalId: attr('string'),
+  @belongsTo('identity/group', { readOnly: true, async: false, inverse: 'alias' })
+  declare group: GroupModel;
 
-  mountPath: attr('string', {
+  @attr('string') declare name: string | undefined;
+  @attr('string') declare canonicalId: string | undefined;
+
+  @attr('string', {
     readOnly: true,
-  }),
-  mountType: attr('string', {
+  })
+  declare mountPath: string | undefined;
+  @attr('string', {
     readOnly: true,
-  }),
-  mountAccessor: attr('string', {
+  })
+  declare mountType: string | undefined;
+  @attr('string', {
     label: 'Auth Backend',
     editType: 'mountAccessor',
-  }),
+  })
+  declare mountAccessor: string | undefined;
 
-  creationTime: attr('string', {
+  @attr('string', {
     readOnly: true,
-  }),
-  lastUpdateTime: attr('string', {
+  })
+  declare creationTime: string | undefined;
+  @attr('string', {
     readOnly: true,
-  }),
+  })
+  declare lastUpdateTime: string | undefined;
 
-  updatePath: identityCapabilities(),
-  canDelete: alias('updatePath.canDelete'),
-  canEdit: alias('updatePath.canUpdate'),
-});
+  @identityCapabilities() declare updatePath: CapabilitiesPathProxy;
+  get canDelete(): boolean {
+    return this.updatePath.get('canDelete') ?? false;
+  }
+  get canEdit(): boolean {
+    return this.updatePath.get('canUpdate') ?? false;
+  }
+}

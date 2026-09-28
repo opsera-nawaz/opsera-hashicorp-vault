@@ -4,11 +4,13 @@
  */
 
 import Model, { attr } from '@ember-data/model';
-import lazyCapabilities, { apiPath } from 'vault/macros/lazy-capabilities';
+import lazyCapabilities, { apiPath, type CapabilitiesPathProxy } from 'vault/macros/lazy-capabilities';
 import { expandAttributeMeta } from 'vault/utils/field-to-attrs';
 import { withModelValidations } from 'vault/decorators/model-validations';
 
-const validations = {
+import type { FormField, Validations } from 'vault/app-types';
+
+const validations: Validations = {
   name: [
     { type: 'presence', message: 'Name is required.' },
     {
@@ -20,20 +22,20 @@ const validations = {
 
 @withModelValidations(validations)
 export default class OidcKeyModel extends Model {
-  @attr('string', { editDisabled: true }) name;
+  @attr('string', { editDisabled: true }) declare name: string | undefined;
   @attr('string', {
     defaultValue: 'RS256',
     possibleValues: ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'EdDSA'],
   })
-  algorithm;
+  declare algorithm: string;
 
-  @attr({ editType: 'ttl', defaultValue: '24h' }) rotationPeriod;
-  @attr({ label: 'Verification TTL', editType: 'ttl', defaultValue: '24h' }) verificationTtl;
-  @attr('array', { label: 'Allowed applications' }) allowedClientIds; // no editType because does not use form-field component
+  @attr({ editType: 'ttl', defaultValue: '24h' }) declare rotationPeriod: string;
+  @attr({ label: 'Verification TTL', editType: 'ttl', defaultValue: '24h' }) declare verificationTtl: string;
+  @attr('array', { label: 'Allowed applications' }) declare allowedClientIds: string[] | undefined; // no editType because does not use form-field component
 
   // TODO refactor when field-to-attrs is refactored as decorator
-  _attributeMeta = null; // cache initial result of expandAttributeMeta in getter and return
-  get formFields() {
+  _attributeMeta: FormField[] | null = null; // cache initial result of expandAttributeMeta in getter and return
+  get formFields(): FormField[] {
     if (!this._attributeMeta) {
       this._attributeMeta = expandAttributeMeta(this, [
         'name',
@@ -45,18 +47,19 @@ export default class OidcKeyModel extends Model {
     return this._attributeMeta;
   }
 
-  @lazyCapabilities(apiPath`identity/oidc/key/${'name'}`, 'name') keyPath;
-  @lazyCapabilities(apiPath`identity/oidc/key/${'name'}/rotate`, 'name') rotatePath;
-  get canRead() {
-    return this.keyPath.get('canRead');
+  @lazyCapabilities(apiPath`identity/oidc/key/${'name'}`, 'name') declare keyPath: CapabilitiesPathProxy;
+  @lazyCapabilities(apiPath`identity/oidc/key/${'name'}/rotate`, 'name')
+  declare rotatePath: CapabilitiesPathProxy;
+  get canRead(): boolean {
+    return this.keyPath.get('canRead') ?? false;
   }
-  get canEdit() {
-    return this.keyPath.get('canUpdate');
+  get canEdit(): boolean {
+    return this.keyPath.get('canUpdate') ?? false;
   }
-  get canRotate() {
-    return this.rotatePath.get('canUpdate');
+  get canRotate(): boolean {
+    return this.rotatePath.get('canUpdate') ?? false;
   }
-  get canDelete() {
-    return this.keyPath.get('canDelete');
+  get canDelete(): boolean {
+    return this.keyPath.get('canDelete') ?? false;
   }
 }

@@ -5,20 +5,23 @@
 
 import Model from '@ember-data/model';
 import { assert } from '@ember/debug';
-import { computed } from '@ember/object';
 import { expandAttributeMeta } from 'vault/utils/field-to-attrs';
 
-export default Model.extend({
-  formFields: computed(function () {
-    return assert('formFields should be overridden', false);
-  }),
+import type { FormField } from 'vault/app-types';
 
-  fields: computed('formFields', 'formFields.[]', function () {
+export default class IdentityModel extends Model {
+  // overridden by every subclass; the base implementation only exists so `fields` below has
+  // something to call before a subclass has had a chance to override it.
+  get formFields(): string[] {
+    assert('formFields should be overridden', false);
+    return [];
+  }
+
+  get fields(): FormField[] {
     return expandAttributeMeta(this, this.formFields);
-  }),
+  }
 
-  identityType: computed('constructor.modelName', function () {
-    const modelType = this.constructor.modelName.split('/')[1];
-    return modelType;
-  }),
-});
+  get identityType(): string | undefined {
+    return String((this.constructor as typeof IdentityModel).modelName).split('/')[1];
+  }
+}

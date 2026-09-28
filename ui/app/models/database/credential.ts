@@ -5,14 +5,14 @@
 
 import Model, { attr } from '@ember-data/model';
 
-export default Model.extend({
-  username: attr('string'),
-  password: attr('string'),
-  rsaPrivateKey: attr('string'),
-  leaseId: attr('string'),
-  leaseDuration: attr('string'),
-  lastVaultRotation: attr('string'),
-  rotationPeriod: attr('number'),
-  ttl: attr('number'),
-  roleType: attr('string'),
-});
+export default class DatabaseCredentialModel extends Model {
+  @attr('string') declare username: string | undefined;
+  @attr('string') declare password: string | undefined;
+  @attr('string') declare rsaPrivateKey: string | undefined;
+  @attr('string') declare leaseId: string | undefined;
+  @attr('string') declare leaseDuration: string | undefined;
+  @attr('string') declare lastVaultRotation: string | undefined;
+  @attr('number') declare rotationPeriod: number | undefined;
+  @attr('number') declare ttl: number | undefined;
+  @attr('string') declare roleType: string | undefined;
+}

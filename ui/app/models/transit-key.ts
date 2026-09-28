@@ -6,9 +6,15 @@
 import Model, { attr } from '@ember-data/model';
 import { set, get } from '@ember/object';
 import clamp from 'vault/utils/clamp';
-import lazyCapabilities, { apiPath } from 'vault/macros/lazy-capabilities';
+import lazyCapabilities, { apiPath, type CapabilitiesPathProxy } from 'vault/macros/lazy-capabilities';
 
-const ACTION_VALUES = {
+interface ActionValue {
+  isSupported: boolean | string;
+  description: string;
+  glyph: string;
+}
+
+const ACTION_VALUES: Record<string, ActionValue> = {
   encrypt: {
     isSupported: 'supportsEncryption',
     description: 'Looks up wrapping properties for the given token.',
@@ -52,17 +58,17 @@ const ACTION_VALUES = {
 };
 
 export default class TransitKeyModel extends Model {
-  @attr('string') backend;
+  @attr('string') declare backend: string | undefined;
   @attr('string', {
     defaultValue: 'aes256-gcm96',
   })
-  type;
+  declare type: string;
 
   @attr('string', {
     label: 'Name',
     readOnly: true,
   })
-  name;
+  declare name: string | undefined;
 
   @attr({
     defaultValue: '0',
@@ -70,61 +76,61 @@ export default class TransitKeyModel extends Model {
     editType: 'ttl',
     label: 'Auto-rotation period',
   })
-  autoRotatePeriod;
+  declare autoRotatePeriod: string;
 
-  @attr('boolean') deletionAllowed;
-  @attr('boolean') derived;
-  @attr('boolean') exportable;
+  @attr('boolean') declare deletionAllowed: boolean | undefined;
+  @attr('boolean') declare derived: boolean | undefined;
+  @attr('boolean') declare exportable: boolean | undefined;
 
   @attr('number', {
     defaultValue: 1,
   })
-  minDecryptionVersion;
+  declare minDecryptionVersion: number;
 
   @attr('number', {
     defaultValue: 0,
   })
-  minEncryptionVersion;
+  declare minEncryptionVersion: number;
 
-  @attr('number') latestVersion;
-  @attr('object') keys;
-  @attr('boolean') convergentEncryption;
-  @attr('number') convergentEncryptionVersion;
+  @attr('number') declare latestVersion: number | undefined;
+  @attr('object') declare keys: Record<string, unknown> | undefined;
+  @attr('boolean') declare convergentEncryption: boolean | undefined;
+  @attr('number') declare convergentEncryptionVersion: number | undefined;
 
-  @attr('boolean') supportsSigning;
-  @attr('boolean') supportsEncryption;
-  @attr('boolean') supportsDecryption;
-  @attr('boolean') supportsDerivation;
+  @attr('boolean') declare supportsSigning: boolean | undefined;
+  @attr('boolean') declare supportsEncryption: boolean | undefined;
+  @attr('boolean') declare supportsDecryption: boolean | undefined;
+  @attr('boolean') declare supportsDerivation: boolean | undefined;
 
-  setConvergentEncryption(val) {
-    if (val === true) {
+  setConvergentEncryption(val: boolean): void {
+    if (val) {
       set(this, 'derived', val);
     }
     set(this, 'convergentEncryption', val);
   }
 
-  setDerived(val) {
-    if (val === false) {
+  setDerived(val: boolean): void {
+    if (!val) {
       set(this, 'convergentEncryption', val);
     }
     set(this, 'derived', val);
   }
 
-  get supportedActions() {
+  get supportedActions(): Array<{ name: string; description: string; glyph: string }> {
     return Object.keys(ACTION_VALUES)
       .filter((name) => {
-        const { isSupported } = ACTION_VALUES[name];
-        return typeof isSupported === 'boolean' || get(this, isSupported);
+        const { isSupported } = ACTION_VALUES[name]!;
+        return typeof isSupported === 'boolean' || get(this, isSupported as never);
       })
       .map((name) => {
-        const { description, glyph } = ACTION_VALUES[name];
+        const { description, glyph } = ACTION_VALUES[name]!;
         return { name, description, glyph };
       });
   }
 
-  get keyVersions() {
-    let maxVersion = Math.max(...this.validKeyVersions);
-    const versions = [];
+  get keyVersions(): number[] {
+    let maxVersion = Math.max(...this.validKeyVersions.map(Number));
+    const versions: number[] = [];
     while (maxVersion > 0) {
       versions.unshift(maxVersion);
       maxVersion--;
@@ -132,7 +138,7 @@ export default class TransitKeyModel extends Model {
     return versions;
   }
 
-  get encryptionKeyVersions() {
+  get encryptionKeyVersions(): number[] {
     const { keyVersions, minDecryptionVersion } = this;
 
     return keyVersions
@@ -142,10 +148,11 @@ export default class TransitKeyModel extends Model {
       .reverse();
   }
 
-  get keysForEncryption() {
+  get keysForEncryption(): number[] {
     let { minEncryptionVersion, latestVersion } = this;
+    latestVersion = latestVersion ?? 0;
     const minVersion = clamp(minEncryptionVersion - 1, 0, latestVersion);
-    const versions = [];
+    const versions: number[] = [];
     while (latestVersion > minVersion) {
       versions.push(latestVersion);
       latestVersion--;
@@ -153,11 +160,11 @@ export default class TransitKeyModel extends Model {
     return versions;
   }
 
-  get validKeyVersions() {
-    return Object.keys(this.keys);
+  get validKeyVersions(): string[] {
+    return Object.keys(this.keys ?? {});
   }
 
-  get exportKeyTypes() {
+  get exportKeyTypes(): string[] {
     const types = ['hmac'];
     if (this.supportsSigning) {
       types.unshift('signing');
@@ -167,27 +174,31 @@ export default class TransitKeyModel extends Model {
     }
     return types;
   }
-  @lazyCapabilities(apiPath`${'backend'}/keys/${'id'}/rotate`, 'backend', 'id') rotatePath;
-  @lazyCapabilities(apiPath`${'backend'}/keys/${'id'}`, 'backend', 'id') secretPath;
+  @lazyCapabilities(apiPath`${'backend'}/keys/${'id'}/rotate`, 'backend', 'id')
+  declare rotatePath: CapabilitiesPathProxy;
+  @lazyCapabilities(apiPath`${'backend'}/keys/${'id'}`, 'backend', 'id')
+  declare secretPath: CapabilitiesPathProxy;
 
-  get canRotate() {
-    return this.rotatePath.get('canUpdate') !== false;
+  get canRotate(): boolean {
+    return this.rotatePath.get('canUpdate');
   }
-  get canRead() {
-    return this.secretPath.get('canUpdate') !== false;
+  get canRead(): boolean {
+    return this.secretPath.get('canUpdate');
   }
-  get canUpdate() {
-    return this.secretPath.get('canUpdate') !== false;
+  get canUpdate(): boolean {
+    return this.secretPath.get('canUpdate');
   }
-  get canDelete() {
+  get canDelete(): boolean {
     // there's more to just a permissions check here.
     // must also check if there's a property on the key called deletionAllowed that is set to true
-    const deleteAttrChanged = Boolean(this.changedAttributes().deletionAllowed);
-    const keyAllowedDeletion = this.deletionAllowed && deleteAttrChanged === false;
-    return this.secretPath.get('canDelete') !== false && keyAllowedDeletion;
+    const deleteAttrChanged = Boolean(
+      (this.changedAttributes() as Record<string, unknown>)['deletionAllowed']
+    );
+    const keyAllowedDeletion = this.deletionAllowed && !deleteAttrChanged;
+    return this.secretPath.get('canDelete') && !!keyAllowedDeletion;
   }
 
-  get canEdit() {
-    return this.secretPath.get('canUpdate') !== false;
+  get canEdit(): boolean {
+    return this.secretPath.get('canUpdate');
   }
 }

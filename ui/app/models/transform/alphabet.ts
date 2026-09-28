@@ -4,8 +4,10 @@
  */
 
 import Model, { attr } from '@ember-data/model';
-import lazyCapabilities, { apiPath } from 'vault/macros/lazy-capabilities';
+import lazyCapabilities, { apiPath, type CapabilitiesPathProxy } from 'vault/macros/lazy-capabilities';
 import { expandAttributeMeta } from 'vault/utils/field-to-attrs';
+
+import type { FormField } from 'vault/app-types';
 
 export default class Alphabet extends Model {
   idPrefix = 'alphabet/';
@@ -14,7 +16,7 @@ export default class Alphabet extends Model {
     readOnly: true,
     subText: 'The alphabet name. Keep in mind that spaces are not allowed and this cannot be edited later.',
   })
-  name;
+  declare name: string | undefined;
 
   @attr('string', {
     label: 'Alphabet',
@@ -22,9 +24,9 @@ export default class Alphabet extends Model {
       'Provide the set of valid UTF-8 characters contained within both the input and transformed value.',
     docLink: '/vault/api-docs/secret/transform#create-update-alphabet',
   })
-  alphabet;
+  declare alphabet: string | undefined;
 
-  get attrs() {
+  get attrs(): FormField[] {
     const keys = ['name', 'alphabet'];
     return expandAttributeMeta(this, keys);
   }
@@ -32,8 +34,8 @@ export default class Alphabet extends Model {
   @attr('string', {
     readOnly: true,
   })
-  backend;
+  declare backend: string | undefined;
 
   @lazyCapabilities(apiPath`${'backend'}/alphabet/${'id'}`, 'backend', 'id')
-  updatePath;
+  declare updatePath: CapabilitiesPathProxy;
 }

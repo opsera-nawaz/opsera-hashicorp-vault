@@ -37,6 +37,6 @@ import Model, { attr } from '@ember-data/model';
 
 */
 
-export default Model.extend({
-  status: attr('object'),
-});
+export default class ReplicationModeModel extends Model {
+  @attr('object') declare status: Record<string, unknown> | undefined;
+}

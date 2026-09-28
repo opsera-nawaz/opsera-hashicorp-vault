@@ -8,10 +8,12 @@
 
 import Model, { belongsTo, attr } from '@ember-data/model';
 
-export default class TestFormModel extends Model {
-  @belongsTo('mount-config', { async: false, inverse: null }) config;
-  @belongsTo('mount-config', { async: false, inverse: null }) otherConfig;
+import type MountConfigModel from 'vault/models/mount-config';
 
-  @attr('string') path;
-  @attr('string', { editType: 'textarea' }) description;
+export default class TestFormModel extends Model {
+  @belongsTo('mount-config', { async: false, inverse: null }) declare config: MountConfigModel;
+  @belongsTo('mount-config', { async: false, inverse: null }) declare otherConfig: MountConfigModel;
+
+  @attr('string') declare path: string | undefined;
+  @attr('string', { editType: 'textarea' }) declare description: string | undefined;
 }

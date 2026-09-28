@@ -185,8 +185,13 @@ export default class UpgradePathAnalyzer extends Component<UpgradePathAnalyzerAr
       return null;
     }
 
-    const drSecondaries = this.cluster.dr?.knownSecondaries ?? [];
-    const perfSecondaries = this.cluster.performance?.knownSecondaries ?? [];
+    // `knownSecondaries` is typed as `string[]` on the model (matching the documented API response
+    // shape), but this component has always treated entries as `{ node_id }` objects; preserve that
+    // existing (pre-TypeScript) runtime behavior here rather than changing it as part of a type-only
+    // conversion of the model.
+    const drSecondaries = (this.cluster.dr?.knownSecondaries ?? []) as unknown as ReplicationSecondary[];
+    const perfSecondaries = (this.cluster.performance?.knownSecondaries ??
+      []) as unknown as ReplicationSecondary[];
 
     return {
       clusterName: this.cluster.name ?? 'Current cluster',

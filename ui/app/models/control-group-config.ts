@@ -4,22 +4,25 @@
  */
 
 import Model, { attr } from '@ember-data/model';
-import { alias } from '@ember/object/computed';
-import { computed } from '@ember/object';
-import lazyCapabilities, { apiPath } from 'vault/macros/lazy-capabilities';
+import lazyCapabilities, { apiPath, type CapabilitiesPathProxy } from 'vault/macros/lazy-capabilities';
 
 import { expandAttributeMeta } from 'vault/utils/field-to-attrs';
 
-export default Model.extend({
-  fields: computed(function () {
-    return expandAttributeMeta(this, ['maxTtl']);
-  }),
-
-  configurePath: lazyCapabilities(apiPath`sys/config/control-group`),
-  canDelete: alias('configurePath.canDelete'),
-  maxTtl: attr({
+export default class ControlGroupConfigModel extends Model {
+  @attr({
     defaultValue: 0,
     editType: 'ttl',
     label: 'Maximum TTL',
-  }),
-});
+  })
+  declare maxTtl: number;
+
+  @lazyCapabilities(apiPath`sys/config/control-group`) declare configurePath: CapabilitiesPathProxy;
+
+  get canDelete(): boolean {
+    return this.configurePath.get('canDelete') ?? false;
+  }
+
+  get fields() {
+    return expandAttributeMeta(this, ['maxTtl']);
+  }
+}

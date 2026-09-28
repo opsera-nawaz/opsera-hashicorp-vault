@@ -5,11 +5,12 @@
 
 import Model, { attr } from '@ember-data/model';
 
-export default Model.extend({
-  mode: attr('string'),
-  paths: attr('array', {
+export default class PathFilterConfigModel extends Model {
+  @attr('string') declare mode: string | undefined;
+  @attr('array', {
     defaultValue: function () {
       return [];
     },
-  }),
-});
+  })
+  declare paths: string[];
+}

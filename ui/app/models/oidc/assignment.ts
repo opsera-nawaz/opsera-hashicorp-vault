@@ -4,11 +4,13 @@
  */
 
 import Model, { attr } from '@ember-data/model';
-import lazyCapabilities, { apiPath } from 'vault/macros/lazy-capabilities';
+import lazyCapabilities, { apiPath, type CapabilitiesPathProxy } from 'vault/macros/lazy-capabilities';
 import { withModelValidations } from 'vault/decorators/model-validations';
 import { isPresent } from '@ember/utils';
 
-const validations = {
+import type { Validations } from 'vault/app-types';
+
+const validations: Validations = {
   name: [
     { type: 'presence', message: 'Name is required.' },
     {
@@ -18,7 +20,7 @@ const validations = {
   ],
   targets: [
     {
-      validator(model) {
+      validator(model: OidcAssignmentModel) {
         return isPresent(model.entityIds) || isPresent(model.groupIds);
       },
       message: 'At least one entity or group is required.',
@@ -28,19 +30,20 @@ const validations = {
 
 @withModelValidations(validations)
 export default class OidcAssignmentModel extends Model {
-  @attr('string') name;
-  @attr('array') entityIds;
-  @attr('array') groupIds;
+  @attr('string') declare name: string | undefined;
+  @attr('array') declare entityIds: string[] | undefined;
+  @attr('array') declare groupIds: string[] | undefined;
 
   // CAPABILITIES
-  @lazyCapabilities(apiPath`identity/oidc/assignment/${'name'}`, 'name') assignmentPath;
-  get canRead() {
-    return this.assignmentPath.get('canRead');
+  @lazyCapabilities(apiPath`identity/oidc/assignment/${'name'}`, 'name')
+  declare assignmentPath: CapabilitiesPathProxy;
+  get canRead(): boolean {
+    return this.assignmentPath.get('canRead') ?? false;
   }
-  get canEdit() {
-    return this.assignmentPath.get('canUpdate');
+  get canEdit(): boolean {
+    return this.assignmentPath.get('canUpdate') ?? false;
   }
-  get canDelete() {
-    return this.assignmentPath.get('canDelete');
+  get canDelete(): boolean {
+    return this.assignmentPath.get('canDelete') ?? false;
   }
 }

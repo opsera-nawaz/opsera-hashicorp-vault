@@ -43,7 +43,7 @@ export default class SecretsBackendConfigurationPluginSettingsRoute extends Rout
 
   afterModel(resolvedModel: RouteModel) {
     // If there is no config and no custom config route when nav to plugin-settings tab redirect to edit page.
-    if (!resolvedModel.config && !engineDisplayData(resolvedModel.secretsEngine.type).configRoute) {
+    if (!resolvedModel.config && !engineDisplayData(resolvedModel.secretsEngine.type ?? '').configRoute) {
       return this.router.replaceWith('vault.cluster.secrets.backend.configuration.edit');
     } else {
       return;

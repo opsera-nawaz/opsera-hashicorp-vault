@@ -6,7 +6,7 @@
 import Model, { attr } from '@ember-data/model';
 import parseURL from 'core/utils/parse-url';
 
-const DOMAIN_STRINGS = {
+const DOMAIN_STRINGS: Record<string, string> = {
   'github.com': 'GitHub',
   'gitlab.com': 'GitLab',
   'google.com': 'Google',
@@ -16,7 +16,7 @@ const DOMAIN_STRINGS = {
   'login.microsoftonline.com': 'Azure',
 };
 
-const PROVIDER_WITH_LOGO = {
+const PROVIDER_WITH_LOGO: Record<string, string> = {
   GitHub: 'github',
   GitLab: 'gitlab',
   Google: 'google',
@@ -28,16 +28,16 @@ const PROVIDER_WITH_LOGO = {
 export { DOMAIN_STRINGS, PROVIDER_WITH_LOGO };
 
 export default class RoleJwtModel extends Model {
-  @attr('string') authUrl;
+  @attr('string') declare authUrl: string | undefined;
 
-  get providerName() {
+  get providerName(): string | null {
     const { hostname } = parseURL(this.authUrl);
-    const firstMatch = Object.keys(DOMAIN_STRINGS).find((name) => hostname.includes(name));
-    return DOMAIN_STRINGS[firstMatch] || null;
+    const firstMatch = Object.keys(DOMAIN_STRINGS).find((name) => (hostname ?? '').includes(name));
+    return (firstMatch && DOMAIN_STRINGS[firstMatch]) || null;
   }
 
-  get providerIcon() {
+  get providerIcon(): string | null {
     const { providerName } = this;
-    return PROVIDER_WITH_LOGO[providerName] || null;
+    return (providerName && PROVIDER_WITH_LOGO[providerName]) || null;
   }
 }

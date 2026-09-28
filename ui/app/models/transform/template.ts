@@ -4,8 +4,10 @@
  */
 
 import Model, { attr } from '@ember-data/model';
-import lazyCapabilities, { apiPath } from 'vault/macros/lazy-capabilities';
+import lazyCapabilities, { apiPath, type CapabilitiesPathProxy } from 'vault/macros/lazy-capabilities';
 import { expandAttributeMeta } from 'vault/utils/field-to-attrs';
+
+import type { FormField } from 'vault/app-types';
 
 export default class TransformTemplate extends Model {
   idPrefix = 'template/';
@@ -15,15 +17,15 @@ export default class TransformTemplate extends Model {
     subText:
       'Templates allow Vault to determine what and how to capture the value to be transformed. This cannot be edited later.',
   })
-  name;
+  declare name: string | undefined;
 
-  @attr('string', { defaultValue: 'regex' }) type;
+  @attr('string', { defaultValue: 'regex' }) declare type: string;
 
   @attr('string', {
     editType: 'regex',
     subText: 'The template’s pattern defines the data format. Expressed in regex.',
   })
-  pattern;
+  declare pattern: string | undefined;
 
   @attr('array', {
     subText:
@@ -35,21 +37,22 @@ export default class TransformTemplate extends Model {
     models: ['transform/alphabet'],
     selectLimit: 1,
   })
-  alphabet;
+  declare alphabet: string[] | undefined;
 
-  @attr('string') encodeFormat;
-  @attr('') decodeFormats;
+  @attr('string') declare encodeFormat: string | undefined;
+  @attr('') declare decodeFormats: string | undefined;
 
-  @attr('string', { readOnly: true }) backend;
+  @attr('string', { readOnly: true }) declare backend: string | undefined;
 
-  get readAttrs() {
+  get readAttrs(): FormField[] {
     const keys = ['name', 'pattern', 'encodeFormat', 'decodeFormats', 'alphabet'];
     return expandAttributeMeta(this, keys);
   }
 
-  get writeAttrs() {
+  get writeAttrs(): FormField[] {
     return expandAttributeMeta(this, ['name', 'pattern', 'alphabet']);
   }
 
-  @lazyCapabilities(apiPath`${'backend'}/template/${'id'}`, 'backend') updatePath;
+  @lazyCapabilities(apiPath`${'backend'}/template/${'id'}`, 'backend')
+  declare updatePath: CapabilitiesPathProxy;
 }

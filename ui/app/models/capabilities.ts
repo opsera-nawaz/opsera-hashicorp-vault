@@ -9,8 +9,6 @@
 
 import Model, { attr } from '@ember-data/model';
 
-import { computed } from '@ember/object';
-
 const SUDO_PATHS = [
   'sys/seal',
   'sys/replication/performance/primary/secondary-token',
@@ -23,10 +21,14 @@ const SUDO_PATH_PREFIXES = ['sys/leases/revoke-prefix', 'sys/leases/revoke-force
 
 export { SUDO_PATHS, SUDO_PATH_PREFIXES };
 
-const computedCapability = function (capability) {
-  return computed('path', 'capabilities', 'capabilities.[]', function () {
-    const capabilities = this.capabilities;
-    const path = this.path;
+export default class CapabilitiesModel extends Model {
+  @attr('string') declare path: string;
+  @attr('array') declare capabilities: string[] | undefined;
+  @attr() declare allowedParameters: Record<string, unknown> | undefined;
+  @attr() declare deniedParameters: Record<string, unknown> | undefined;
+
+  hasCapability(capability: string): boolean {
+    const { capabilities, path } = this;
     if (!capabilities) {
       return false;
     }
@@ -41,19 +43,27 @@ const computedCapability = function (capability) {
       return capabilities.includes('sudo') && capabilities.includes(capability);
     }
     return capabilities.includes(capability);
-  });
-};
+  }
 
-export default Model.extend({
-  path: attr('string'),
-  capabilities: attr('array'),
-  allowedParameters: attr(),
-  deniedParameters: attr(),
-  canCreate: computedCapability('create'),
-  canDelete: computedCapability('delete'),
-  canList: computedCapability('list'),
-  canPatch: computedCapability('patch'),
-  canRead: computedCapability('read'),
-  canSudo: computedCapability('sudo'),
-  canUpdate: computedCapability('update'),
-});
+  get canCreate(): boolean {
+    return this.hasCapability('create');
+  }
+  get canDelete(): boolean {
+    return this.hasCapability('delete');
+  }
+  get canList(): boolean {
+    return this.hasCapability('list');
+  }
+  get canPatch(): boolean {
+    return this.hasCapability('patch');
+  }
+  get canRead(): boolean {
+    return this.hasCapability('read');
+  }
+  get canSudo(): boolean {
+    return this.hasCapability('sudo');
+  }
+  get canUpdate(): boolean {
+    return this.hasCapability('update');
+  }
+}

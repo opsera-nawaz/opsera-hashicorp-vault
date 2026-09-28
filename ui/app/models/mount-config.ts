@@ -10,27 +10,27 @@ export default class MountConfigModel extends Model {
     label: 'Default Lease TTL',
     editType: 'ttl',
   })
-  defaultLeaseTtl;
+  declare defaultLeaseTtl: string | undefined;
 
   @attr({
     label: 'Max Lease TTL',
     editType: 'ttl',
   })
-  maxLeaseTtl;
+  declare maxLeaseTtl: string | undefined;
 
   @attr({
     label: 'Request keys excluded from HMACing in audit',
     editType: 'stringArray',
     helpText: "Keys that will not be HMAC'd by audit devices in the request data object.",
   })
-  auditNonHmacRequestKeys;
+  declare auditNonHmacRequestKeys: string[] | undefined;
 
   @attr({
     label: 'Response keys excluded from HMACing in audit',
     editType: 'stringArray',
     helpText: "Keys that will not be HMAC'd by audit devices in the response data object.",
   })
-  auditNonHmacResponseKeys;
+  declare auditNonHmacResponseKeys: string[] | undefined;
 
   @attr('mountVisibility', {
     label: 'Use as preferred UI login method',
@@ -41,21 +41,21 @@ export default class MountConfigModel extends Model {
       'Turn on the toggle to use this auth mount as a preferred login method during UI login.',
     defaultValue: false,
   })
-  listingVisibility;
+  declare listingVisibility: string | undefined;
 
   @attr({
     label: 'Allowed passthrough request headers',
     helpText: 'Headers to allow and pass from the request to the backend',
     editType: 'stringArray',
   })
-  passthroughRequestHeaders;
+  declare passthroughRequestHeaders: string[] | undefined;
 
   @attr({
     label: 'Allowed response headers',
     helpText: 'Headers to allow, allowing a plugin to include them in the response.',
     editType: 'stringArray',
   })
-  allowedResponseHeaders;
+  declare allowedResponseHeaders: string[] | undefined;
 
   @attr('string', {
     label: 'Token type',
@@ -64,19 +64,19 @@ export default class MountConfigModel extends Model {
     possibleValues: ['default-service', 'default-batch', 'batch', 'service'],
     noDefault: true,
   })
-  tokenType;
+  declare tokenType: string | undefined;
 
   @attr({
     editType: 'stringArray',
   })
-  allowedManagedKeys;
+  declare allowedManagedKeys: string[] | undefined;
 
   @attr('string', {
     label: 'Plugin version',
     subText:
       'Specifies the semantic version of the plugin to use, e.g. "v1.0.0". If unspecified, the server will select any matching un-versioned plugin that may have been registered, the latest versioned plugin registered, or a built-in plugin in that order of precedence.',
   })
-  pluginVersion;
+  declare pluginVersion: string | undefined;
 
   // identityTokenKey is yielded in a named block on the mount-backend-form component
   @attr({
@@ -84,14 +84,14 @@ export default class MountConfigModel extends Model {
     subText: `A named key to sign tokens. If not provided, this will default to Vault's OIDC default key.`,
     editType: 'yield',
   })
-  identityTokenKey;
+  declare identityTokenKey: string | undefined;
 
   // Auth mount userLockoutConfig params, added to user_lockout_config object in saveModel method
   @attr('string', {
     label: 'Lockout threshold',
     subText: 'Specifies the number of failed login attempts after which the user is locked out, e.g. 15.',
   })
-  lockoutThreshold;
+  declare lockoutThreshold: string | undefined;
 
   @attr({
     label: 'Lockout duration',
@@ -99,7 +99,7 @@ export default class MountConfigModel extends Model {
     editType: 'ttl',
     helperTextDisabled: 'No lockout duration configured.',
   })
-  lockoutDuration;
+  declare lockoutDuration: string | undefined;
 
   @attr({
     label: 'Lockout counter reset',
@@ -108,12 +108,12 @@ export default class MountConfigModel extends Model {
     editType: 'ttl',
     helperTextDisabled: 'No reset duration configured.',
   })
-  lockoutCounterReset;
+  declare lockoutCounterReset: string | undefined;
 
   @attr('boolean', {
     label: 'Disable lockout for this mount',
     subText: 'If checked, disables the user lockout feature for this mount.',
   })
-  lockoutDisable;
+  declare lockoutDisable: boolean | undefined;
   // end of user_lockout_config params
 }

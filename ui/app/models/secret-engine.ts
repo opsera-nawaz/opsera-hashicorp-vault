@@ -13,9 +13,12 @@ import { INTERNAL_ENGINE_TYPES } from 'vault/utils/all-engines-metadata';
 import { getEffectiveEngineType } from 'vault/utils/external-plugin-helpers';
 import { WHITESPACE_WARNING } from 'vault/utils/forms/validators';
 
-const LINKED_BACKENDS = supportedSecretBackends();
+import type MountConfigModel from 'vault/models/mount-config';
+import type { FormField, Validations } from 'vault/app-types';
 
-const validations = {
+const LINKED_BACKENDS: string[] = supportedSecretBackends();
+
+const validations: Validations = {
   path: [
     { type: 'presence', message: "Path can't be blank." },
     {
@@ -33,29 +36,35 @@ const validations = {
 @withModelValidations(validations)
 @withExpandedAttributes()
 export default class SecretEngineModel extends Model {
-  @attr('string') path;
-  @attr('string') type;
+  // Added at runtime by the `@withExpandedAttributes()` class decorator above. TypeScript's legacy
+  // `experimentalDecorators` class decorators can change a class's runtime shape but not the static
+  // type seen by the decorated class's own body/consumers, so these are redeclared here.
+  declare allByKey: Record<string, FormField>;
+  declare _expandGroups: (groups: Array<Record<string, string[]>>) => Array<Record<string, FormField[]>>;
+
+  @attr('string') declare path: string | undefined;
+  @attr('string') declare type: string | undefined;
   @attr('string', {
     editType: 'textarea',
   })
-  description;
-  @belongsTo('mount-config', { async: false, inverse: null }) config;
+  declare description: string | undefined;
+  @belongsTo('mount-config', { async: false, inverse: null }) declare config: MountConfigModel;
 
   // Enterprise options (still available on OSS)
   @attr('boolean', {
     helpText:
       'When Replication is enabled, a local mount will not be replicated across clusters. This can only be specified at mount time.',
   })
-  local;
+  declare local: boolean | undefined;
   @attr('boolean', {
     helpText:
       'When enabled - if a seal supporting seal wrapping is specified in the configuration, all critical security parameters (CSPs) in this backend will be seal wrapped. (For KV mounts, all values will be seal wrapped.) This can only be specified at mount time.',
   })
-  sealWrap;
-  @attr('boolean') externalEntropyAccess;
+  declare sealWrap: boolean | undefined;
+  @attr('boolean') declare externalEntropyAccess: boolean | undefined;
 
   // options.version
-  @attr('number', {
+  @attr({
     label: 'Version',
     helpText:
       'The KV Secrets Engine can operate in different modes. Version 1 is the original generic Secrets Engine that allows for the storage of static key/value pairs. Version 2 added more features, including data versioning, TTLs, and check-and-set.',
@@ -63,14 +72,14 @@ export default class SecretEngineModel extends Model {
     // This shouldn't be defaultValue because if no version comes back from API we should assume it's v1
     defaultFormValue: 2, // Set the form to 2 by default
   })
-  version;
+  declare version: number | string | undefined;
 
   // AWS specific attributes
-  @attr('string') lease;
-  @attr('string') leaseMax;
+  @attr('string') declare lease: string | undefined;
+  @attr('string') declare leaseMax: string | undefined;
 
   // Returned from API response
-  @attr('string') accessor;
+  @attr('string') declare accessor: string | undefined;
 
   // KV 2 additional config default options
   @attr('number', {
@@ -79,14 +88,14 @@ export default class SecretEngineModel extends Model {
     subText:
       'The number of versions to keep per key. Once the number of keys exceeds the maximum number set here, the oldest version will be permanently deleted. This value applies to all keys, but a key’s metadata settings can overwrite this value. When 0 is used or the value is unset, Vault will keep 10 versions.',
   })
-  maxVersions;
+  declare maxVersions: number;
   @attr('boolean', {
     defaultValue: false,
     label: 'Require Check and Set',
     subText:
       'If checked, all keys will require the cas parameter to be set on all write requests. A key’s metadata settings can overwrite this value.',
   })
-  casRequired;
+  declare casRequired: boolean;
   @attr({
     defaultValue: 0,
     editType: 'ttl',
@@ -94,7 +103,7 @@ export default class SecretEngineModel extends Model {
     helperTextDisabled: 'A secret’s version must be manually deleted.',
     helperTextEnabled: 'Delete all new versions of this secret after',
   })
-  deleteVersionAfter;
+  declare deleteVersionAfter: string | number;
 
   // `plugin_version` represents the version specified at mount time (if any), and is only used for external plugins.
   // For built-in plugins, this field is intentionally left empty to simplify upgrades.
@@ -102,49 +111,49 @@ export default class SecretEngineModel extends Model {
   // `running_plugin_version` reflects the actual version of the plugin currently running,
   // regardless of whether it is built-in or external. This provides a reliable source of truth
   // and is why we are surfacing it over plugin_version.
-  @attr('string') runningPluginVersion;
+  @attr('string') declare runningPluginVersion: string | undefined;
 
   /* GETTERS */
-  get isV2KV() {
+  get isV2KV(): boolean {
     const effectiveType = getEffectiveEngineType(this.engineType);
     return this.version === 2 && ['kv', 'generic'].includes(effectiveType);
   }
 
-  get attrs() {
+  get attrs(): FormField[] {
     return this.formFields.map((fieldName) => {
       return this.allByKey[fieldName];
-    });
+    }) as FormField[];
   }
 
-  get fieldGroups() {
+  get fieldGroups(): Array<Record<string, FormField[]>> {
     return this._expandGroups(this.formFieldGroups);
   }
 
-  get icon() {
+  get icon(): string {
     const engineData = engineDisplayData(this.engineType);
 
     return engineData?.glyph || 'lock';
   }
 
-  get engineType() {
+  get engineType(): string {
     return (this.type || '').replace(/^ns_/, '');
   }
 
-  get shouldIncludeInList() {
+  get shouldIncludeInList(): boolean {
     return !INTERNAL_ENGINE_TYPES.includes(this.engineType);
   }
 
-  get isSupportedBackend() {
+  get isSupportedBackend(): boolean {
     return LINKED_BACKENDS.includes(this.engineType);
   }
 
-  get backendLink() {
+  get backendLink(): string {
     const effectiveType = getEffectiveEngineType(this.engineType);
     if (effectiveType === 'database') {
       return 'vault.cluster.secrets.backend.overview';
     }
-    if (isAddonEngine(effectiveType, this.version)) {
-      return `vault.cluster.secrets.backend.${engineDisplayData(effectiveType).engineRoute}`;
+    if (isAddonEngine(effectiveType, Number(this.version))) {
+      return `vault.cluster.secrets.backend.${engineDisplayData(effectiveType)?.engineRoute}`;
     }
     if (this.isV2KV) {
       // if it's KV v2 but not registered as an addon, it's type generic
@@ -153,19 +162,19 @@ export default class SecretEngineModel extends Model {
     return `vault.cluster.secrets.backend.list-root`;
   }
 
-  get backendConfigurationLink() {
+  get backendConfigurationLink(): string {
     const effectiveType = getEffectiveEngineType(this.engineType);
-    if (isAddonEngine(effectiveType, this.version)) {
+    if (isAddonEngine(effectiveType, Number(this.version))) {
       return `vault.cluster.secrets.backend.${effectiveType}.configuration`;
     }
     return `vault.cluster.secrets.backend.configuration.general-settings`;
   }
 
-  get localDisplay() {
+  get localDisplay(): string {
     return this.local ? 'local' : 'replicated';
   }
 
-  get formFields() {
+  get formFields(): string[] {
     const type = this.engineType;
     const fields = ['type', 'path', 'description', 'accessor', 'runningPluginVersion', 'local', 'sealWrap'];
     // no ttl options for keymgmt
@@ -183,7 +192,7 @@ export default class SecretEngineModel extends Model {
       fields.push('version');
     }
     // version comes in as number not string
-    if (type === 'kv' && parseInt(this.version, 10) === 2) {
+    if (type === 'kv' && parseInt(String(this.version), 10) === 2) {
       fields.push('casRequired', 'deleteVersionAfter', 'maxVersions');
     }
     // For WIF Secret engines, allow users to set the identity token key when mounting the engine.
@@ -193,9 +202,9 @@ export default class SecretEngineModel extends Model {
     return fields;
   }
 
-  get formFieldGroups() {
+  get formFieldGroups(): Array<Record<string, string[]>> {
     let defaultFields = ['path'];
-    let optionFields;
+    let optionFields: string[];
     const CORE_OPTIONS = ['description', 'config.listingVisibility', 'local', 'sealWrap'];
     const STANDARD_CONFIG = [
       'config.auditNonHmacRequestKeys',
@@ -240,7 +249,9 @@ export default class SecretEngineModel extends Model {
         // no ttl options for keymgmt
         optionFields = [...CORE_OPTIONS, 'config.allowedManagedKeys', ...STANDARD_CONFIG];
         break;
-      case ALL_ENGINES.find((engine) => engine.type === this.engineType && engine.isWIF)?.type:
+      case ALL_ENGINES.find(
+        (engine: { type: string; isWIF?: boolean }) => engine.type === this.engineType && engine.isWIF
+      )?.type:
         defaultFields = ['path'];
         optionFields = [
           ...CORE_OPTIONS,
@@ -263,11 +274,6 @@ export default class SecretEngineModel extends Model {
         break;
     }
 
-    return [
-      { default: defaultFields },
-      {
-        'Method Options': optionFields,
-      },
-    ];
+    return [{ default: defaultFields }, { 'Method Options': optionFields }];
   }
 }

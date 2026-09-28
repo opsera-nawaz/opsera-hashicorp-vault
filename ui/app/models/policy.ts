@@ -4,25 +4,33 @@
  */
 
 import Model, { attr } from '@ember-data/model';
-import { alias } from '@ember/object/computed';
-import { computed } from '@ember/object';
-import lazyCapabilities, { apiPath } from 'vault/macros/lazy-capabilities';
+import lazyCapabilities, { apiPath, type CapabilitiesPathProxy } from 'vault/macros/lazy-capabilities';
 
-export default Model.extend({
-  name: attr('string'),
-  policy: attr('string'),
-  policyType: computed('constructor.modelName', function () {
-    return this.constructor.modelName.split('/')[1];
-  }),
-  updatePath: lazyCapabilities(apiPath`sys/policies/${'policyType'}/${'id'}`, 'id', 'policyType'),
-  canDelete: alias('updatePath.canDelete'),
-  canEdit: alias('updatePath.canUpdate'),
-  canRead: alias('updatePath.canRead'),
-  format: computed('policy', function () {
+export default class PolicyModel extends Model {
+  @attr('string') declare name: string | undefined;
+  @attr('string') declare policy: string | undefined;
+
+  get policyType(): string | undefined {
+    return String((this.constructor as typeof PolicyModel).modelName).split('/')[1];
+  }
+
+  @lazyCapabilities(apiPath`sys/policies/${'policyType'}/${'id'}`, 'id', 'policyType')
+  declare updatePath: CapabilitiesPathProxy;
+  get canDelete(): boolean {
+    return this.updatePath.get('canDelete') ?? false;
+  }
+  get canEdit(): boolean {
+    return this.updatePath.get('canUpdate') ?? false;
+  }
+  get canRead(): boolean {
+    return this.updatePath.get('canRead') ?? false;
+  }
+
+  get format(): 'json' | 'hcl' {
     const policy = this.policy;
-    let isJSON;
+    let isJSON = false;
     try {
-      const parsed = JSON.parse(policy);
+      const parsed = policy ? JSON.parse(policy) : undefined;
       if (parsed) {
         isJSON = true;
       }
@@ -31,5 +39,5 @@ export default Model.extend({
       isJSON = false;
     }
     return isJSON ? 'json' : 'hcl';
-  }),
-});
+  }
+}
