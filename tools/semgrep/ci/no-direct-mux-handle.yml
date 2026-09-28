@@ -1,0 +1,61 @@
+# Copyright IBM Corp. 2016, 2025
+# SPDX-License-Identifier: BUSL-1.1
+#
+# EPIC-03 handler registration remediation: blocks direct mux.Handle /
+# mux.HandleFunc registrations in the http/ package outside the
+# HandlerRegistry. WO-024 migrated every production endpoint in
+# http/handler.go onto HandlerRegistry.Register(), so each handler's
+# authorization metadata (AuthRequired, FIPSSensitive, audit classification)
+# is explicit and auditable at the registration site instead of being
+# buried inside the handler body. This rule prevents regressions where a
+# new handler is wired up with a bare mux.Handle call that silently
+# bypasses that registry and the authorization pipeline it enforces.
+#
+# Exclusions:
+#   - http/handler_registry.go is the HandlerRegistry implementation
+#     itself; its Build() method is the one legitimate place that calls
+#     mux.Handle, since it is what every other handler is wrapped by.
+#   - The three mux.Handle calls in the `case props.RecoveryMode:` branch
+#     of handlerWithSettings (http/handler.go) are an intentional,
+#     documented exception: recovery mode is a separate, much smaller
+#     handler set that predates and is not part of this registry. They are
+#     allowlisted structurally below via pattern-not-inside rather than by
+#     excluding handler.go outright, so any *other* direct mux.Handle call
+#     added to handler.go in the future is still caught.
+#   - Test files (http/*_test.go) may legitimately construct a raw mux for
+#     test setup and are out of scope for this enforcement. http/testing.go
+#     is the same kind of test-support file (TestListener,
+#     TestServerWithListenerAndProperties) but doesn't match the *_test.go
+#     glob, so it is excluded by name — the same precedent WO-033's
+#     fips-crypto-imports.yml sets for vault/testing.go.
+
+rules:
+  - id: no-direct-mux-handle
+    patterns:
+      - pattern-either:
+          - pattern: mux.Handle($PATH, $HANDLER)
+          - pattern: mux.HandleFunc($PATH, $HANDLER)
+      - pattern-not-inside: |
+          switch {
+          case props.RecoveryMode:
+              ...
+          }
+    paths:
+      include:
+        - "**/http/**"
+      exclude:
+        - "**/http/handler_registry.go"
+        - "**/http/*_test.go"
+        - "**/http/testing.go"
+    message: >-
+      Direct mux.Handle calls are prohibited in the http package. Use
+      HandlerRegistry.Register() instead. See EPIC-03 handler registration
+      remediation.
+    languages: [go]
+    severity: ERROR
+    metadata:
+      quality_gate: EPIC-03
+      category: security
+      confidence: HIGH
+      references:
+        - http/handler_registry.go
