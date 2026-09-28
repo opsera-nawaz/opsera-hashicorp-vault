@@ -83,3 +83,14 @@ declare module 'ember-engines/routes' {
 
   export default function buildRoutes(callback: DSLCallback): DSLCallback & { isRouteMap: true };
 }
+
+// jsondiffpatch and its HTML formatter are compiled into standalone UMD
+// vendor bundles by webpack.jsondiffpatch.config.js and loaded as browser
+// globals via `app.import()` in ember-cli-build.js (used by the KV engine's
+// secret/version-diff views), so they have no import path of their own.
+declare const jsondiffpatch: {
+  create(options?: import('jsondiffpatch').Options): import('jsondiffpatch').DiffPatcher;
+};
+declare const htmlformatter: {
+  format(delta: import('jsondiffpatch').Delta, left?: unknown): string | undefined;
+};

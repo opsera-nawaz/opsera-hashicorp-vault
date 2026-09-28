@@ -201,3 +201,35 @@ change its output. `ui/lib/kmip/addon/config/environment.d.ts` and
 `ui/lib/sync/addon/config/environment.d.ts` (new files, no `.js` counterpart)
 are excluded from both counts above for the same "type-only, zero runtime
 footprint" reason `app/config/environment.d.ts` already is.
+
+## Update — WO-048: `ui/lib/kv/` converted to TypeScript
+
+**Date:** 2026-09-28
+
+WO-048 converted every `.js` file under `ui/lib/kv/addon/` to `.ts` (19 routes
+plus `engine.js`/`addon/routes.js`, 3 controllers, 4 helpers, 2 utils, and 18
+components — 48 files total), added `lib/kv/**/*` to `ui/tsconfig.json`'s
+`include`, fixed the 5 pre-existing errors this baseline flagged above for
+`kv-version-dropdown.ts` and `page/configure.ts`, and removed the
+now-redundant `lib/kv/**/*.ts` exclusion from the `strict-type-checked`
+override in `ui/.eslintrc.js` per this doc's own follow-up note.
+
+```sh
+find ui/lib/kv -name '*.js' | grep -v node_modules   # index.js, config/environment.js only — Node-side entry/build files, untouched like every sibling engine's own index.js
+npx tsc --noEmit                                      # 0 errors, run from ui/
+```
+
+Every file was `git mv`'d before any typing changes, so `git log --follow`
+preserves full pre-.ts history. A shared `ui/lib/kv/addon/utils/kv-types.ts`
+module defines the domain types (`KvSecretMetadata`, `KvSubkeysResponse`,
+`KvCapabilities`, etc.) that the generated `@hashicorp/vault-client-typescript`
+response models don't cover — their KV payload fields are typed as plain
+`object` because the OpenAPI spec doesn't model KV's dynamic maps
+(`versions`, `data`, `subkeys`, `metadata`). A couple of latent issues were
+surfaced by strict typing and fixed: `routes/configure.ts`'s "Configuration"
+breadcrumb passed the whole `backend` resource object as `model` instead of
+`backend.id` (every sibling breadcrumb entry in this file and
+`routes/configuration.ts` uses `.id`); `page/secret/metadata/details.ts`'s
+error handler unconditionally set `.isControlGroup` on the previous
+(sometimes still-`null`) value of `this.error` before overwriting it on the
+non-control-group failure path.

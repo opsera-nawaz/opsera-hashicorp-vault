@@ -86,6 +86,7 @@
     "lib/core/**/*",
     "lib/css/**/*",
     "lib/kmip/**/*",
+    "lib/kv/**/*",
     "lib/ldap/**/*",
     "lib/kubernetes/**/*",
     "lib/open-api-explorer/**/*",

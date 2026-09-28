@@ -5,47 +5,45 @@
 
 import Component from '@glimmer/component';
 import { service } from '@ember/service';
-
-import { action } from '@ember/object';
-import { tracked } from '@glimmer/tracking';
 import { task } from 'ember-concurrency';
+import { tracked } from '@glimmer/tracking';
 
 import type KvForm from 'vault/forms/secrets/kv';
-import type { ApiParsedError } from 'vault/api';
-import type { Breadcrumb, ValidationMap } from 'vault/app-types';
-import type FlashMessageService from 'vault/services/flash-messages';
-import type RouterService from '@ember/routing/router-service';
 import type ApiService from 'vault/services/api';
-import type SecretsEngineResource from 'vault/resources/secrets/engine';
+import type { ApiParsedError } from 'vault/api';
+import type FlashMessageService from 'vault/services/flash-messages';
+import type { Breadcrumb, ValidationMap } from 'vault/app-types';
+import type { KvCapabilities } from 'kv/utils/kv-types';
 
 interface Args {
   form: KvForm;
-  backend: SecretsEngineResource;
-  breadcrumbs: Array<Breadcrumb>;
+  backend: string;
+  breadcrumbs: Breadcrumb[];
+  capabilities: KvCapabilities;
+  onCancel: () => void;
+  onSave: () => void;
 }
 
 /**
- * @module KvConfigurePageComponent
- * KvConfigurePageComponent is a component to show secrets mount and engine configuration data
+ * @module KvSecretMetadataEdit
+ * This component renders the view for editing a kv secret's metadata.
+ * While secret data and metadata are created on the same view, they are edited on different views/routes.
  *
- * @param {object} form - config form data for mount and engine
- * @param {string} backend - The kv secrets engine data
+ * @param {Form} form - kv form
+ * @param {string} backend - mount path of the kv secret engine
  * @param {array} breadcrumbs - Breadcrumbs as an array of objects that contain label, route, and modelId. They are updated via the util kv-breadcrumbs to handle dynamic *pathToSecret on the list-directory route.
+ * @param {object} capabilities - capabilities for data, metadata, subkeys, delete and undelete paths
+ * @callback onCancel - Callback triggered when cancel button is clicked that transitions to the metadata details route.
+ * @callback onSave - Callback triggered on save success that transitions to the metadata details route.
  */
 
-export default class KvConfigurePageComponent extends Component<Args> {
+export default class KvSecretMetadataEditComponent extends Component<Args> {
   @service declare readonly flashMessages: FlashMessageService;
-  @service('app-router') declare readonly router: RouterService;
   @service declare readonly api: ApiService;
 
   @tracked errorBanner = '';
   @tracked invalidFormAlert = '';
   @tracked modelValidations: ValidationMap | null = null;
-
-  @action
-  navigateToConfiguration(): void {
-    this.router.transitionTo(`vault.cluster.secrets.backend.kv.configuration`);
-  }
 
   @task
   *save(event: Event) {
@@ -56,9 +54,10 @@ export default class KvConfigurePageComponent extends Component<Args> {
       this.invalidFormAlert = invalidFormMessage;
 
       if (isValid) {
-        yield this.api.secrets.kvV2Configure(data.path, data);
-        this.flashMessages.success(`Successfully updated ${data.path}'s configuration.`);
-        this.navigateToConfiguration();
+        const { path, ...metadata } = data;
+        yield this.api.secrets.kvV2WriteMetadata(path, this.args.backend, metadata);
+        this.flashMessages.success(`Successfully updated ${path}'s metadata.`);
+        this.args.onSave();
       }
     } catch (error) {
       const { message } = (yield this.api.parseError(error)) as ApiParsedError;
