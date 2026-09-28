@@ -103,4 +103,70 @@ module('Unit | Service | path-help', function (hooks) {
       });
     });
   });
+
+  // These tests verify the runtime shapes match the OpenApiPathItem / PathResolutionResult
+  // and OpenApiExpandedProps interfaces introduced when path-help.js was converted to
+  // TypeScript (path-help.ts), so the typed contract stays honest as OpenAPI responses change.
+  module('getPaths (typed contract)', function (hooks) {
+    hooks.beforeEach(function () {
+      this.server.get('/auth/userpass/', () => openapiStub);
+    });
+
+    test('it resolves a PathResolutionResult whose path entries match the typed Path shape', async function (assert) {
+      const pathInfo = await this.pathHelp.getPaths('auth/userpass/', 'userpass');
+
+      assert.strictEqual(
+        pathInfo.apiPath,
+        'auth/userpass/',
+        'apiPath is preserved on the typed PathResolutionResult'
+      );
+      assert.true(
+        Array.isArray(pathInfo.paths),
+        'paths is an array as declared on PathResolutionResult/PathInfo'
+      );
+
+      const [path] = pathInfo.paths;
+      assert.deepEqual(
+        Object.keys(path).sort(),
+        ['action', 'itemName', 'itemType', 'navigation', 'operations', 'param', 'path'].sort(),
+        'each resolved path entry has exactly the fields declared on the Path type backing PathResolutionResult'
+      );
+      assert.strictEqual(
+        path.itemType,
+        'user',
+        'x-vault-displayAttrs.itemType is surfaced on the typed path entry'
+      );
+      assert.strictEqual(
+        path.action,
+        'Create',
+        'x-vault-displayAttrs.action is surfaced on the typed path entry'
+      );
+    });
+  });
+
+  module('getProps (typed contract)', function (hooks) {
+    hooks.beforeEach(function () {
+      this.server.get('/auth/userpass/users/example', () => openapiStub);
+    });
+
+    test('it resolves an OpenApiExpandedProps record with typed field metadata', async function (assert) {
+      const props = await this.pathHelp.getProps('/v1/auth/userpass/users/example?help=true');
+
+      assert.ok(
+        'password' in props,
+        'expanded props include the schema-defined field, keyed as declared on OpenApiExpandedProps'
+      );
+      assert.strictEqual(
+        props.password.type,
+        'string',
+        'schema type is surfaced on the typed ResolvedFieldAttribute-shaped prop'
+      );
+      assert.true(props.password.sensitive, 'x-vault-displayAttrs.sensitive is surfaced on the typed prop');
+      assert.strictEqual(
+        props.password.fieldGroup,
+        'default',
+        'fieldGroup defaults per the OpenApiExpandedProps contract'
+      );
+    });
+  });
 });
