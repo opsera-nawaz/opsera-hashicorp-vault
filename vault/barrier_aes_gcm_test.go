@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/hashicorp/vault/sdk/physical"
 	"github.com/hashicorp/vault/sdk/physical/inmem"
+	"github.com/hashicorp/vault/vault/interfaces"
 	"github.com/stretchr/testify/require"
 )
 
@@ -550,6 +551,127 @@ func TestEncrypt_BarrierEncryptor(t *testing.T) {
 
 	if string(plain) != "quick brown fox" {
 		t.Fatalf("bad: %s", plain)
+	}
+}
+
+// TestAESGCMBarrier_ImplementsCryptoBarrier is a compile-time check (backed
+// by a runtime assignment) that *AESGCMBarrier satisfies
+// interfaces.CryptoBarrier, so callers like sdk/helper/keysutil and
+// vault/seal can depend on the interface instead of the concrete type.
+func TestAESGCMBarrier_ImplementsCryptoBarrier(t *testing.T) {
+	inm, err := inmem.NewInmem(nil, logger)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	b, err := NewAESGCMBarrier(inm, false)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	var cb interfaces.CryptoBarrier = b
+	if cb == nil {
+		t.Fatalf("*AESGCMBarrier does not satisfy interfaces.CryptoBarrier")
+	}
+}
+
+// TestAESGCMBarrier_CryptoBarrierEncryptDecrypt verifies Encrypt/Decrypt
+// work correctly when invoked through the interfaces.CryptoBarrier
+// interface rather than the concrete *AESGCMBarrier type.
+func TestAESGCMBarrier_CryptoBarrierEncryptDecrypt(t *testing.T) {
+	inm, err := inmem.NewInmem(nil, logger)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	b, err := NewAESGCMBarrier(inm, false)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	key, err := b.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("err generating key: %v", err)
+	}
+	ctx := context.Background()
+	if err := b.Initialize(ctx, key, nil, rand.Reader); err != nil {
+		t.Fatalf("err initializing: %v", err)
+	}
+	if err := b.Unseal(ctx, key); err != nil {
+		t.Fatalf("err unsealing: %v", err)
+	}
+
+	var cb interfaces.CryptoBarrier = b
+
+	ciphertext, err := cb.Encrypt(ctx, "foo", []byte("quick brown fox"))
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	plaintext, err := cb.Decrypt(ctx, "foo", ciphertext)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	if string(plaintext) != "quick brown fox" {
+		t.Fatalf("bad: %s", plaintext)
+	}
+}
+
+// TestAESGCMBarrier_CryptoBarrierRotateKey verifies that RotateKey, invoked
+// through the interfaces.CryptoBarrier interface, rotates the underlying
+// barrier key (observed via the concrete type's ActiveKeyInfo) and that
+// data written under the old term remains readable afterwards.
+func TestAESGCMBarrier_CryptoBarrierRotateKey(t *testing.T) {
+	inm, err := inmem.NewInmem(nil, logger)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	b, err := NewAESGCMBarrier(inm, false)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	key, err := b.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("err generating key: %v", err)
+	}
+	ctx := context.Background()
+	if err := b.Initialize(ctx, key, nil, rand.Reader); err != nil {
+		t.Fatalf("err initializing: %v", err)
+	}
+	if err := b.Unseal(ctx, key); err != nil {
+		t.Fatalf("err unsealing: %v", err)
+	}
+
+	before, err := b.ActiveKeyInfo()
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	ciphertext, err := b.Encrypt(ctx, "foo", []byte("quick brown fox"))
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	var cb interfaces.CryptoBarrier = b
+	if err := cb.RotateKey(ctx); err != nil {
+		t.Fatalf("err rotating key: %v", err)
+	}
+
+	after, err := b.ActiveKeyInfo()
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if after.Term != before.Term+1 {
+		t.Fatalf("expected term %d, got %d", before.Term+1, after.Term)
+	}
+
+	// Data encrypted under the prior term must remain decryptable.
+	plaintext, err := b.Decrypt(ctx, "foo", ciphertext)
+	if err != nil {
+		t.Fatalf("err decrypting under prior term: %v", err)
+	}
+	if string(plaintext) != "quick brown fox" {
+		t.Fatalf("bad: %s", plaintext)
 	}
 }
 
