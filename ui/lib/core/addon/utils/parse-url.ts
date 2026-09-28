@@ -4,13 +4,14 @@
  */
 
 // adapted from https://gist.github.com/jed/964849
-const fn = (function (anchor) {
-  return function (url) {
+const fn = (function (anchor: HTMLAnchorElement) {
+  return function (url: string): Record<string, string> {
     anchor.href = url;
-    const parts = {};
+    const parts: Record<string, string> = {};
     for (const prop in anchor) {
-      if ('' + anchor[prop] === anchor[prop]) {
-        parts[prop] = anchor[prop];
+      const value = anchor[prop as keyof HTMLAnchorElement];
+      if ('' + value === value) {
+        parts[prop] = value;
       }
     }
 

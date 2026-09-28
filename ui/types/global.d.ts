@@ -21,3 +21,18 @@ declare module 'vault/tests/helpers/vault-keys';
 declare module '@carbon/charts/styles.css';
 
 declare module 'sinon';
+
+// uuid@9.0.1 ships no "types" field/declaration files in this repo's
+// installed layout, and @types/uuid isn't a dependency.
+declare module 'uuid';
+
+// text-encoder-lite is loaded as a vendor global via `app.import()` in
+// ember-cli-build.js (not an ES module), so it has no npm @types package.
+declare class TextEncoderLite {
+  constructor(encoding?: string);
+  encode(input: string): Uint8Array;
+}
+declare class TextDecoderLite {
+  constructor(encoding?: string);
+  decode(input: Uint8Array): string;
+}
