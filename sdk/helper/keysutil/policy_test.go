@@ -1561,6 +1561,27 @@ func newExistingChaCha20Fixture(t *testing.T) *Policy {
 	}
 }
 
+// preGeneratedChaCha20Ciphertext encrypts plaintext under p's latest
+// ChaCha20-Poly1305 key version using the same low-level primitives
+// EncryptWithOptions uses internally (getSymmetricKeys + SymmetricEncryptRaw
+// + getVersionPrefix), but without going through EncryptWithOptions/Encrypt
+// itself. It stands in for a ciphertext blob that was already produced and
+// stored before WO-042 gated new ChaCha20-Poly1305 encryption under FIPS
+// mode (AC8's "pre-generated ChaCha20-Poly1305 ciphertext blobs"): building
+// it this way keeps the fixture valid under a FIPS build, where calling
+// p.Encrypt directly would now be rejected by that gate.
+func preGeneratedChaCha20Ciphertext(t *testing.T, p *Policy, plaintext []byte) string {
+	t.Helper()
+
+	encKey, hmacKey, err := p.getSymmetricKeys(EncryptionOptions{KeyVersion: p.LatestVersion})
+	require.NoError(t, err)
+
+	raw, err := p.SymmetricEncryptRaw(p.LatestVersion, encKey, plaintext, SymmetricOpts{HMACKey: hmacKey})
+	require.NoError(t, err)
+
+	return p.getVersionPrefix(p.LatestVersion) + base64.StdEncoding.EncodeToString(raw)
+}
+
 // newExistingEd25519Fixture returns a Policy with one already-generated
 // Ed25519 key version, simulating a key created before FIPS mode was
 // enabled. See newExistingChaCha20Fixture for why it bypasses Rotate (AC9).
@@ -1657,4 +1678,161 @@ func TestPolicy_NonFIPSMode_NonApprovedKeyTypesFullyFunctional(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, verified)
 	})
+}
+
+// --- Performance regression benchmarks (WO-042, AC7) ---
+//
+// These compare AES-256-GCM (the FIPS-Approved replacement) against
+// ChaCha20-Poly1305 (the algorithm being migrated away from) for encrypt
+// and decrypt, at the 1KB/64KB/1MB payload sizes AC7 calls out. Run with:
+//
+//	go test ./sdk/helper/keysutil/ -run '^$' -bench BenchmarkPolicy -benchtime=2s
+//
+// and compare ns/op (or the reported MB/s from -benchmem/SetBytes) between
+// the AES256GCM96 and ChaCha20Poly1305 variants at each payload size: AC7
+// requires AES-256-GCM to be within 10% of the ChaCha20-Poly1305 baseline.
+//
+// Policies are built directly (like newExistingChaCha20Fixture) rather
+// than via LockManager.GetPolicy, so that benchmarking a ChaCha20-Poly1305
+// policy does not itself trip the WO-027 creation gate under a FIPS build.
+// Decrypt benchmarks seed their ciphertext via the same raw primitive
+// EncryptWithOptions uses internally (SymmetricEncryptRaw), not via
+// p.Encrypt, so they measure decrypt throughput independent of -- and
+// without tripping -- the encrypt-side FIPS gate added by this story.
+
+func benchmarkPolicyFor(b *testing.B, keyType KeyType) *Policy {
+	b.Helper()
+
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		b.Fatal(err)
+	}
+	hmacKey := make([]byte, 32)
+	if _, err := rand.Read(hmacKey); err != nil {
+		b.Fatal(err)
+	}
+
+	algo := keyType
+	return &Policy{
+		Name:                 "bench-" + keyType.String(),
+		Type:                 keyType,
+		LatestVersion:        1,
+		MinDecryptionVersion: 1,
+		Keys: keyEntryMap{
+			"1": KeyEntry{
+				Key:          key,
+				HMACKey:      hmacKey,
+				Algorithm:    &algo,
+				CreationTime: time.Now(),
+			},
+		},
+	}
+}
+
+func rawCiphertextForBenchmark(b *testing.B, p *Policy, plaintext []byte) string {
+	b.Helper()
+
+	encKey, hmacKey, err := p.getSymmetricKeys(EncryptionOptions{KeyVersion: p.LatestVersion})
+	if err != nil {
+		b.Fatal(err)
+	}
+	raw, err := p.SymmetricEncryptRaw(p.LatestVersion, encKey, plaintext, SymmetricOpts{HMACKey: hmacKey})
+	if err != nil {
+		b.Fatal(err)
+	}
+	return p.getVersionPrefix(p.LatestVersion) + base64.StdEncoding.EncodeToString(raw)
+}
+
+func benchmarkPolicyEncrypt(b *testing.B, keyType KeyType, payloadSize int) {
+	if isFIPSMode() && !keyType.IsFIPSApproved() {
+		b.Skipf("%s encryption is rejected under FIPS mode (WO-042); no throughput to measure", keyType)
+	}
+
+	p := benchmarkPolicyFor(b, keyType)
+
+	plaintext := make([]byte, payloadSize)
+	if _, err := rand.Read(plaintext); err != nil {
+		b.Fatal(err)
+	}
+	value := base64.StdEncoding.EncodeToString(plaintext)
+
+	b.SetBytes(int64(payloadSize))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := p.Encrypt(0, nil, nil, value); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func benchmarkPolicyDecrypt(b *testing.B, keyType KeyType, payloadSize int) {
+	p := benchmarkPolicyFor(b, keyType)
+
+	plaintext := make([]byte, payloadSize)
+	if _, err := rand.Read(plaintext); err != nil {
+		b.Fatal(err)
+	}
+	ciphertext := rawCiphertextForBenchmark(b, p, plaintext)
+
+	b.SetBytes(int64(payloadSize))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := p.Decrypt(nil, nil, ciphertext); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+const (
+	benchPayload1KB  = 1024
+	benchPayload64KB = 64 * 1024
+	benchPayload1MB  = 1024 * 1024
+)
+
+func BenchmarkPolicy_Encrypt_AES256GCM96_1KB(b *testing.B) {
+	benchmarkPolicyEncrypt(b, KeyType_AES256_GCM96, benchPayload1KB)
+}
+
+func BenchmarkPolicy_Encrypt_AES256GCM96_64KB(b *testing.B) {
+	benchmarkPolicyEncrypt(b, KeyType_AES256_GCM96, benchPayload64KB)
+}
+
+func BenchmarkPolicy_Encrypt_AES256GCM96_1MB(b *testing.B) {
+	benchmarkPolicyEncrypt(b, KeyType_AES256_GCM96, benchPayload1MB)
+}
+
+func BenchmarkPolicy_Encrypt_ChaCha20Poly1305_1KB(b *testing.B) {
+	benchmarkPolicyEncrypt(b, KeyType_ChaCha20_Poly1305, benchPayload1KB)
+}
+
+func BenchmarkPolicy_Encrypt_ChaCha20Poly1305_64KB(b *testing.B) {
+	benchmarkPolicyEncrypt(b, KeyType_ChaCha20_Poly1305, benchPayload64KB)
+}
+
+func BenchmarkPolicy_Encrypt_ChaCha20Poly1305_1MB(b *testing.B) {
+	benchmarkPolicyEncrypt(b, KeyType_ChaCha20_Poly1305, benchPayload1MB)
+}
+
+func BenchmarkPolicy_Decrypt_AES256GCM96_1KB(b *testing.B) {
+	benchmarkPolicyDecrypt(b, KeyType_AES256_GCM96, benchPayload1KB)
+}
+
+func BenchmarkPolicy_Decrypt_AES256GCM96_64KB(b *testing.B) {
+	benchmarkPolicyDecrypt(b, KeyType_AES256_GCM96, benchPayload64KB)
+}
+
+func BenchmarkPolicy_Decrypt_AES256GCM96_1MB(b *testing.B) {
+	benchmarkPolicyDecrypt(b, KeyType_AES256_GCM96, benchPayload1MB)
+}
+
+func BenchmarkPolicy_Decrypt_ChaCha20Poly1305_1KB(b *testing.B) {
+	benchmarkPolicyDecrypt(b, KeyType_ChaCha20_Poly1305, benchPayload1KB)
+}
+
+func BenchmarkPolicy_Decrypt_ChaCha20Poly1305_64KB(b *testing.B) {
+	benchmarkPolicyDecrypt(b, KeyType_ChaCha20_Poly1305, benchPayload64KB)
+}
+
+func BenchmarkPolicy_Decrypt_ChaCha20Poly1305_1MB(b *testing.B) {
+	benchmarkPolicyDecrypt(b, KeyType_ChaCha20_Poly1305, benchPayload1MB)
 }

@@ -5,7 +5,10 @@ package transit
 
 import (
 	"context"
+	cryptoRand "crypto/rand"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -13,6 +16,7 @@ import (
 	"testing"
 
 	uuid "github.com/hashicorp/go-uuid"
+	"github.com/hashicorp/vault/helper/constants"
 	"github.com/hashicorp/vault/sdk/helper/keysutil"
 	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/mitchellh/mapstructure"
@@ -1125,5 +1129,194 @@ func TestTransit_EncryptWithRSAPublicKey(t *testing.T) {
 	_, err = b.HandleRequest(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// --- FIPS enforcement for ChaCha20-Poly1305 (WO-042) ---
+//
+// AC1: encrypt requests against a ChaCha20-Poly1305 key must be rejected
+// (HTTP 400 / logical.ErrInvalidRequest) under FIPS mode. AC2: decrypt
+// requests against existing ChaCha20-Poly1305 ciphertext must keep
+// succeeding under FIPS mode. The reject assertion is written using the
+// same runtime constants.IsFIPS() check path_sign_verify_test.go uses to
+// skip its sha3 cases under FIPS: this file carries no build tag, so it
+// always compiles, and constants.IsFIPS() only reports true on a build
+// where the root module's FIPS detection is wired up.
+//
+// NOTE: as of this story, github.com/hashicorp/vault/helper/constants has
+// no fips-tagged implementation of IsFIPS() -- only the !fips one exists
+// at the root module -- so `go build/test -tags fips ./...` does not
+// currently compile for any root-module package, including this one. That
+// is pre-existing and independent of this story (confirmed via `git stash`
+// before making any changes here); wiring a real root-level FIPS build is
+// tracked separately. The actual encrypt-vs-decrypt enforcement lives in,
+// and is fully exercised under `go test -tags fips` at, sdk/helper/keysutil
+// (see policy_fips_test.go, which does compile and run standalone since it
+// mirrors isFIPSMode() locally rather than depending on this predicate).
+// The reject branch below therefore skips today and will start exercising
+// once the root-level wiring lands; the decrypt-succeeds assertion is
+// unconditional and runs today, proving the transit HTTP layer's
+// backward-compatible read path is intact.
+func TestTransit_FIPS_ChaCha20Poly1305_EncryptRejectDecryptSucceed(t *testing.T) {
+	b, s := createBackendWithStorage(t)
+
+	// Create a chacha20-poly1305 key. Key creation is itself gated by
+	// WO-027 under FIPS mode, but this test runs on the default (non-FIPS)
+	// build, so creation succeeds here exactly as it would have for an
+	// operator's key created before FIPS mode was ever enabled.
+	keyReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "keys/chacha-key",
+		Storage:   s,
+		Data: map[string]interface{}{
+			"type": "chacha20-poly1305",
+		},
+	}
+	resp, err := b.HandleRequest(context.Background(), keyReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	plaintext := base64.StdEncoding.EncodeToString([]byte("fips-integration-plaintext"))
+
+	// Produce an existing ciphertext to exercise the decrypt-succeeds half
+	// (AC2). This encrypt call happens outside FIPS mode, exactly as it
+	// would for data written prior to a FIPS-mode migration.
+	encReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "encrypt/chacha-key",
+		Storage:   s,
+		Data:      map[string]interface{}{"plaintext": plaintext},
+	}
+	resp, err = b.HandleRequest(context.Background(), encReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	ciphertext, ok := resp.Data["ciphertext"].(string)
+	if !ok || ciphertext == "" {
+		t.Fatalf("expected ciphertext in response, got: %#v", resp.Data)
+	}
+
+	// AC2: decrypting existing ChaCha20-Poly1305 ciphertext must succeed
+	// regardless of FIPS mode.
+	decReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "decrypt/chacha-key",
+		Storage:   s,
+		Data:      map[string]interface{}{"ciphertext": ciphertext},
+	}
+	resp, err = b.HandleRequest(context.Background(), decReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("decrypt of existing chacha20-poly1305 ciphertext must succeed: err:%v resp:%#v", err, resp)
+	}
+	if resp.Data["plaintext"] != plaintext {
+		t.Fatalf("unexpected plaintext: got %v, want %v", resp.Data["plaintext"], plaintext)
+	}
+
+	// AC1: new encryption against a ChaCha20-Poly1305 key must be rejected
+	// under FIPS mode. See the file-level comment above for why this only
+	// exercises today once constants.IsFIPS() can report true.
+	if !constants.IsFIPS() {
+		t.Skip("constants.IsFIPS() is false on this build; the FIPS-mode encrypt-reject path is proven at sdk/helper/keysutil under -tags fips (see policy_fips_test.go's TestPolicy_FIPS_RejectsChaCha20Encrypt)")
+	}
+
+	rejectReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "encrypt/chacha-key",
+		Storage:   s,
+		Data:      map[string]interface{}{"plaintext": plaintext},
+	}
+	resp, err = b.HandleRequest(context.Background(), rejectReq)
+	if err == nil {
+		t.Fatalf("expected FIPS-mode encrypt rejection, got resp:%#v", resp)
+	}
+	if !errors.Is(err, logical.ErrInvalidRequest) {
+		t.Fatalf("expected logical.ErrInvalidRequest (HTTP 400), got: %v", err)
+	}
+	errMsg, _ := resp.Data["error"].(string)
+	if !strings.Contains(errMsg, "not permitted for encryption in FIPS mode") {
+		t.Fatalf("expected FIPS-mode rejection message, got resp:%#v", resp)
+	}
+}
+
+// TestTransit_FIPS_BatchEncrypt_MixedKeyTypesFailsWhole covers the WO-042
+// edge case: "A batch encrypt request where some items use
+// ChaCha20-Poly1305 and others use AES-GCM -- the entire batch should fail
+// if any item targets a non-Approved key in FIPS mode." A single encrypt
+// request is always scoped to one named key (encrypt/<name>), so "some
+// items ChaCha20-Poly1305, others AES-GCM" happens via key_version: one
+// key whose version 1 is chacha20-poly1305 and version 2 (after an
+// algorithm-changing rotation, as in
+// TestTransit_Rewrap_ChaCha20ToAESGCM_SameKeyVersion) is aes256-gcm96, with
+// a batch that targets both versions in one request.
+//
+// No new handling is added for the "fails as a whole" part: batchRequestResponse
+// (path_encrypt.go) already returns HTTP 400 for the whole response whenever
+// any batch item errors (absent an opt-in partial_failure_response_code), so
+// gating ChaCha20-Poly1305 in EncryptWithOptions is sufficient on its own.
+// See the file-level comment on
+// TestTransit_FIPS_ChaCha20Poly1305_EncryptRejectDecryptSucceed for why the
+// reject branch here only exercises once constants.IsFIPS() can report
+// true.
+func TestTransit_FIPS_BatchEncrypt_MixedKeyTypesFailsWhole(t *testing.T) {
+	if !constants.IsFIPS() {
+		t.Skip("constants.IsFIPS() is false on this build; see TestTransit_FIPS_ChaCha20Poly1305_EncryptRejectDecryptSucceed's file-level comment")
+	}
+
+	b, s := createBackendWithStorage(t)
+
+	keyReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "keys/mixed-key",
+		Storage:   s,
+		Data:      map[string]interface{}{"type": "chacha20-poly1305"},
+	}
+	resp, err := b.HandleRequest(context.Background(), keyReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	p, _, err := b.GetPolicy(context.Background(), keysutil.PolicyRequest{
+		Storage: s,
+		Name:    "mixed-key",
+	}, b.GetRandomReader())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.RotateWithAlgorithm(context.Background(), s, cryptoRand.Reader, keysutil.KeyType_AES256_GCM96, nil); err != nil {
+		p.Unlock()
+		t.Fatal(err)
+	}
+	p.Unlock()
+
+	plaintext := base64.StdEncoding.EncodeToString([]byte("mixed-batch-plaintext"))
+	batchReq := &logical.Request{
+		Operation: logical.CreateOperation,
+		Path:      "encrypt/mixed-key",
+		Storage:   s,
+		Data: map[string]interface{}{
+			"batch_input": []interface{}{
+				map[string]interface{}{"plaintext": plaintext, "key_version": 1}, // chacha20-poly1305, rejected
+				map[string]interface{}{"plaintext": plaintext, "key_version": 2}, // aes256-gcm96, approved
+			},
+		},
+	}
+	resp, err = b.HandleRequest(context.Background(), batchReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := resp.Data["http_status_code"]; !ok || v.(int) != http.StatusBadRequest {
+		t.Fatalf("expected the whole batch to fail with HTTP 400 because one item targets version 1 (chacha20-poly1305), got resp:%#v", resp)
+	}
+
+	batchResults, ok := resp.Data["batch_results"].([]EncryptBatchResponseItem)
+	if !ok || len(batchResults) != 2 {
+		t.Fatalf("expected 2 batch results, got resp:%#v", resp.Data)
+	}
+	if batchResults[0].Error == "" {
+		t.Fatalf("expected the version-1 (chacha20-poly1305) item to error, got: %#v", batchResults[0])
+	}
+	if batchResults[1].Error != "" || batchResults[1].Ciphertext == "" {
+		t.Fatalf("expected the version-2 (aes256-gcm96) item to succeed on its own, got: %#v", batchResults[1])
 	}
 }

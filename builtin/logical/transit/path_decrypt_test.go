@@ -5,6 +5,7 @@ package transit
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"reflect"
@@ -386,5 +387,99 @@ func TestTransit_decodeDecryptBatchRequestItems(t *testing.T) {
 				t.Errorf("decodeDecryptBatchRequestItems: dest mismatch, want: %v, got: %v", expectedDest, tt.dest)
 			}
 		})
+	}
+}
+
+// TestTransit_ChaCha20Poly1305_DecryptBackwardCompatible covers AC2/AC8
+// (WO-042) from the decrypt endpoint's side: existing ChaCha20-Poly1305
+// ciphertext -- both a single item and a batch -- must keep decrypting
+// successfully. This is the backward-compatibility half of the story: it
+// must hold regardless of FIPS mode, since Decrypt/DecryptWithOptions in
+// sdk/helper/keysutil/policy.go is deliberately left without a FIPS gate
+// (only Encrypt was gated; see path_encrypt_test.go's
+// TestTransit_FIPS_ChaCha20Poly1305_EncryptRejectDecryptSucceed for the
+// encrypt-side reject assertion).
+func TestTransit_ChaCha20Poly1305_DecryptBackwardCompatible(t *testing.T) {
+	b, s := createBackendWithStorage(t)
+
+	keyReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "keys/chacha-key",
+		Storage:   s,
+		Data:      map[string]interface{}{"type": "chacha20-poly1305"},
+	}
+	resp, err := b.HandleRequest(context.Background(), keyReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	plaintexts := []string{"first-secret", "second-secret"}
+	ciphertexts := make([]string, len(plaintexts))
+	for i, pt := range plaintexts {
+		encReq := &logical.Request{
+			Operation: logical.UpdateOperation,
+			Path:      "encrypt/chacha-key",
+			Storage:   s,
+			Data: map[string]interface{}{
+				"plaintext": base64.StdEncoding.EncodeToString([]byte(pt)),
+			},
+		}
+		resp, err = b.HandleRequest(context.Background(), encReq)
+		if err != nil || (resp != nil && resp.IsError()) {
+			t.Fatalf("err:%v resp:%#v", err, resp)
+		}
+		ciphertexts[i] = resp.Data["ciphertext"].(string)
+	}
+
+	// Single-item decrypt.
+	decReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "decrypt/chacha-key",
+		Storage:   s,
+		Data:      map[string]interface{}{"ciphertext": ciphertexts[0]},
+	}
+	resp, err = b.HandleRequest(context.Background(), decReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(resp.Data["plaintext"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(decoded) != plaintexts[0] {
+		t.Fatalf("unexpected plaintext: got %q, want %q", decoded, plaintexts[0])
+	}
+
+	// Batch decrypt of multiple pre-existing ChaCha20-Poly1305 ciphertext
+	// blobs in a single request.
+	batchInput := make([]interface{}, len(ciphertexts))
+	for i, ct := range ciphertexts {
+		batchInput[i] = map[string]interface{}{"ciphertext": ct}
+	}
+	batchReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "decrypt/chacha-key",
+		Storage:   s,
+		Data:      map[string]interface{}{"batch_input": batchInput},
+	}
+	resp, err = b.HandleRequest(context.Background(), batchReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	batchResults := resp.Data["batch_results"].([]DecryptBatchResponseItem)
+	if len(batchResults) != len(plaintexts) {
+		t.Fatalf("expected %d batch results, got %d", len(plaintexts), len(batchResults))
+	}
+	for i, item := range batchResults {
+		if item.Error != "" {
+			t.Fatalf("batch item %d: unexpected error: %s", i, item.Error)
+		}
+		decoded, err := base64.StdEncoding.DecodeString(item.Plaintext)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(decoded) != plaintexts[i] {
+			t.Fatalf("batch item %d: unexpected plaintext: got %q, want %q", i, decoded, plaintexts[i])
+		}
 	}
 }

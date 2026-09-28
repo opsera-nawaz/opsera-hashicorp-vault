@@ -20,9 +20,13 @@ import (
 // build tag (`go test -tags fips ./...`), which makes isFIPSMode() (see
 // fips_enabled.go) return true for real, rather than via a runtime mock of
 // IsFIPS()/isFIPSMode(). It covers the "FIPS mode on" half of WO-027's test
-// matrix; the "FIPS mode off" half, IsFIPSApproved() itself, and the shared
-// newExistingChaCha20Fixture/newExistingEd25519Fixture helpers live in
-// policy_test.go (which compiles in both configurations).
+// matrix, extended by WO-042 to also cover Encrypt() on ChaCha20-Poly1305
+// keys (creation/rotation were already gated by WO-027; WO-042 adds the
+// encrypt gate while leaving Decrypt() ungated for backward compatibility).
+// The "FIPS mode off" half, IsFIPSApproved() itself, and the shared
+// newExistingChaCha20Fixture/newExistingEd25519Fixture/
+// preGeneratedChaCha20Ciphertext helpers live in policy_test.go (which
+// compiles in both configurations).
 
 func TestPolicy_FIPS_ModeIsActive(t *testing.T) {
 	require.True(t, isFIPSMode(), "this file must only run in a -tags fips build")
@@ -66,17 +70,18 @@ func TestPolicy_FIPS_RejectsNewEd25519KeyCreation(t *testing.T) {
 	require.Nil(t, p)
 }
 
-// TestPolicy_FIPS_AllowsExistingChaCha20Decrypt covers AC3: a
-// pre-existing chacha20-poly1305 key (created before FIPS mode was turned
-// on) must still decrypt without error.
+// TestPolicy_FIPS_AllowsExistingChaCha20Decrypt covers AC2/AC8: a
+// pre-existing chacha20-poly1305 ciphertext blob (as if written before
+// FIPS mode was turned on, or produced by encrypt on a non-FIPS build)
+// must still decrypt without error. The ciphertext is built via
+// preGeneratedChaCha20Ciphertext rather than p.Encrypt -- as of WO-042,
+// Encrypt on a ChaCha20-Poly1305 key is itself rejected under FIPS mode
+// (see TestPolicy_FIPS_RejectsChaCha20Encrypt below), so it can no longer
+// be used to produce the fixture ciphertext here.
 func TestPolicy_FIPS_AllowsExistingChaCha20Decrypt(t *testing.T) {
 	p := newExistingChaCha20Fixture(t)
 
-	// Encrypt is not gated by this story (only creation and rotation are),
-	// so it's used here purely to produce a valid ciphertext for the
-	// pre-existing key to then decrypt.
-	ct, err := p.Encrypt(0, nil, nil, base64.StdEncoding.EncodeToString([]byte("pre-fips-plaintext")))
-	require.NoError(t, err)
+	ct := preGeneratedChaCha20Ciphertext(t, p, []byte("pre-fips-plaintext"))
 
 	pt, err := p.Decrypt(nil, nil, ct)
 	require.NoError(t, err, "decrypting with a pre-existing chacha20-poly1305 key must succeed under FIPS mode")
@@ -84,6 +89,37 @@ func TestPolicy_FIPS_AllowsExistingChaCha20Decrypt(t *testing.T) {
 	decoded, err := base64.StdEncoding.DecodeString(pt)
 	require.NoError(t, err)
 	require.Equal(t, []byte("pre-fips-plaintext"), decoded)
+}
+
+// TestPolicy_FIPS_RejectsChaCha20Encrypt covers AC1/AC5 (WO-042): encrypting
+// new data with an existing chacha20-poly1305 key must fail under FIPS
+// mode, with an error naming an Approved alternative. This is the
+// complement of TestPolicy_FIPS_AllowsExistingChaCha20Decrypt above --
+// together they prove the read-only backward-compatibility mode required
+// by this story: old ciphertext keeps decrypting, but no new
+// ChaCha20-Poly1305 encryption is permitted.
+func TestPolicy_FIPS_RejectsChaCha20Encrypt(t *testing.T) {
+	p := newExistingChaCha20Fixture(t)
+
+	_, err := p.Encrypt(0, nil, nil, base64.StdEncoding.EncodeToString([]byte("new-plaintext")))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not permitted for encryption in FIPS mode")
+	require.Contains(t, err.Error(), "aes256-gcm96")
+}
+
+// TestPolicy_FIPS_RejectsConvergentChaCha20Encrypt covers the convergent-
+// encryption edge case called out in WO-042: a chacha20-poly1305 key with
+// convergent encryption enabled must also reject new encryption under FIPS
+// mode, via the same gate (EncryptWithOptions checks the key type before
+// branching into the convergent-vs-random-nonce logic).
+func TestPolicy_FIPS_RejectsConvergentChaCha20Encrypt(t *testing.T) {
+	p := newExistingChaCha20Fixture(t)
+	p.ConvergentEncryption = true
+	p.ConvergentVersion = 3
+
+	_, err := p.Encrypt(0, nil, nil, base64.StdEncoding.EncodeToString([]byte("new-plaintext")))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not permitted for encryption in FIPS mode")
 }
 
 // TestPolicy_FIPS_AllowsExistingEd25519Verify covers AC4 (WO-027) and

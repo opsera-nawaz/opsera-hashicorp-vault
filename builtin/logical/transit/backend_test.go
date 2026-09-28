@@ -788,6 +788,203 @@ func testBackendRotation(t *testing.T) {
 	})
 }
 
+// TestTransit_Rewrap_ChaCha20ToAESGCM_SameKeyVersion covers AC3's literal
+// mechanism: "A Transit engine rewrap operation (POST /transit/rewrap/:name)
+// can re-encrypt ChaCha20-Poly1305 ciphertext under a new AES-256-GCM key
+// version when the policy is updated to use an Approved key type." Per
+// technical_details, this works because DecryptWithOptions has no FIPS gate
+// (it decrypts the old ChaCha20-Poly1305 version fine) and
+// EncryptWithOptions re-encrypts under the policy's *latest* version -- so
+// once that latest version is an Approved type, rewrap naturally produces
+// AES-256-GCM ciphertext.
+//
+// There is currently no HTTP/CLI field to request a specific algorithm on
+// `keys/<name>/rotate` (path_rotate.go only exposes managed_key_name/
+// managed_key_id), so the "policy is updated to use an Approved key type"
+// step is performed directly against the SDK, via
+// keysutil.Policy.RotateWithAlgorithm -- the same primitive WO-027 added
+// and that path_keys.go's formatKeyPolicy already documents as being set
+// "by RotateInMemoryWithAlgorithm after a POST .../algorithm call". No new
+// production HTTP endpoint is added by this story; this test proves the
+// rewrap/migration mechanics that such an endpoint would eventually drive.
+func TestTransit_Rewrap_ChaCha20ToAESGCM_SameKeyVersion(t *testing.T) {
+	b, s := createBackendWithStorage(t)
+
+	keyReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "keys/migrate-me",
+		Storage:   s,
+		Data:      map[string]interface{}{"type": "chacha20-poly1305"},
+	}
+	resp, err := b.HandleRequest(context.Background(), keyReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	plaintext := base64.StdEncoding.EncodeToString([]byte(testPlaintext))
+	encReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "encrypt/migrate-me",
+		Storage:   s,
+		Data:      map[string]interface{}{"plaintext": plaintext},
+	}
+	resp, err = b.HandleRequest(context.Background(), encReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	oldCiphertext := resp.Data["ciphertext"].(string)
+	if !strings.HasPrefix(oldCiphertext, "vault:v1:") {
+		t.Fatalf("expected v1 ciphertext, got: %s", oldCiphertext)
+	}
+
+	// Give the key a new, AES-256-GCM, latest version -- what a future
+	// "rotate to a new algorithm" operator workflow would do.
+	p, _, err := b.GetPolicy(context.Background(), keysutil.PolicyRequest{
+		Storage: s,
+		Name:    "migrate-me",
+	}, b.GetRandomReader())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.RotateWithAlgorithm(context.Background(), s, cryptoRand.Reader, keysutil.KeyType_AES256_GCM96, nil); err != nil {
+		p.Unlock()
+		t.Fatalf("rotating to aes256-gcm96 must succeed outside FIPS mode: %v", err)
+	}
+	if p.LatestVersion != 2 {
+		p.Unlock()
+		t.Fatalf("expected latest version 2 after rotation, got %d", p.LatestVersion)
+	}
+	if p.KeyVersionType(2) != keysutil.KeyType_AES256_GCM96 {
+		p.Unlock()
+		t.Fatalf("expected version 2 to be aes256-gcm96, got %s", p.KeyVersionType(2))
+	}
+	p.Unlock()
+
+	// Rewrap the original ChaCha20-Poly1305 ciphertext. Decrypt (v1,
+	// chacha20-poly1305) succeeds because Decrypt has no FIPS gate;
+	// encrypt uses the latest version (v2, aes256-gcm96), so the new
+	// ciphertext comes out under AES-256-GCM.
+	rewrapReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "rewrap/migrate-me",
+		Storage:   s,
+		Data:      map[string]interface{}{"ciphertext": oldCiphertext},
+	}
+	resp, err = b.HandleRequest(context.Background(), rewrapReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("rewrap must succeed: err:%v resp:%#v", err, resp)
+	}
+	newCiphertext := resp.Data["ciphertext"].(string)
+	if !strings.HasPrefix(newCiphertext, "vault:v2:") {
+		t.Fatalf("expected v2 (aes256-gcm96) ciphertext after rewrap, got: %s", newCiphertext)
+	}
+
+	// Verify decryption under the new AES-256-GCM version recovers the
+	// original plaintext.
+	decReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "decrypt/migrate-me",
+		Storage:   s,
+		Data:      map[string]interface{}{"ciphertext": newCiphertext},
+	}
+	resp, err = b.HandleRequest(context.Background(), decReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("decrypt of rewrapped ciphertext must succeed: err:%v resp:%#v", err, resp)
+	}
+	if resp.Data["plaintext"] != plaintext {
+		t.Fatalf("unexpected plaintext after migration: got %v, want %v", resp.Data["plaintext"], plaintext)
+	}
+}
+
+// TestTransit_FIPSMigration_ChaCha20ToNewAESGCMKey covers implementation
+// step 4's literal scenario: create a ChaCha20-Poly1305 key, encrypt data,
+// create a *separate* AES-256-GCM key, migrate the ciphertext across to
+// the new key (decrypt under the old key, encrypt under the new one --
+// the cross-key counterpart of rewrap, since /transit/rewrap/:name only
+// re-encrypts within a single key's own versions), and verify decryption
+// under the new key succeeds. This is the procedure documented in
+// FIPS_MIGRATION.md for operators who want to retire a ChaCha20-Poly1305
+// key entirely rather than grow a new version on it.
+func TestTransit_FIPSMigration_ChaCha20ToNewAESGCMKey(t *testing.T) {
+	b, s := createBackendWithStorage(t)
+
+	for name, keyType := range map[string]string{
+		"old-chacha-key": "chacha20-poly1305",
+		"new-aes-key":    "aes256-gcm96",
+	} {
+		keyReq := &logical.Request{
+			Operation: logical.UpdateOperation,
+			Path:      "keys/" + name,
+			Storage:   s,
+			Data:      map[string]interface{}{"type": keyType},
+		}
+		resp, err := b.HandleRequest(context.Background(), keyReq)
+		if err != nil || (resp != nil && resp.IsError()) {
+			t.Fatalf("creating %s: err:%v resp:%#v", name, err, resp)
+		}
+	}
+
+	plaintext := base64.StdEncoding.EncodeToString([]byte(testPlaintext))
+	encReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "encrypt/old-chacha-key",
+		Storage:   s,
+		Data:      map[string]interface{}{"plaintext": plaintext},
+	}
+	resp, err := b.HandleRequest(context.Background(), encReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	oldCiphertext := resp.Data["ciphertext"].(string)
+
+	// Migrate: decrypt under the old key, re-encrypt under the new key.
+	decReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "decrypt/old-chacha-key",
+		Storage:   s,
+		Data:      map[string]interface{}{"ciphertext": oldCiphertext},
+	}
+	resp, err = b.HandleRequest(context.Background(), decReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("decrypt under old key must succeed: err:%v resp:%#v", err, resp)
+	}
+	recoveredPlaintext := resp.Data["plaintext"].(string)
+	if recoveredPlaintext != plaintext {
+		t.Fatalf("unexpected plaintext from old key: got %v, want %v", recoveredPlaintext, plaintext)
+	}
+
+	migrateReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "encrypt/new-aes-key",
+		Storage:   s,
+		Data:      map[string]interface{}{"plaintext": recoveredPlaintext},
+	}
+	resp, err = b.HandleRequest(context.Background(), migrateReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("encrypt under new key must succeed: err:%v resp:%#v", err, resp)
+	}
+	migratedCiphertext := resp.Data["ciphertext"].(string)
+	if !strings.HasPrefix(migratedCiphertext, "vault:v1:") {
+		t.Fatalf("expected v1 ciphertext under the new key, got: %s", migratedCiphertext)
+	}
+
+	// Verify: decrypting the migrated ciphertext under the new AES-256-GCM
+	// key recovers the original plaintext.
+	verifyReq := &logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "decrypt/new-aes-key",
+		Storage:   s,
+		Data:      map[string]interface{}{"ciphertext": migratedCiphertext},
+	}
+	resp, err = b.HandleRequest(context.Background(), verifyReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("decrypt under new key must succeed: err:%v resp:%#v", err, resp)
+	}
+	if resp.Data["plaintext"] != plaintext {
+		t.Fatalf("unexpected plaintext after migration: got %v, want %v", resp.Data["plaintext"], plaintext)
+	}
+}
+
 func TestBackend_basic_derived(t *testing.T) {
 	decryptData := make(map[string]interface{})
 	factory, obsRecorder := factoryWithObservationRecorder(t)
