@@ -1,0 +1,2235 @@
+{
+  "generatedFor": "WO-023 — Triage ui/lib/core/ files into migration effort buckets (blocks WO-034)",
+  "generatedAt": "2026-09-28",
+  "methodology": {
+    "scope": "Every .js file under ui/lib/core/ (260 files: 102 in addon/, 157 in app/, 1 addon index.js). ui/lib/core/**/*.ts (56 files) and ui/lib/core/**/*.hbs (119 files) are excluded from the entries below because they are already TypeScript / are templates with no migration classification of their own, per the WO-023 scope.",
+    "patternDetection": "Regex-based static analysis of each file's default/named export declarations: Mixin.create( -> mixin; `X.extend(` -> classic-extend; `export default class` -> octane-class (bumped to medium if it still calls legacy computed()/observer() internally); `helper(...)`/`buildHelper(...)` default export -> helper; plain `export function`/`export default function`/object-literal export -> utility. Every classification below was cross-checked by reading the actual file (see AC-2/AC-3 spot-check evidence in the WO comment).",
+    "dependencyGraph": "Built by parsing `import ... from '...'` and `export { ... } from '...'` specifiers in every .js AND .ts file under ui/lib/core/, resolving relative imports and `core/...` absolute imports (per ui/tsconfig.json paths mapping \"core/*\" -> \"lib/core/addon/*\") to real files in this directory, and counting unique resolving source files per target. This intentionally matches the AC's literal definition (\"number of other core files that import this file\") — it does NOT count usages from ui/app/**, other engine libs (lib/pki, lib/kv, etc.), or .hbs template invocations (e.g. <SomeComponent /> or {{some-helper}}), since those are outside \"core files\" and outside static import-statement parsing per the implementation_steps. Because of that, widely-used UI components/helpers invoked only from .hbs templates in *other* libs can correctly show dependencyCount 0 here while still being heavily used app-wide; wave assignment in this artifact reflects intra-core coupling only, as specified.",
+    "waveAssignment": "wave 1: dependencyCount >= 5 (intra-core foundations, convert first). wave 2: dependencyCount 1-4. wave 3: dependencyCount === 0 (leaf nodes, convert last) — per AC-4."
+  },
+  "summary": {
+    "totalJsFiles": 260,
+    "byCurrentPattern": {
+      "octane-class": 52,
+      "classic-extend": 17,
+      "utility": 167,
+      "helper": 21,
+      "mixin": 3
+    },
+    "byEstimatedEffort": {
+      "low": 239,
+      "high": 20,
+      "medium": 1
+    },
+    "byRecommendedWave": {
+      "1": 2,
+      "2": 99,
+      "3": 159
+    }
+  },
+  "topIntraCoreDependedOnFiles": [
+    {
+      "filePath": "lib/core/addon/components/replication-actions-single.js",
+      "dependencyCount": 8,
+      "dependents": [
+        "lib/core/addon/components/replication-action-demote.js",
+        "lib/core/addon/components/replication-action-disable.js",
+        "lib/core/addon/components/replication-action-generate-token.js",
+        "lib/core/addon/components/replication-action-promote.js",
+        "lib/core/addon/components/replication-action-recover.js",
+        "lib/core/addon/components/replication-action-reindex.js",
+        "lib/core/addon/components/replication-action-update-primary.js",
+        "lib/core/app/components/replication-actions-single.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/utils/sanitize-path.js",
+      "dependencyCount": 5,
+      "dependents": [
+        "lib/core/addon/helpers/matches-current-url.ts",
+        "lib/core/addon/utils/client-counts/serializers.ts",
+        "lib/core/addon/utils/code-generators/api.ts",
+        "lib/core/addon/utils/code-generators/terraform.ts",
+        "lib/core/app/utils/sanitize-path.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/helpers/cluster-states.js",
+      "dependencyCount": 3,
+      "dependents": [
+        "lib/core/addon/components/replication-dashboard.js",
+        "lib/core/addon/components/replication-secondary-card.js",
+        "lib/core/app/helpers/cluster-states.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/components/external-link.js",
+      "dependencyCount": 2,
+      "dependents": [
+        "lib/core/addon/components/doc-link.js",
+        "lib/core/app/components/external-link.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/components/shamir/flow.js",
+      "dependencyCount": 2,
+      "dependents": [
+        "lib/core/addon/components/shamir/dr-token-flow.js",
+        "lib/core/app/components/shamir/flow.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/mixins/replication-actions.js",
+      "dependencyCount": 2,
+      "dependents": [
+        "lib/core/addon/components/replication-actions.js",
+        "lib/core/app/mixins/replication-actions.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/components/alert-inline.js",
+      "dependencyCount": 1,
+      "dependents": [
+        "lib/core/app/components/alert-inline.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/components/autocomplete-input.js",
+      "dependencyCount": 1,
+      "dependents": [
+        "lib/core/app/components/autocomplete-input.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/components/chevron.js",
+      "dependencyCount": 1,
+      "dependents": [
+        "lib/core/app/components/chevron.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/components/choose-pgp-key-form.js",
+      "dependencyCount": 1,
+      "dependents": [
+        "lib/core/app/components/choose-pgp-key-form.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/components/confirm-action.js",
+      "dependencyCount": 1,
+      "dependents": [
+        "lib/core/app/components/confirm-action.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/components/confirmation-modal.js",
+      "dependencyCount": 1,
+      "dependents": [
+        "lib/core/app/components/confirmation-modal.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/components/copy-secret-dropdown.js",
+      "dependencyCount": 1,
+      "dependents": [
+        "lib/core/app/components/copy-secret-dropdown.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/components/doc-link.js",
+      "dependencyCount": 1,
+      "dependents": [
+        "lib/core/app/components/doc-link.js"
+      ]
+    },
+    {
+      "filePath": "lib/core/addon/components/download-button.js",
+      "dependencyCount": 1,
+      "dependents": [
+        "lib/core/app/components/download-button.js"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "filePath": "lib/core/addon/components/alert-inline.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/autocomplete-input.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/chevron.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/choose-pgp-key-form.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/confirm-action.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/confirmation-modal.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/copy-secret-dropdown.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/doc-link.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/download-button.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/edit-form.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Component.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/external-link.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 2,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/form-field-groups-loop.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/form-field-label.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Template-only component (no backing JS class) — trivial rename to .ts, no logic to type."
+    },
+    {
+      "filePath": "lib/core/addon/components/form-field.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/form-save-buttons.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/icon.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/info-table-item-array.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/info-table-row.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/input-search.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/json-editor.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/key-value-header.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/kv-object-editor.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/list-item.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/list-view.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/masked-input.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/message-error.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/namespace-reminder.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/navigate-input.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/object-list-input.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/policy-example.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/read-more.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/readonly-form-field.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-action-demote.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Actions.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-action-disable.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Actions.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-action-generate-token.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Actions.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-action-promote.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Actions.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-action-recover.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Actions.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-action-reindex.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Actions.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-action-update-primary.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Actions.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-actions-single.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 8,
+      "recommendedWave": 1,
+      "notes": "Component.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-actions.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Component.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-dashboard.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-page.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-secondary-card.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Component.extend({...}) classic object model with computed() macros; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-summary-card.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/replication-table-rows.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Component.extend({...}) classic object model with computed() macros; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/search-select.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/secret-list-header-tab.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/secret-list-header.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/select.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Component.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/components/shamir/dr-token-flow.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/shamir/flow.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 2,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/shamir/form.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/sidebar/frame.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/sidebar/nav/cluster.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/sidebar/user-menu.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/string-list.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/text-file.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/toggle-button.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/toggle.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/toolbar-link.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/ttl-picker.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/components/upgrade-page.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/decorators/confirm-leave.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "medium",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Class-decorator factory function (returns an anonymous class extending a generic SuperClass) — needs careful generic typing, not a simple function signature."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/await.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/changelog-url-for.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/cluster-states.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 3,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/date-format.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/date-from-now.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/doc-link.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/format-duration.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/format-number.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/has-feature.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Helper.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/has-permission.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Helper.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/img-path.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/is-active-route.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Helper.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/is-empty-value.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/jsonify.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/loose-equal.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/message-types.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/new-line-split.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/options-for-backend.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/path-or-array.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/replication-action-for-mode.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/replication-mode-description.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/sanitized-html.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/set-flash-message.js",
+      "currentPattern": "classic-extend",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Helper.extend({...}) classic object model; needs full rewrite to native class + decorators."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/stringify.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/to-label.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/tools-actions.js",
+      "currentPattern": "helper",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Function-based Ember helper via helper()/buildHelper() wrapper — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/helpers/transition-to.js",
+      "currentPattern": "octane-class",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Already `export default class X extends ...` (Octane native class) — rename + type annotations only."
+    },
+    {
+      "filePath": "lib/core/addon/mixins/list-controller.js",
+      "currentPattern": "mixin",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Classic Ember Mixin.create() — must become a plain TS utility, decorator, or composed native-class helper; not a 1:1 class conversion."
+    },
+    {
+      "filePath": "lib/core/addon/mixins/list-route.js",
+      "currentPattern": "mixin",
+      "estimatedEffort": "high",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Classic Ember Mixin.create() — must become a plain TS utility, decorator, or composed native-class helper; not a 1:1 class conversion."
+    },
+    {
+      "filePath": "lib/core/addon/mixins/replication-actions.js",
+      "currentPattern": "mixin",
+      "estimatedEffort": "high",
+      "dependencyCount": 2,
+      "recommendedWave": 2,
+      "notes": "Classic Ember Mixin.create() — must become a plain TS utility, decorator, or composed native-class helper; not a 1:1 class conversion."
+    },
+    {
+      "filePath": "lib/core/addon/utils/advanced-secret.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Plain exported function(s); no Ember object-model dependency — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/utils/b64.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Plain exported function(s); no Ember object-model dependency — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/utils/common-prefix.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Plain exported function(s); no Ember object-model dependency — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/utils/keys.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Plain object/value or function export; no Ember object-model dependency."
+    },
+    {
+      "filePath": "lib/core/addon/utils/parse-url.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Plain object/value or function export; no Ember object-model dependency."
+    },
+    {
+      "filePath": "lib/core/addon/utils/sanitize-path.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 5,
+      "recommendedWave": 1,
+      "notes": "Plain exported function(s); no Ember object-model dependency — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/addon/utils/timestamp.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Plain object/value or function export; no Ember object-model dependency."
+    },
+    {
+      "filePath": "lib/core/addon/utils/uuid.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 1,
+      "recommendedWave": 2,
+      "notes": "Plain exported function(s); no Ember object-model dependency — low effort, mostly parameter/return typing."
+    },
+    {
+      "filePath": "lib/core/app/components/alert-inline.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/alert-inline.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/autocomplete-input.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/autocomplete-input.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/checkbox-grid.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/checkbox-grid.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/chevron.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/chevron.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/choose-pgp-key-form.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/choose-pgp-key-form.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/code-generator/automation-snippets.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/code-generator/automation-snippets.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/code-generator/policy/builder.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/code-generator/policy/builder.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/code-generator/policy/flyout.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/code-generator/policy/flyout.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/code-generator/policy/stanza.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/code-generator/policy/stanza.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/confirm-action.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/confirm-action.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/confirm-modal.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/confirm-modal.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/confirmation-modal.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/confirmation-modal.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/control-group-inline-error.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/copy-secret-dropdown.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/copy-secret-dropdown.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/doc-link.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/doc-link.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/download-button.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/download-button.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/edit-form.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/edit-form.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/enable-input.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/enable-input.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/encoded-data-card.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/encoded-data-card.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/external-link.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/external-link.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/field-group-show.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/filter-input-explicit.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/filter-input.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/filter-input.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/form-field-groups-loop.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/form-field-groups-loop.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/form-field-groups.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/form-field-groups.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/form-field-label.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/form-field-label.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/form-field.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/form-field.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/form-save-buttons.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/form-save-buttons.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/icon.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/icon.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/info-table-item-array.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/info-table-item-array.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/info-table-row.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/info-table-row.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/input-search.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/input-search.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/json-editor.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/json-editor.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/key-value-header.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/key-value-header.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/kv-object-editor.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/kv-object-editor.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/layout-loading.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/linked-block.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/linked-block.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/list-item.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/list-item.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/list-item/content.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/list-item/popup-menu.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/list-table.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/list-table/cell.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/list-table/cell.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/list-table/index.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/list-table/index.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/list-view.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/list-view.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/loading-dropdown-option.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/manage-dropdown.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/manage-dropdown.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/masked-input.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/masked-input.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/message-error.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/message-error.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/mount/configure-tabs.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/namespace-reminder.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/namespace-reminder.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/navigate-input.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/navigate-input.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/object-list-input.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/object-list-input.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/overview-card.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/page-header-level.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/page/breadcrumbs.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/page/breadcrumbs.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/page/error.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/page/error.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/page/header.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/page/list-view.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/page/list-view.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/page/tabs.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/policy-example.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/policy-example.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/radio-button.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/radio-card.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/read-more.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/read-more.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/readonly-form-field.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/readonly-form-field.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-action-demote.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-action-demote.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-action-disable.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-action-disable.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-action-generate-token.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-action-generate-token.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-action-promote.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-action-promote.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-action-recover.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-action-recover.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-action-reindex.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-action-reindex.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-action-update-primary.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-action-update-primary.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-actions-single.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-actions-single.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-actions.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-actions.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-dashboard.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-dashboard.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-header.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-page.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-page.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-secondary-card.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-secondary-card.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-summary-card.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-summary-card.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/replication-table-rows.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/replication-table-rows.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/search-select-placeholder.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/search-select.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/search-select.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/secret-list-header-tab.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/secret-list-header-tab.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/secret-list-header.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/secret-list-header.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/secrets-engine-mount-config.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/select.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/select.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/selectable-card.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/shamir/dr-token-flow.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/shamir/dr-token-flow.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/shamir/flow.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/shamir/flow.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/shamir/form.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/shamir/form.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/sidebar/frame.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/sidebar/frame.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/sidebar/nav/access.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/sidebar/nav/access.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/sidebar/nav/agents.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/sidebar/nav/clients.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/sidebar/nav/cluster.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/sidebar/nav/cluster.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/sidebar/nav/reporting.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/sidebar/nav/reporting.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/sidebar/nav/resilience-and-recovery.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/sidebar/nav/resilience-and-recovery.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/sidebar/nav/secrets.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/sidebar/nav/secrets.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/sidebar/nav/support.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/sidebar/nav/tools.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/sidebar/nav/tools.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/sidebar/user-menu.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/sidebar/user-menu.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/stat-text.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/string-list.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/string-list.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/suggestion-input.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/suggestion-input.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/sync-status-badge.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/sync-status-badge.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/text-file.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/text-file.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/toggle-button.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/toggle-button.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/toggle.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/toggle.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/toolbar-actions.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/toolbar-filters.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/toolbar-link.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/toolbar-link.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/toolbar.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/components/ttl-picker.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/ttl-picker.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/unsaved-changes-modal.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/components/unsaved-changes-modal.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/components/upgrade-page.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/components/upgrade-page.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/components/vault-logo-spinner.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember dual-package \"app/\" re-export shim; could not resolve its addon/ target automatically — verify manually."
+    },
+    {
+      "filePath": "lib/core/app/decorators/confirm-leave.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/decorators/confirm-leave.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/await.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/await.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/changelog-url-for.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/changelog-url-for.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/cluster-states.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/cluster-states.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/date-format.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/date-format.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/date-from-now.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/date-from-now.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/display-nav-item.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/helpers/display-nav-item.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/helpers/doc-link.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/doc-link.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/engines-display-data.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/helpers/engines-display-data.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/helpers/format-duration.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/format-duration.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/format-number.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/format-number.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/has-capability.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/helpers/has-capability.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/helpers/has-feature.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/has-feature.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/has-permission.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/has-permission.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/img-path.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/img-path.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/is-active-route.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/is-active-route.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/is-empty-value.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/is-empty-value.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/jsonify.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/jsonify.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/loose-equal.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/loose-equal.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/matches-current-url.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/helpers/matches-current-url.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/helpers/message-types.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/message-types.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/new-line-split.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/new-line-split.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/options-for-backend.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/options-for-backend.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/path-or-array.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/path-or-array.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/replication-action-for-mode.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/replication-action-for-mode.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/replication-mode-description.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/replication-mode-description.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/sanitized-html.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/sanitized-html.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/set-flash-message.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/set-flash-message.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/stringify.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/stringify.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/sync-destinations.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/helpers/sync-destinations.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/helpers/to-label.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/to-label.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/tools-actions.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/tools-actions.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/helpers/transition-to.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/helpers/transition-to.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/mixins/list-controller.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/mixins/list-controller.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/mixins/list-route.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/mixins/list-route.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/mixins/replication-actions.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/mixins/replication-actions.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/utils/advanced-secret.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/utils/advanced-secret.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/utils/b64.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/utils/b64.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/utils/key-utils.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for already-converted addon/utils/key-utils.ts. Shim itself is trivial (single export statement) but still .js; convert together with its addon counterpart's wave so a .ts implementation isn't left wrapped by a .js shim."
+    },
+    {
+      "filePath": "lib/core/app/utils/sanitize-path.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/utils/sanitize-path.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/utils/timestamp.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/utils/timestamp.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/app/utils/uuid.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember \"app/\" re-export shim for addon/utils/uuid.js (still .js). Convert in the same wave as that addon file."
+    },
+    {
+      "filePath": "lib/core/index.js",
+      "currentPattern": "utility",
+      "estimatedEffort": "low",
+      "dependencyCount": 0,
+      "recommendedWave": 3,
+      "notes": "Ember-CLI addon build config (CommonJS module.exports/require, not ES module app source). Not consumed by any lib/core ES import. Recommend excluding from the WO-034 rename scope (or converting separately as a Node/CommonJS config file, same as ember-cli-build.js elsewhere in the repo) rather than treating it as a UI source file."
+    }
+  ]
+}
