@@ -17,6 +17,43 @@ import {
   WHITESPACE_WARNING,
 } from 'vault/utils/forms/validators';
 
+interface KvDatum {
+  name: string;
+  value: unknown;
+}
+
+// KVObject is an ArrayProxy.extend({...}) (app/lib/kv-object.js, out of this
+// story's scope); `.extend()`'s own type doesn't propagate its custom
+// methods (fromJSON/toJSON/etc.) onto `.create()`'s result, so this
+// component's actual usage is described directly instead.
+interface KvObjectInstance {
+  length: number;
+  fromJSON(json: Record<string, unknown> | null | undefined): KvObjectInstance;
+  toJSON(): Record<string, unknown>;
+  find(callback: (datum: KvDatum) => boolean): KvDatum | undefined;
+  addObject(obj: KvDatum): void;
+  objectAt(index: number): KvDatum | undefined;
+  removeAt(index: number): void;
+  uniqBy(key: string): { length: number };
+}
+
+interface KvObjectEditorArgs {
+  value?: Record<string, unknown> | null;
+  onChange: (value: Record<string, unknown>) => void;
+  isMasked?: boolean;
+  isSingleRow?: boolean;
+  onKeyUp?: (value: string) => void;
+  label?: string;
+  labelClass?: string;
+  warning?: string;
+  helpText?: string;
+  subText?: string;
+  keyPlaceholder?: string;
+  valuePlaceholder?: string;
+  allowWhiteSpace?: boolean;
+  warnNonStringValues?: boolean;
+}
+
 /**
  * @module KvObjectEditor
  * KvObjectEditor components are called in FormFields when the editType on the model is kv.  They are used to show a key-value input field.
@@ -40,9 +77,9 @@ import {
  * @param {boolean} [warnNonStringValues = false] - when true, shows a warning if the value is a non-string
  */
 
-export default class KvObjectEditor extends Component {
+export default class KvObjectEditor extends Component<KvObjectEditorArgs> {
   // kvData is type ArrayProxy, so addObject etc are fine here
-  @tracked kvData;
+  @tracked kvData!: KvObjectInstance;
   whitespaceWarning = WHITESPACE_WARNING('key');
   nonStringWarning = NON_STRING_WARNING;
 
@@ -52,21 +89,21 @@ export default class KvObjectEditor extends Component {
       value: this.args.valuePlaceholder || 'value',
     };
   }
-  get hasDuplicateKeys() {
+  get hasDuplicateKeys(): boolean {
     return this.kvData.uniqBy('name').length !== this.kvData.length;
   }
 
   // fired on did-insert from render modifier
   @action
-  createKvData(elem, [value]) {
-    this.kvData = KVObject.create({ content: [] }).fromJSON(value);
+  createKvData(_elem: HTMLElement, [value]: [Record<string, unknown> | null | undefined]): void {
+    this.kvData = (KVObject.create({ content: [] }) as unknown as KvObjectInstance).fromJSON(value);
 
     if (!this.args.isSingleRow || !value || Object.keys(value).length < 1) {
       this.addRow();
     }
   }
   @action
-  addRow() {
+  addRow(): void {
     if (!isNone(this.kvData.find((datum) => datum.name === ''))) {
       return;
     }
@@ -75,28 +112,28 @@ export default class KvObjectEditor extends Component {
     this.kvData.addObject(newObj);
   }
   @action
-  updateRow() {
+  updateRow(): void {
     this.args.onChange(this.kvData.toJSON());
   }
   @action
-  deleteRow(object, index) {
+  deleteRow(object: KvDatum, index: number): void {
     const oldObj = this.kvData.objectAt(index);
     assert('object guids match', guidFor(oldObj) === guidFor(object));
     this.kvData.removeAt(index);
     this.args.onChange(this.kvData.toJSON());
   }
   @action
-  handleKeyUp(event) {
+  handleKeyUp(event: Event): void {
     if (this.args.onKeyUp) {
-      this.args.onKeyUp(event.target.value);
+      this.args.onKeyUp((event.target as HTMLInputElement).value);
     }
   }
-  showWhitespaceWarning = (name) => {
+  showWhitespaceWarning = (name: string): boolean => {
     if (this.args.allowWhiteSpace) return false;
     return hasWhitespace(name);
   };
 
-  showNonStringWarning = (value) => {
+  showNonStringWarning = (value: unknown): boolean => {
     if (!this.args.warnNonStringValues) return false;
     return isNonString(value);
   };
