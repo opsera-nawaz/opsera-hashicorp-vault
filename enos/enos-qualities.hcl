@@ -596,6 +596,24 @@ quality "vault_replication_ent_pr_available" {
   description = "PR replication is available on Enterprise"
 }
 
+quality "vault_rollback_in_place" {
+  description = <<-EOF
+    WO-052: a Vault Raft cluster can be rolled back in place to a pinned pre-modernization
+    release by restarting all followers, then the leader, on the reinstalled binary
+  EOF
+}
+
+quality "vault_rollback_data_integrity_preserved" {
+  description = <<-EOF
+    WO-052 AC4: a secret written before a modernization deploy is still readable, with the
+    correct value, after the deploy is rolled back
+  EOF
+}
+
+quality "vault_rollback_within_sla" {
+  description = "WO-052 AC6: a full rollback, from decision to full cluster health, completes in under 1800 seconds (30 minutes)"
+}
+
 quality "vault_seal_awskms" {
   description = "Vault auto-unseals with the awskms seal"
 }

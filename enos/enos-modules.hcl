@@ -299,6 +299,17 @@ module "vault_raft_remove_peer" {
   vault_install_dir = var.vault_install_dir
 }
 
+# WO-052: reverses ./modules/vault_upgrade, reinstalling a pinned pre-modernization release.
+module "vault_rollback" {
+  source            = "./modules/vault_rollback"
+  vault_install_dir = var.vault_install_dir
+}
+
+# WO-052: measures and asserts the 30 minute rollback recovery SLA.
+module "vault_rollback_timer" {
+  source = "./modules/vault_rollback_timer"
+}
+
 module "vault_setup_dr_primary" {
   source = "./modules/vault_setup_dr_primary"
 
@@ -367,6 +378,11 @@ module "vault_verify_removed_node" {
 module "vault_verify_removed_node_shim" {
   source            = "./modules/vault_verify_removed_node_shim"
   vault_install_dir = var.vault_install_dir
+}
+
+# WO-052: writes (and later verifies) the rollback data-integrity fixture at secret/data/rollback-test.
+module "vault_verify_rollback_data" {
+  source = "./modules/vault_verify_rollback_data"
 }
 
 module "vault_verify_secrets_engines_create" {
