@@ -4,8 +4,18 @@
  */
 
 import { expandAttributeMeta } from 'vault/utils/field-to-attrs';
-import Model from '@ember-data/model';
+import EmberDataModel from '@ember-data/model';
 import { debug } from '@ember/debug';
+
+import type { FormField } from 'vault/app-types';
+
+type FieldGroup = Record<string, string[]>;
+type ExpandedFieldGroup = Record<string, FormField[]>;
+type AttributeIterator = (callback: (name: string) => void) => void;
+type RelationshipIterator = (
+  callback: (name: string, details: { kind: string }) => void,
+  binding?: unknown
+) => void;
 
 /**
  * sets allByKey properties on model class. These are all the attributes on the model
@@ -17,18 +27,25 @@ import { debug } from '@ember/debug';
  * attributes in place of the strings in the array.
  */
 
-export function withExpandedAttributes() {
-  return function decorator(SuperClass) {
-    if (!Object.prototype.isPrototypeOf.call(Model, SuperClass)) {
+// `any[]` below (both the generic constraint and the constructor rest param) is TypeScript's own
+// required shape for a mixin constructor per TS2545 ("A mixin class must have a constructor with a
+// single rest parameter of type 'any[]'") — there is no narrower type that satisfies that rule.
+export function withExpandedAttributes<T extends new (...args: any[]) => EmberDataModel>() {
+  return function decorator(SuperClass: T) {
+    if (!Object.prototype.isPrototypeOf.call(EmberDataModel, SuperClass)) {
       // eslint-disable-next-line
       console.error(
         'withExpandedAttributes decorator must be used on instance of ember-data Model class. Decorator not applied to returned class'
       );
       return SuperClass;
     }
-    return class ModelExpandedAttrs extends SuperClass {
+    class WithExpandedAttributes extends SuperClass {
+      constructor(...args: any[]) {
+        super(...args);
+      }
+
       // Helper method for expanding dynamic groups on model
-      _expandGroups(groups) {
+      _expandGroups(groups: FieldGroup[]): ExpandedFieldGroup[] {
         if (!Array.isArray(groups)) {
           throw new Error('_expandGroups expects an array of objects');
         }
@@ -38,8 +55,11 @@ export function withExpandedAttributes() {
           { "Method Options": ['other', 'fieldNames'] },
         ]*/
         return groups.map((obj) => {
-          const [key, stringArray] = Object.entries(obj)[0];
-          const expanded = stringArray.map((fieldName) => this.allByKey[fieldName]).filter((f) => !!f);
+          const entry = Object.entries(obj)[0] as [string, string[]];
+          const [key, stringArray] = entry;
+          const expanded = stringArray
+            .map((fieldName) => this.allByKey[fieldName])
+            .filter((f): f is FormField => !!f);
           // if this fails, it might mean there are missing fields in the model or the model must be hydrated via OpenAPI
           if (expanded.length !== stringArray.length) {
             debug(`not all model fields found in allByKey for group "${key}"`);
@@ -48,30 +68,37 @@ export function withExpandedAttributes() {
         });
       }
 
-      _allByKey = null;
-      get allByKey() {
+      _allByKey: Record<string, FormField> | null = null;
+      get allByKey(): Record<string, FormField> {
         // Caching like this ensures allByKey only gets calculated once
         if (!this._allByKey) {
-          const byKey = {};
+          const byKey: Record<string, FormField> = {};
+          const self = this as unknown as EmberDataModel;
+          const selfCtor = this.constructor as unknown as {
+            eachAttribute: AttributeIterator;
+            eachRelationship: RelationshipIterator;
+          };
           // First, get attr names which are on the model directly
           // By this time, OpenAPI should have populated non-explicit attrs
-          const mainFields = [];
-          this.eachAttribute(function (key) {
+          const mainFields: string[] = [];
+          selfCtor.eachAttribute(function (key: string) {
             mainFields.push(key);
           });
-          const expanded = expandAttributeMeta(this, mainFields);
+          const expanded = expandAttributeMeta(self, mainFields);
           expanded.forEach((attr) => {
             // Add expanded attributes from the model
             byKey[attr.name] = attr;
           });
 
           // Next, fetch and expand attrs for related models
-          this.eachRelationship(function (name, descriptor) {
+          selfCtor.eachRelationship(function (name: string, descriptor: { kind: string }) {
             // We don't worry about getting hasMany relationships
             if (descriptor.kind !== 'belongsTo') return;
-            const rModel = this[name];
-            const rAttrNames = [];
-            rModel.eachAttribute(function (key) {
+            const rModel = (self as unknown as Record<string, EmberDataModel | undefined>)[name];
+            if (!rModel) return;
+            const rModelCtor = rModel.constructor as unknown as { eachAttribute: AttributeIterator };
+            const rAttrNames: string[] = [];
+            rModelCtor.eachAttribute(function (key: string) {
               rAttrNames.push(key);
             });
             const expanded = expandAttributeMeta(rModel, rAttrNames);
@@ -81,15 +108,16 @@ export function withExpandedAttributes() {
                 options: {
                   ...attr.options,
                   // This ensures the correct path is updated in FormField
-                  fieldValue: `${name}.${attr.fieldValue || attr.name}`,
+                  fieldValue: `${name}.${(attr.options as { fieldValue?: string })?.fieldValue || attr.name}`,
                 },
-              };
+              } as FormField;
             });
-          }, this);
+          }, self);
           this._allByKey = byKey;
         }
         return this._allByKey;
       }
-    };
+    }
+    return WithExpandedAttributes;
   };
 }

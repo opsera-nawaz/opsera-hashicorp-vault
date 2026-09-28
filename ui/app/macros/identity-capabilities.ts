@@ -5,6 +5,6 @@
 
 import lazyCapabilities, { apiPath } from 'vault/macros/lazy-capabilities';
 
-export default function () {
+export default function identityCapabilities() {
   return lazyCapabilities(apiPath`identity/${'identityType'}/id/${'id'}`, 'id', 'identityType');
 }
