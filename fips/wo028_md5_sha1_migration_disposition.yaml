@@ -1,0 +1,178 @@
+# FIPS 140-3 Phase 2 — Approved-Algorithm Configuration and Enforcement
+# WO-028: Migrate security-relevant MD5/SHA-1 to SHA-256+
+#
+# This record is the Phase 2 disposition for every MD5/SHA-1 finding the
+# WO-019 consolidated inventory (fips/crypto_inventory.yaml) and this WO's
+# own audit flagged as potentially security-relevant in PKI, SSH, LDAP, and
+# userpass. It documents, with exact file:line evidence gathered directly
+# against this repository (not assumed from the WO's own narrative), which
+# findings required a code change and which were already compliant or are
+# scope-clarified as non-Vault-code-path items. Per WO-028's constraints,
+# non-security-relevant MD5/SHA-1 usage (cache keys, ETags, content
+# addressing, wire-protocol compatibility such as RADIUS/OCSP/HOTP) is
+# explicitly out of scope and is NOT touched here.
+
+disposition_id: WO-028
+disposition_title: "Migrate security-relevant MD5/SHA-1 to SHA-256+"
+disposition_date: "2026-09-28"
+verified_by: "nawaz@opsera.io (Forge automated verification agent)"
+repository: "opsera-nawaz/opsera-hashicorp-vault"
+branch: "feature/WO-028"
+depends_on: "WO-019 (fips/crypto_inventory.yaml, commit 9c2d3a4 on main)"
+
+scope: >
+  Migrate only the security-relevant MD5/SHA-1 call sites identified by
+  fips/crypto_inventory.yaml and this WO's acceptance criteria: PKI
+  certificate-signing paths, SSH CA fingerprint/KeyID display, and a scope
+  clarification for LDAP password hashing plus a compliance note for
+  userpass bcrypt. Non-security-relevant MD5/SHA-1 (cache keys, ETags,
+  content-addressing) and protocol-mandated legacy hashes (RADIUS
+  User-Password obfuscation, OCSP CertID issuerNameHash, HOTP/TOTP RFC 4226
+  default) are out of scope per this WO's constraints and are unchanged.
+
+overall_result: >-
+  PASS (verification, no code-behavior changes required) — every
+  security-relevant PKI certificate-signing and SSH fingerprint/display path
+  audited already defaults to or exclusively offers SHA-256 or stronger.
+  No production signing/display code produced a SHA-1 or MD5 output before
+  this WO ran. LDAP hashing is confirmed delegated outside the Vault Go code
+  path. Userpass bcrypt usage is documented per AC-5.
+
+findings:
+
+  - id: F1
+    ac_ref: "AC-1: PKI engine test fixtures use SHA-256+ for certificate signing"
+    title: "No SHA-1 certificate-signing fixtures in builtin/logical/pki/backend_test.go"
+    evidence:
+      - "`grep -in 'sha1|sha-1|md5' builtin/logical/pki/backend_test.go` returns zero matches."
+      - "builtin/logical/pki/backend_test.go:767-768 asserts a signed intermediate certificate's SignatureAlgorithm equals x509.SHA512WithRSA (SHA-2 family)."
+      - "builtin/logical/pki/backend_test.go:5071-5074 asserts leaf certs signed by an RSA-type CA use the PSS algorithm (also SHA-2 family)."
+      - "sdk/helper/certutil/helpers.go:889-902 (selectSignatureAlgorithmForRSA) only ever assigns x509.SHA256WithRSA(PSS)/SHA384WithRSA(PSS)/SHA512WithRSA(PSS) — SHA-1 is not a reachable branch."
+      - "builtin/logical/pki/fields.go:395-405,750-760 (signature_bits field) documents and accepts only 256/384/512; there is no operator-facing way to request a SHA-1 signature on a new cert."
+    disposition: "PASS — no fixture change needed; no SHA-1 option exists on the production or test signing path."
+
+  - id: F2
+    ac_ref: "AC-1 (edge case): legacy SHA-1 OID recognition table must be preserved for verifying externally-signed certs"
+    title: "builtin/logical/pki/issuing/signing_utils.go retains a SHA-1 OID table but has zero callers"
+    evidence:
+      - "signing_utils.go:36,41,43,48,60-61,68,70 defines oidSignatureSHA1WithRSA/DSAWithSHA1/ECDSAWithSHA1 entries in signatureAlgorithmDetails, copied from Go stdlib's x509.go."
+      - "`grep -rn 'SigningParamsForKey' . --include=*.go` (repo-wide) returns only the function's own definition and doc comment at signing_utils.go:78,82 — zero call sites anywhere in the repository."
+      - "sdk/helper/certutil/helpers.go:2190 (FindSignatureBits) maps MD2/MD5/SHA1/DSA-SHA1/ECDSA-SHA1 to -1 (rejected/unsupported bit length), so even if a caller existed, weak algorithms are explicitly flagged non-viable."
+    disposition: >-
+      PASS, not modified — this table is dead code (SigningParamsForKey has no
+      callers) and, per this WO's own constraint ("PKI backward compatibility
+      for verifying existing SHA-1-signed certificates must be preserved"),
+      an OID-recognition table is exactly the kind of legacy-verification
+      artifact that must not be deleted. Recorded here as a residual
+      code-hygiene observation for a future cleanup WO, not a FIPS gap.
+
+  - id: F3
+    ac_ref: "AC-2: sdk/helper/certutil/x509verify/verify_test.go has zero SHA-1-signed certs in security-relevant test paths"
+    title: "verify_test.go fixtures are ECDSA P-256, not SHA-1-signed"
+    evidence:
+      - "verify_test.go:730-731,746-747,763-764,799-800,817-818,837-838 — every comment referencing 'SHA1-RSA' explicitly states the constant is 'a test-only ECDSA P-256 replacement for the original SHA1-RSA ... certificate, which is rejected by Go 1.15+.'"
+      - "Decoding each of geoTrustRoot/giag2Intermediate/googleLeaf/dnssecExpLeaf/startComIntermediate/startComRoot's PEM shows an ECDSA P-256 SubjectPublicKeyInfo OID (1.2.840.10045.3.1.7) and an ECDSA-with-SHA256 signature OID (1.2.840.10045.4.3.2), not RSA/SHA-1."
+      - "googleLeafWithInvalidHash (verify_test.go:780-797) is an intentional negative test — its own comment states the signature algorithm OID is replaced with 'a made-up unknown OID' to exercise the 'algorithm unimplemented' error path; it is not a SHA-1 fixture."
+    disposition: "PASS — zero SHA-1-signed certificates in this file's security-relevant verification paths; already migrated to ECDSA equivalents prior to this WO."
+
+  - id: F4
+    ac_ref: "AC-3: SSH CA fingerprint display uses SHA-256, or MD5 is documented as display-only/non-security-relevant"
+    title: "builtin/logical/ssh/ contains zero MD5 usage of any kind"
+    evidence:
+      - "`grep -rn 'md5|MD5|sha1|SHA1|Fingerprint' builtin/logical/ssh/*.go builtin/logical/ssh/cmd/ssh/*.go` returns zero matches."
+      - "`grep -rln 'crypto/md5' --include=*.go .` (repo-wide, excluding vendor and _test.go) finds only physical/gcs/gcs.go and helper/storagepacker/storagepacker.go — neither is under builtin/logical/ssh/, neither is in this WO's scope, and neither is a security-relevant signing/verification path (content-hash cache keys, out of scope per this WO's constraints)."
+      - "builtin/logical/ssh/path_issue_sign.go:264-286 (calculateKeyID) already computes `public_key_hash` via `fmt.Sprintf(\"%x\", sha256.Sum256(pubKey.Marshal()))` — crypto/sha256, not MD5 or a golang.org/x/crypto/ssh.FingerprintLegacyMD5-style helper."
+      - "builtin/logical/ssh/backend.go:110-113 (Salt) already uses salt.SHA256Hash for its storage-key HMAC salt, not MD5."
+    disposition: >-
+      PASS, already compliant — there is no MD5 fingerprint code anywhere in
+      the SSH secrets engine to migrate. The only hash-based display
+      identifier (the KeyID template's public_key_hash) already uses
+      SHA-256. The WO's premise that MD5 fingerprints 'may' be used for
+      display in this engine does not hold in this codebase snapshot;
+      recorded here as a verified negative finding.
+
+  - id: F5
+    ac_ref: "AC-6: unit tests verify SHA-256 format for fingerprint/display functions"
+    title: "Existing test already asserts the SHA-256 hex-digest length/format of public_key_hash"
+    evidence:
+      - "builtin/logical/ssh/backend_test.go:1776-1808 (TestBackend_CustomKeyIDFormat) configures key_id_format \"{{role_name}}-{{token_display_name}}-{{public_key_hash}}\" and asserts the resulting KeyID equals \"customrole-root-22608f5ef173aabf700797cb95c5641e792698ec6380e8e1eb55523e39aa5e51\" — a 64-hex-character (32-byte / 256-bit) digest, i.e. the SHA-256 output length, not the 32-hex-character (16-byte) length an MD5 digest would produce."
+    disposition: >-
+      PASS via existing coverage — no fingerprint/display function needed to
+      be changed (see F4), so no new test was required by AC-6's own
+      conditional wording ('any updated fingerprint display functions').
+      The pre-existing test already provides byte-for-byte evidence that the
+      format is SHA-256, not SHA-1/MD5.
+
+  - id: F6
+    ac_ref: "AC-4: LDAP password hashing is delegated to the target directory server, not a Vault Go code path"
+    title: "LDAP scope clarification — confirmed independently, not just cited from WO-019"
+    evidence:
+      - "fips/crypto_inventory.yaml:3567-3578 (source: fips/inventory/builtin_logical_crypto_sites.yaml, WO-007) already records: 'file: N/A — not present under builtin/logical/ in this repository ... library: github.com/hashicorp/vault-plugin-secrets-openldap v0.19.0 (go.mod:176) ... security_relevant: false ... The LDAP dynamic-secrets engine (openldap) is externalized; no source under builtin/logical/ldap/ in this repository.'"
+      - "fips/crypto_inventory.yaml:3852-3866 records builtin/credential/ldap/*.go (the LDAP AUTH method, which IS vendored here) as 'security_relevant: true ... algorithm: N/A — no direct crypto/* or golang.org/x/crypto/* imports found ... LDAP bind (including LDAPS/StartTLS) and any password hashing for the password_policy-driven root-credential rotation path are delegated entirely to go-ldap/v3 and hashicorp/cap/ldap.'"
+      - "Independently re-verified in this WO: `grep -rn '\"crypto|golang.org/x/crypto' builtin/credential/ldap/*.go` returns zero matches (exit 1). The only crypto-adjacent import across builtin/credential/ldap/*.go is github.com/hashicorp/go-secure-stdlib/password (cli.go:11, an interactive-password-prompt helper, not a hash primitive) and github.com/hashicorp/cap/ldap (backend.go:13, owns TLS/bind internally)."
+      - "builtin/credential/ldap/path_config_rotate_root.go:17 uses sdk/helper/base62 to generate a new random rotated password (not a hash function) before handing it to the directory server via an LDAP modify operation."
+    disposition: >-
+      PASS — confirmed, both by the existing WO-019 inventory and by an
+      independent grep against the actual source in this branch, that
+      neither the LDAP secrets engine (externalized to
+      vault-plugin-secrets-openldap, not vendored in this repository) nor
+      the LDAP auth method (builtin/credential/ldap/) performs local
+      MD5/SHA-1 password hashing. Recorded here as the AC-4 scope
+      clarification; no LDAP code path was modified per this WO's
+      constraint to not touch LDAP without this confirmation.
+
+  - id: F7
+    ac_ref: "AC-5: userpass bcrypt usage documented as already compliant"
+    title: "userpass auth method bcrypt confirmed at path_login.go and path_user_password.go"
+    evidence:
+      - "builtin/credential/userpass/path_login.go:112 (verified in this WO): userPassword = []byte(\"$2a$10$/rzAjBPX3APZv8DesvsjB.OKdMif2xomluDfaxQ.OZcF06EuECsVG\") is a fixed dummy bcrypt hash compared for nonexistent users, specifically to avoid a timing side channel revealing username existence."
+      - "builtin/credential/userpass/path_login.go:116 (bcrypt.CompareHashAndPassword) is the primary verification path for every current account; path_login.go:122 (subtle.ConstantTimeCompare) is a constant-time fallback used only for pre-Vault-0.2 legacy plaintext-password accounts (PasswordHash == nil)."
+      - "fips/crypto_inventory.yaml:3823-3836 records builtin/credential/userpass/path_user_password.go:108 (bcrypt.GenerateFromPassword, bcrypt.DefaultCost) as the write-path counterpart."
+    disposition: >-
+      Documented per AC-5 as already compliant / not requiring migration in
+      this WO. Note for transparency: the WO-019/WO-007 inventory
+      classifies this same call site as fips_approved: false (bcrypt is a
+      Blowfish-based construction, not the PBKDF2-with-Approved-HMAC
+      construction that SP 800-132 itself specifies as the Approved
+      password-based-KDF). This WO's own acceptance criteria (AC-5) and
+      description direct that bcrypt be recorded as already compliant and
+      out of scope for migration here; that policy call is preserved as
+      written by the WO rather than overridden by this audit. A human FIPS
+      assessor may want to reconcile AC-5's framing against WO-007's
+      fips_approved: false classification before this component ships in a
+      FIPS-140-3-asserting build; this note exists so that reconciliation
+      is not lost.
+
+acceptance_criteria_results:
+  - ac: "AC-1 (PKI SHA-1 fixtures verified/updated)"
+    result: PASS
+    evidence_ref: [F1, F2]
+  - ac: "AC-2 (verify_test.go zero SHA-1-signed certs)"
+    result: PASS
+    evidence_ref: [F3]
+  - ac: "AC-3 (SSH CA fingerprint SHA-256 or documented display-only)"
+    result: PASS
+    evidence_ref: [F4]
+  - ac: "AC-4 (LDAP scope clarification)"
+    result: PASS
+    evidence_ref: [F6]
+  - ac: "AC-5 (userpass bcrypt documented compliant)"
+    result: PASS
+    evidence_ref: [F7]
+  - ac: "AC-6 (unit tests verify SHA-256 format)"
+    result: PASS
+    evidence_ref: [F5]
+  - ac: "AC-7 (N/A — system integration tests, PKI signing tests must keep passing)"
+    result: PASS
+    evidence_ref: "go test ./builtin/logical/pki/... and ./sdk/helper/certutil/... — see WO-028 completion comment for run output"
+  - ac: "AC-8 (N/A — no new mock data/fixtures generated)"
+    result: PASS
+    evidence_ref: "No new PKI test fixtures were created; existing fixtures verified in place only"
+
+code_changes_made: >-
+  None required to production or test behavior. Four short pointer comments
+  were added (builtin/logical/pki/backend_test.go, builtin/logical/pki/path_issue_sign.go,
+  sdk/helper/certutil/x509verify/verify_test.go, builtin/logical/ssh/backend.go)
+  referencing this disposition record at the exact lines audited above, so a
+  future reader lands on the FIPS-CRYPTO-002 evidence trail instead of
+  re-deriving it. No signing, hashing, or fingerprint logic was altered.

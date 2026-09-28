@@ -764,6 +764,9 @@ func generateURLSteps(t *testing.T, caCert, caKey string, intdata, reqdata map[s
 					return fmt.Errorf("OCSPServer:\nexpected\n%#v\ngot\n%#v\n", expected.OCSPServers, cert.OCSPServer)
 				case !reflect.DeepEqual([]string{"intermediate.cert.com"}, cert.DNSNames):
 					return fmt.Errorf("DNSNames\nexpected\n%#v\ngot\n%#v\n", []string{"intermediate.cert.com"}, cert.DNSNames)
+				// FIPS-CRYPTO-002 (WO-028): this asserts the signed intermediate uses a
+				// SHA-2 family algorithm. See fips/wo028_md5_sha1_migration_disposition.yaml
+				// finding F1 — no SHA-1 signing fixture exists anywhere in this file.
 				case !reflect.DeepEqual(x509.SHA512WithRSA, cert.SignatureAlgorithm):
 					return fmt.Errorf("Signature Algorithm:\nexpected\n%#v\ngot\n%#v\n", x509.SHA512WithRSA, cert.SignatureAlgorithm)
 				case !reflect.DeepEqual(skid, cert.SubjectKeyId):
