@@ -126,3 +126,35 @@ cd ui
 npx tsc --showConfig            # confirms strict sub-flags, allowJs
 npx tsc --noEmit                # 0 errors against current tsconfig.json
 ```
+
+## Update — WO-034: `ui/lib/core/` shared files converted
+
+**Date:** 2026-09-28
+
+WO-034 converted every `.js` file under `ui/lib/core/addon/` to `.ts`, following
+`ui/lib/core/migration-triage.json`'s (WO-023) three-wave plan (wave 1: 2
+files with dependencyCount >= 5, wave 2: 99 files with dependencyCount 1-4,
+wave 3: 1 leaf file with dependencyCount 0 — 102 files total).
+
+```sh
+find ui/lib/core/addon/ -name '*.js' -not -name index.js | wc -l   # 0 (was 102 before WO-034)
+npx tsc --noEmit                                                    # 0 errors, run from ui/
+```
+
+`ui/lib/core/app/` (157 files) is intentionally untouched — those are Ember
+addon app-tree re-export shims (`export { default } from 'core/xyz';`)
+required by Ember CLI's classic resolver, not migration targets; this
+matches the acceptance criteria's own carve-out for "intentional
+JavaScript-only files like index.js entry points." `ui/lib/core/index.js`
+(the addon's package entry point) is likewise untouched for the same
+reason.
+
+Every file was `git mv`'d in a content-free rename commit before any typing
+changes, so `git log --follow` preserves full pre-.ts history for all 102
+files. A handful of latent runtime bugs were surfaced (and fixed) by making
+previously-untyped code honestly typed — see the WO-034 commits for
+specifics (a non-existent `.any()` Array method called in four different
+files where `.some()` was clearly intended; one call site passing a wrapped
+`{ headers }` object where raw `HeadersInit` was expected;
+`dasherize(val)` receiving a bare string where its real `[string]`-tuple
+signature expected an array).

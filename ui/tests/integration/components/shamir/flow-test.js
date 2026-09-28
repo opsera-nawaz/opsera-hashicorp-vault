@@ -87,4 +87,36 @@ module('Integration | Component | shamir/flow', function (hooks) {
     assert.true(this.checkComplete.notCalled, 'checkComplete was not called');
     assert.true(this.updateProgress.notCalled, 'updateProgress was not called');
   });
+
+  // WO-034: shamir/flow.ts is a wave 2 foundation file (imported by 2 other
+  // core files, including shamir/dr-token-flow.ts). Both @checkComplete and
+  // @updateProgress are typed as optional on ShamirFlowArgs, and
+  // checkComplete()'s fallback (`response?.complete === true`) is the
+  // untested default path -- every other test in this file always passes
+  // @checkComplete explicitly.
+  test('it falls back to checking response.complete when @checkComplete is not passed', async function (assert) {
+    this.server.put('/sys/unseal', () => ({
+      sealed: false,
+      t: this.threshold,
+      n: this.threshold,
+      progress: 1,
+      complete: true,
+    }));
+
+    await render(hbs`
+      <Shamir::Flow
+        @action="unseal"
+        @threshold={{this.threshold}}
+        @progress={{this.progress}}
+        @onShamirSuccess={{this.onSuccess}}
+      />`);
+
+    await fillIn(GENERAL.inputByAttr('shamir-key'), this.keyPart);
+    await click(GENERAL.submitButton);
+
+    assert.true(
+      this.onSuccess.calledOnce,
+      'onShamirSuccess fires from the default checkComplete fallback (response.complete === true) with no @checkComplete arg'
+    );
+  });
 });

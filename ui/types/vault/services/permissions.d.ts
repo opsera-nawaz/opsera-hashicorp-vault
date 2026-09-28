@@ -21,4 +21,5 @@ export default class PermissionsService extends Service {
   hasPermission: (pathName: string, capabilities?: Array<string | null>) => boolean;
   hasNavPermission: (navItem: string, routeParams?: string | string[], requireAll?: boolean) => boolean;
   getPaths: Task<void, []>;
+  navPathParams: (navItem: string) => { route?: string; models: (string | undefined)[] } | undefined;
 }

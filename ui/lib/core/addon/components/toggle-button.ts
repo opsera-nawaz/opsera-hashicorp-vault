@@ -1,0 +1,41 @@
+/**
+ * Copyright IBM Corp. 2016, 2025
+ * SPDX-License-Identifier: BUSL-1.1
+ */
+
+import Component from '@glimmer/component';
+
+/**
+ * @module ToggleButton
+ * `ToggleButton` components are used to expand and collapse content with a toggle.
+ *
+ * @example
+ * <ToggleButton @isOpen={{this.showOptions}} @openLabel="Show stuff" @closedLabel="Hide the stuff" @onClick={{fn (mut this.showOptions) (not this.showOptions)}} />
+ *  {{#if this.showOptions}}
+ *     <div>
+ *       <p>
+ *         I will be toggled!
+ *       </p>
+ *     </div>
+ *   {{/if}}
+ *
+ * @param {boolean} isOpen - determines whether to show open or closed label
+ * @param {function} onClick - fired when button is clicked
+ * @param {string} [openLabel=Hide options] - The message to display when the toggle is open.
+ * @param {string} [closedLabel=More options] - The message to display when the toggle is closed.
+ */
+interface ToggleButtonArgs {
+  isOpen: boolean;
+  onClick: () => void;
+  openLabel?: string;
+  closedLabel?: string;
+}
+
+export default class ToggleButtonComponent extends Component<ToggleButtonArgs> {
+  get openLabel(): string {
+    return this.args.openLabel || 'Hide options';
+  }
+  get closedLabel(): string {
+    return this.args.closedLabel || 'More options';
+  }
+}

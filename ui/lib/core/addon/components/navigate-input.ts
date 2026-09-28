@@ -1,0 +1,274 @@
+/**
+ * Copyright IBM Corp. 2016, 2025
+ * SPDX-License-Identifier: BUSL-1.1
+ */
+
+import Ember from 'ember';
+import { debounce, later } from '@ember/runloop';
+import { service } from '@ember/service';
+import { action } from '@ember/object';
+import { guidFor } from '@ember/object/internals';
+import Component from '@glimmer/component';
+
+import { encodePath } from 'vault/utils/path-encoding-helpers';
+import { keyIsFolder, parentKeyForKey } from 'core/utils/key-utils';
+import keys from 'core/utils/keys';
+
+import type RouterService from '@ember/routing/router-service';
+import type { NativeArray } from '@ember/array';
+
+interface RouteUrls {
+  create?: string;
+  list?: string;
+  show?: string;
+  [key: string]: string | undefined;
+}
+
+interface NavigateInputArgs {
+  filter?: string | null;
+  placeholder?: string;
+  urls?: RouteUrls | null;
+  filterFocusDidChange?: (isFocused: boolean) => void;
+  filterDidChange?: (value: string) => void;
+  filterMatchesKey?: boolean;
+  filterPartialMatch?: unknown;
+  firstPartialMatch?: { id?: string };
+  baseKey?: string;
+  shouldNavigateTree?: boolean;
+  mode?: string;
+  extraNavParams?: string;
+}
+
+/**
+ * @module NavigateInput
+ * `NavigateInput` components are used to filter list data.
+ *
+ * @example
+ * <NavigateInput @filter={{@roleFiltered}} urls={{hash list="vault.cluster.secrets.backend.kubernetes.roles"}}/>
+ *
+ * @param {String} filter=null  - The filtered string.
+ * @param {String} [placeholder=Filter items] - The message inside the input to indicate what the user should enter into the space.
+ * @param {Object} [urls=null] - An object containing list=route url.
+ * @param {Function} [filterFocusDidChange=null] - A function called when the focus changes.
+ * @param {Function} [filterDidChange=null] - A function called when the filter string changes.
+ * @param {Function} [filterMatchesKey=null] - A function used to match to a specific key, such as an Id.
+ * @param {Function} [filterPartialMatch=null] - A function used to filter through a partial match. Such as "oo" of "root".
+ * @param {String} [baseKey] - A string to transition by Id.
+ * @param {Boolean} [shouldNavigateTree=false] - If true, navigate a larger tree, such as when you're navigating leases under access.
+ * @param {String} [mode=secrets] - Mode which plays into navigation type.
+ * @param {String} [extraNavParams] - A string used in route transition when necessary.
+ */
+
+const MODES: Record<string, string> = {
+  secrets: 'vault.cluster.secrets.backend',
+  'secrets-cert': 'vault.cluster.secrets.backend',
+  'policy-show': 'vault.cluster.policy',
+  'policy-list': 'vault.cluster.policies',
+  leases: 'vault.cluster.access.leases',
+};
+
+const routeFor = function (type: string, mode: string, urls: RouteUrls | null | undefined) {
+  // urls object should have create, list, show keys
+  // so we'll return that here
+  if (urls) {
+    return urls[type.replace('-root', '')];
+  }
+  let useSuffix = true;
+  const typeVal = mode === 'secrets' || mode === 'leases' ? type : type.replace('-root', '');
+  const modeKey = mode + '-' + typeVal;
+  const modeVal = MODES[modeKey] || MODES[mode];
+  if (modeKey === 'policy-list') {
+    useSuffix = false;
+  }
+
+  return useSuffix ? modeVal + '.' + typeVal : modeVal;
+};
+
+export default class NavigateInput extends Component<NavigateInputArgs> {
+  @service declare readonly router: RouterService;
+  inputId = `nav-input-${guidFor(this)}`;
+
+  get mode(): string {
+    return this.args.mode || 'secrets';
+  }
+
+  transitionToRoute(...args: unknown[]): void {
+    const params = args.map((param, index) => {
+      if (index === 0 || typeof param !== 'string') {
+        return param;
+      }
+      return encodePath(param);
+    });
+
+    this.router.transitionTo(...(params as Parameters<RouterService['transitionTo']>));
+  }
+
+  keyForNav(key: string): string {
+    if (this.mode !== 'secrets-cert') {
+      return key;
+    }
+    return `cert/${key}`;
+  }
+
+  onEnter(val: string): void {
+    const mode = this.mode;
+    const baseKey = this.args.baseKey;
+    const extraParams = this.args.extraNavParams;
+    if (mode.startsWith('secrets') && (!val || val === baseKey)) {
+      return;
+    }
+    if (this.args.filterMatchesKey && !keyIsFolder(val)) {
+      const params = (
+        [routeFor('show', mode, this.args.urls), extraParams, this.keyForNav(val)] as NativeArray<unknown>
+      ).compact();
+      this.transitionToRoute(...params);
+    } else {
+      if (mode === 'policies') {
+        return;
+      }
+      const route = routeFor('create', mode, this.args.urls);
+      if (baseKey) {
+        this.transitionToRoute(route, this.keyForNav(baseKey), {
+          queryParams: {
+            initialKey: val,
+          },
+        });
+      } else if (this.args.urls) {
+        this.transitionToRoute(route, {
+          queryParams: {
+            initialKey: this.keyForNav(val),
+          },
+        });
+      } else {
+        this.transitionToRoute(route + '-root', {
+          queryParams: {
+            initialKey: this.keyForNav(val),
+          },
+        });
+      }
+    }
+  }
+
+  // pop to the nearest parentKey or to the root
+  onEscape(val: string): void {
+    const key = parentKeyForKey(val) || '';
+    this.args.filterDidChange?.(key);
+    this.filterUpdated(key);
+  }
+
+  onTab(event: KeyboardEvent): void {
+    const firstPartialMatch = this.args.firstPartialMatch?.id;
+    if (!firstPartialMatch) {
+      return;
+    }
+    event.preventDefault();
+    this.args.filterDidChange?.(firstPartialMatch);
+    this.filterUpdated(firstPartialMatch);
+  }
+
+  // as you type, navigates through the k/v tree
+  filterUpdated(val: string): void {
+    const mode = this.mode;
+    if (mode === 'policies' || !this.args.shouldNavigateTree) {
+      this.filterUpdatedNoNav(val, mode);
+      return;
+    }
+    // select the key to nav to, assumed to be a folder
+    let key = val ? val.trim() : '';
+    const isFolder = keyIsFolder(key);
+
+    if (!isFolder) {
+      // nav to the closest parentKey (or the root)
+      key = parentKeyForKey(val) || '';
+    }
+
+    const pageFilter = val.replace(key, '');
+    this.navigate(this.keyForNav(key), mode, pageFilter);
+  }
+
+  navigate(key: string, mode: string, pageFilter: string): void {
+    const route = routeFor(key ? 'list' : 'list-root', mode, this.args.urls);
+    const args: unknown[] = [route];
+    if (key) {
+      args.push(key);
+    }
+    if (pageFilter && !keyIsFolder(pageFilter)) {
+      args.push({
+        queryParams: {
+          page: 1,
+          pageFilter,
+        },
+      });
+    } else {
+      args.push({
+        queryParams: {
+          page: 1,
+          pageFilter: null,
+        },
+      });
+    }
+    this.transitionToRoute(...args);
+  }
+
+  filterUpdatedNoNav(val: string, mode: string): void {
+    const key = val ? val.trim() : null;
+    const route = routeFor('list-root', mode, this.args.urls);
+    // policies are nested under their type (e.g. vault.cluster.policies.acl) rather than a dynamic segment
+    const routeName =
+      mode === 'policy' && this.args.extraNavParams ? `${route}.${this.args.extraNavParams}` : route;
+    this.transitionToRoute(routeName, {
+      queryParams: {
+        pageFilter: key,
+        page: 1,
+      },
+    });
+    // component is not re-rendered on policy list so trigger autofocus here
+    this.maybeFocusInput();
+  }
+
+  @action
+  maybeFocusInput(): void {
+    // if component is loaded and filter is already applied,
+    // we assume the user just typed in a filter and the page reloaded
+    if (this.args.filter && !Ember.testing) {
+      later(
+        this,
+        function (this: NavigateInput) {
+          document.getElementById(this.inputId)?.focus();
+        },
+        400
+      );
+    }
+  }
+
+  @action
+  handleInput(evt: Event): void {
+    const value = (evt.target as HTMLInputElement).value;
+    if (this.args.filterDidChange) {
+      this.args.filterDidChange(value);
+    }
+    debounce(this, this.filterUpdated, value, 400);
+  }
+  @action
+  setFilterFocused(isFocused: boolean): void {
+    if (this.args.filterFocusDidChange) {
+      this.args.filterFocusDidChange(isFocused);
+    }
+  }
+  @action
+  handleKeyPress(event: KeyboardEvent): void {
+    if (event.key === keys.TAB) {
+      this.onTab(event);
+    }
+  }
+  @action
+  handleKeyUp(event: KeyboardEvent): void {
+    const val = (event.target as HTMLInputElement).value;
+    if (event.key === keys.ENTER) {
+      this.onEnter(val);
+    }
+    if (keys.ESC.includes(event.key)) {
+      this.onEscape(val);
+    }
+  }
+}

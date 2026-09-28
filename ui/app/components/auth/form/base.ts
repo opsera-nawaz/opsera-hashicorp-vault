@@ -107,12 +107,14 @@ export default abstract class AuthBase extends Component<Args> {
     if (this.args.authType !== 'token') {
       // strip leading or trailing slashes for consistency.
       // fallback to auth type which is the default path Vault expects.
-      data['path'] = sanitizePath(formData?.get('path')) || this.args.authType;
+      // 'path' is a text input, never a file input, so formData.get() always
+      // returns a string (or null) here despite the wider FormDataEntryValue type.
+      data['path'] = sanitizePath(formData?.get('path') as string | null) || this.args.authType;
     }
 
     if (this.version.isEnterprise) {
       // strip leading or trailing slashes for consistency
-      let namespace = sanitizePath(formData?.get('namespace')) || '';
+      let namespace = sanitizePath(formData?.get('namespace') as string | null) || '';
 
       const hvdRootNs = this.flags.hvdManagedNamespaceRoot; // if HVD managed, this is "admin"
       if (hvdRootNs) {
