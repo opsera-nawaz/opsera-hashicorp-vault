@@ -75,3 +75,21 @@ declare module 'autosize' {
   }
   export default autosize;
 }
+
+// ember-engines@0.8.23 ships no declaration files. `ember-engines/engine` is
+// a thin re-export of `@ember/engine`'s Engine class, so alias straight to
+// the real (typed) base class instead of stubbing with `any`.
+declare module 'ember-engines/engine' {
+  import Engine from '@ember/engine';
+
+  export default Engine;
+}
+
+// `ember-engines/routes` re-exports the standard Ember router DSL callback
+// shape used by `Router.map()`, just tagged with `isRouteMap` so the engine
+// can lazily mount it. Reuse Ember's own (typed) DSL callback contract.
+declare module 'ember-engines/routes' {
+  import type { DSLCallback } from '@ember/routing/lib/dsl';
+
+  export default function buildRoutes(callback: DSLCallback): DSLCallback & { isRouteMap: true };
+}

@@ -10,10 +10,15 @@ import config from './config/environment';
 
 const { modulePrefix } = config;
 
+interface SyncEngineDependencies {
+  services: string[];
+  externalRoutes: string[];
+}
+
 export default class SyncEngine extends Engine {
-  modulePrefix = modulePrefix;
-  Resolver = Resolver;
-  dependencies = {
+  modulePrefix: string = modulePrefix;
+  Resolver: typeof Resolver = Resolver;
+  dependencies: SyncEngineDependencies = {
     services: [
       'flash-messages',
       'flags',
