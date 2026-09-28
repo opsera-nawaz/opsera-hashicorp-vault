@@ -275,6 +275,11 @@ func mergeKMSEnvConfig(configKMS *KMS) error {
 	return nil
 }
 
+// For FIPS 140-3 CMVP certificate references, FIPS endpoint configuration,
+// and operational guidance for each KMS/HSM seal type dispatched below, see
+// docs/fips/kms-hsm-seal-cmvp-certificates.md (WO-030). That document also
+// records why PKCS#11 (below) is Enterprise-only and why Shamir is not a
+// validated cryptographic module.
 func configureWrapper(configKMS *KMS, infoKeys *[]string, info *map[string]string, logger hclog.Logger, opts ...wrapping.Option) (wrapping.Wrapper, error) {
 	var wrapper wrapping.Wrapper
 	var kmsInfo map[string]string
