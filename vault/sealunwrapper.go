@@ -75,7 +75,7 @@ func (d *sealUnwrapper) unwrap(ctx context.Context, key string) (unwrappedEntry 
 		return nil, false, nil
 	}
 
-	wrappedEntryValue, unmarshaled := UnmarshalSealWrappedValueWithCanary(entry.Value)
+	wrappedEntryValue, unmarshaled := unmarshalSealWrappedValueWithCanary(entry.Value)
 	switch {
 	case !unmarshaled:
 		// Entry is not wrapped

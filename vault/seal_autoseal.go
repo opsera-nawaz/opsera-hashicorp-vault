@@ -181,7 +181,7 @@ func (d *autoSeal) upgradeStoredKeys(ctx context.Context) error {
 	}
 	pe := physical.Entry(*entry)
 
-	wrappedEntryValue, err := UnmarshalSealWrappedValue(pe.Value)
+	wrappedEntryValue, err := unmarshalSealWrappedValue(pe.Value)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal stored keys: %w", err)
 	}
@@ -192,7 +192,7 @@ func (d *autoSeal) upgradeStoredKeys(ctx context.Context) error {
 	if !uptodate {
 		d.logger.Info("upgrading stored keys")
 
-		keys, err := UnsealWrapStoredBarrierKeys(ctx, d.GetAccess(), &pe)
+		keys, err := unsealWrapStoredBarrierKeys(ctx, d.GetAccess(), &pe)
 		if err != nil {
 			return fmt.Errorf("failed to decrypt encrypted stored keys: %w", err)
 		}
@@ -204,11 +204,11 @@ func (d *autoSeal) upgradeStoredKeys(ctx context.Context) error {
 	return nil
 }
 
-// UpgradeKeys re-encrypts and saves the stored keys and the recovery key
+// upgradeKeys re-encrypts and saves the stored keys and the recovery key
 // with the current key if the current KeyId is different from the KeyId
 // the stored keys and the recovery key are encrypted with. The provided
 // Context must be non-nil.
-func (d *autoSeal) UpgradeKeys(ctx context.Context) error {
+func (d *autoSeal) upgradeKeys(ctx context.Context) error {
 	if err := d.upgradeRecoveryKey(ctx); err != nil { // re-encrypts the recovery key
 		return err
 	}
@@ -247,7 +247,7 @@ func (d *autoSeal) BarrierConfig(ctx context.Context) (*SealConfig, error) {
 
 	barrierTypeUpgradeCheck(d.BarrierSealConfigType(), &conf)
 
-	if !CompatibleSealTypes(conf.Type, d.BarrierSealConfigType().String()) {
+	if !compatibleSealTypes(conf.Type, d.BarrierSealConfigType().String()) {
 		d.logger.Error("barrier seal type does not match loaded type", "seal_type", conf.Type, "loaded_type", d.BarrierSealConfigType())
 		return nil, fmt.Errorf("barrier seal type of %q does not match loaded type of %q", conf.Type, d.BarrierSealConfigType())
 	}
@@ -256,7 +256,7 @@ func (d *autoSeal) BarrierConfig(ctx context.Context) (*SealConfig, error) {
 	return conf.Clone(), nil
 }
 
-func CompatibleSealTypes(a, b string) bool {
+func compatibleSealTypes(a, b string) bool {
 	return a == b || a == SealConfigTypeMultiseal.String() || b == SealConfigTypeMultiseal.String()
 }
 
@@ -413,7 +413,7 @@ func (d *autoSeal) SetRecoveryKey(ctx context.Context, key []byte) error {
 	}
 
 	// Encrypt and marshal the keys
-	be, err := SealWrapRecoveryKey(ctx, d.Access, key)
+	be, err := sealWrapRecoveryKey(ctx, d.Access, key)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt keys for storage: %w", err)
 	}
@@ -443,7 +443,7 @@ func (d *autoSeal) getRecoveryKeyInternal(ctx context.Context) ([]byte, error) {
 	}
 	pe := physical.Entry(*entry)
 
-	pt, err := UnsealWrapRecoveryKey(ctx, d.Access, &pe)
+	pt, err := unsealWrapRecoveryKey(ctx, d.Access, &pe)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt encrypted stored keys: %w", err)
 	}
@@ -461,7 +461,7 @@ func (d *autoSeal) upgradeRecoveryKey(ctx context.Context) error {
 	}
 	pe := physical.Entry(*entry)
 
-	wrappedEntryValue, err := UnmarshalSealWrappedValue(pe.Value)
+	wrappedEntryValue, err := unmarshalSealWrappedValue(pe.Value)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal recovery key: %w", err)
 	}
@@ -472,7 +472,7 @@ func (d *autoSeal) upgradeRecoveryKey(ctx context.Context) error {
 
 	if !uptodate {
 		d.logger.Info("upgrading recovery key")
-		pt, err := UnsealWrapRecoveryKey(ctx, d.Access, &pe)
+		pt, err := unsealWrapRecoveryKey(ctx, d.Access, &pe)
 		if err != nil {
 			return fmt.Errorf("failed to decrypt recovery key: %w", err)
 		}
@@ -524,10 +524,10 @@ func (d *autoSeal) migrateRecoveryConfig(ctx context.Context) error {
 	return nil
 }
 
-// StartHealthCheck starts a goroutine that tests the health of the auto-unseal backend once every 10 minutes.
+// startHealthCheck starts a goroutine that tests the health of the auto-unseal backend once every 10 minutes.
 // If unhealthy, logs a warning on the condition and begins testing every one minute until healthy again.
-func (d *autoSeal) StartHealthCheck(ctx context.Context) {
-	d.StopHealthCheck()
+func (d *autoSeal) startHealthCheck(ctx context.Context) {
+	d.stopHealthCheck()
 	d.hcLock.Lock()
 	defer d.hcLock.Unlock()
 
@@ -620,7 +620,7 @@ error and restart Vault.`)
 	}()
 }
 
-func (d *autoSeal) StopHealthCheck() {
+func (d *autoSeal) stopHealthCheck() {
 	d.hcLock.Lock()
 	defer d.hcLock.Unlock()
 	if d.healthCheckStop != nil {

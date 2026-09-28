@@ -102,7 +102,7 @@ func init() {
 	}
 }
 
-// Marshal a seal wrapped value. DO NOT USE DIRECTLY, use MarshalSealWrappedValue instead.
+// Marshal a seal wrapped value. DO NOT USE DIRECTLY, use marshalSealWrappedValue instead.
 // The marshalled bytes consists of:
 // a) A 16 byte header
 // b) 4 bytes specifying the length of the remaining bytes
@@ -134,7 +134,7 @@ func (swv *SealWrappedValue) marshal() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Unmarshal a seal wrapped value. DO NOT USE DIRECTLY, use UnmarshalSealWrappedValue instead.
+// Unmarshal a seal wrapped value. DO NOT USE DIRECTLY, use unmarshalSealWrappedValue instead.
 func (swv *SealWrappedValue) unmarshal(value []byte) error {
 	if len(value) < sealWrappedValueHeaderLength+4 {
 		return errors.New("error unmarshalling SealWrappedValue, not enough bytes")

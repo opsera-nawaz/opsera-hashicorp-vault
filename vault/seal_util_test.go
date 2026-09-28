@@ -79,8 +79,8 @@ func TestMarshalSealWrappedValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MarshalSealWrappedValue(tt.value)
-			if !tt.wantErr(t, err, fmt.Sprintf("MarshalSealWrappedValue(%v)", tt.value)) {
+			got, err := marshalSealWrappedValue(tt.value)
+			if !tt.wantErr(t, err, fmt.Sprintf("marshalSealWrappedValue(%v)", tt.value)) {
 				return
 			}
 			if tt.want == wantBlobInfo {
@@ -89,7 +89,7 @@ func TestMarshalSealWrappedValue(t *testing.T) {
 				assertTrue(t, isSealWrapValue(got), "expecting bytes to be a marshalled SealWrappedValue")
 			}
 
-			unmarshalled, err := UnmarshalSealWrappedValue(got)
+			unmarshalled, err := unmarshalSealWrappedValue(got)
 			assert.NoError(t, err)
 			assert.True(t, proto.Equal(&tt.value.value, &unmarshalled.value), "%v != %v", tt.value.value, unmarshalled.value)
 		})

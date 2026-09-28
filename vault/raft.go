@@ -1030,7 +1030,7 @@ func (c *Core) getRaftChallenge(leaderInfo *raft.LeaderJoinInfo) (*raftInformati
 
 	// We compare here the local seal configuration to that of the leader we are trying to join,
 	// thus there is no need to call ValidateSealGenerationInfo.
-	if !CompatibleSealTypes(sealConfig.Type, c.seal.BarrierSealConfigType().String()) {
+	if !compatibleSealTypes(sealConfig.Type, c.seal.BarrierSealConfigType().String()) {
 		return nil, fmt.Errorf("incompatible seal types between raft leader (%s) and follower (%s)", sealConfig.Type, c.seal.BarrierSealConfigType())
 	}
 
