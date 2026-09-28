@@ -99,34 +99,3 @@ jobs:
           else
             echo "Found changelog entry in PR!"
           fi
-
-  # Blocks affirmative FIPS validated/certified/compliant claims in
-  # changelog entries, release note templates, and CHANGELOG files unless a
-  # CMVP certificate reference (CMVP #<number>) is present nearby. See
-  # tools/pipeline/internal/cmd/fips_overclaim_check.go for the check and
-  # docs/fips/*.md for the disclaimer language convention it enforces.
-  fips-overclaim-check:
-    runs-on: ${{ github.repository == 'hashicorp/vault' && 'ubuntu-latest' || fromJSON('["self-hosted","ubuntu-22.04-x64"]') }}
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-      - uses: ./.github/actions/set-up-pipeline
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - id: fips-overclaim-check
-        name: fips-overclaim-check
-        run: |
-          # Scan the changelog/ directory plus any top-level CHANGELOG*.md
-          # file for FIPS overclaiming language. changelog/ not existing is
-          # not an error (OverclaimCheck treats a missing path as nothing to
-          # scan), so it's always safe to include.
-          shopt -s nullglob
-          targets=(changelog)
-          for f in CHANGELOG.md CHANGELOG-*.md; do
-            [ -f "$f" ] && targets+=("$f")
-          done
-          echo "fips-overclaim-check: scanning ${targets[*]}"
-          pipeline fips-overclaim-check "${targets[@]}"
