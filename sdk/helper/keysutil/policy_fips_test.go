@@ -154,3 +154,55 @@ func TestPolicy_FIPS_RejectsEd25519Rotation(t *testing.T) {
 	_, ok := p.Keys["2"]
 	require.False(t, ok)
 }
+
+// TestPolicy_FIPS_RejectsChaCha20Rotation_StructuredResponse covers WO-045:
+// RotateInMemoryWithAlgorithm (the single physical FIPS enforcement point
+// that both key creation and rotation flow through) must return a
+// structured FIPSAlgorithmError response, not just a plain error string,
+// when it rejects a non-Approved algorithm under FIPS mode. Called
+// directly (rather than via RotateInMemory) because RotateInMemory only
+// propagates the error half of the pair to its own callers.
+func TestPolicy_FIPS_RejectsChaCha20Rotation_StructuredResponse(t *testing.T) {
+	p := newExistingChaCha20Fixture(t)
+
+	resp, err := p.RotateInMemoryWithAlgorithm(rand.Reader, KeyType_ChaCha20_Poly1305, nil)
+	require.ErrorIs(t, err, logical.ErrInvalidRequest)
+	require.NotNil(t, resp)
+	require.True(t, resp.IsError(), "structured FIPS error response must still satisfy logical.Response.IsError()")
+
+	data, ok := resp.Data["data"].(map[string]interface{})
+	require.True(t, ok, "structured fields must be nested under Data[\"data\"]")
+	require.Equal(t, "chacha20-poly1305", data["algorithm"])
+	require.NotEmpty(t, data["fips_restriction"])
+	require.Equal(t, "aes256-gcm96", data["recommended_alternative"])
+
+	errText, ok := resp.Data["error"].(string)
+	require.True(t, ok)
+	require.Contains(t, errText, "chacha20-poly1305")
+	require.Contains(t, errText, "aes256-gcm96")
+
+	require.Equal(t, 1, p.LatestVersion, "rotation must not create a new key version when rejected")
+	_, ok = p.Keys["2"]
+	require.False(t, ok)
+}
+
+// TestPolicy_FIPS_RejectsEd25519Rotation_StructuredResponse covers WO-045
+// for Ed25519; see TestPolicy_FIPS_RejectsChaCha20Rotation_StructuredResponse.
+func TestPolicy_FIPS_RejectsEd25519Rotation_StructuredResponse(t *testing.T) {
+	p := newExistingEd25519Fixture(t)
+
+	resp, err := p.RotateInMemoryWithAlgorithm(rand.Reader, KeyType_ED25519, nil)
+	require.ErrorIs(t, err, logical.ErrInvalidRequest)
+	require.NotNil(t, resp)
+	require.True(t, resp.IsError())
+
+	data, ok := resp.Data["data"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, "ed25519", data["algorithm"])
+	require.NotEmpty(t, data["fips_restriction"])
+	require.Equal(t, "ecdsa-p256, ecdsa-p384, or ecdsa-p521", data["recommended_alternative"])
+
+	require.Equal(t, 1, p.LatestVersion)
+	_, ok = p.Keys["2"]
+	require.False(t, ok)
+}

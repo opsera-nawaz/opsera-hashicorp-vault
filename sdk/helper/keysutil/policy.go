@@ -2015,7 +2015,7 @@ func (p *Policy) RotateWithAlgorithm(ctx context.Context, storage logical.Storag
 		}
 	}()
 
-	if err := p.RotateInMemoryWithAlgorithm(randReader, keyType, config); err != nil {
+	if _, err := p.RotateInMemoryWithAlgorithm(randReader, keyType, config); err != nil {
 		return err
 	}
 
@@ -2039,19 +2039,26 @@ func (p *Policy) RotateInMemory(randReader io.Reader) (retErr error) {
 		}
 	}
 
-	return p.RotateInMemoryWithAlgorithm(randReader, keyType, &KeyConfig{
+	_, err := p.RotateInMemoryWithAlgorithm(randReader, keyType, &KeyConfig{
 		HybridConfig: p.HybridConfig,
 		ParameterSet: p.ParameterSet,
 		KeySize:      p.KeySize,
 	})
+	return err
 }
 
 // RotateInMemoryWithAlgorithm rotates the policy but does not persist it to
 // storage. The algorithm used for the new key version is determined by the
 // keyType parameter rather than p.Type.
-func (p *Policy) RotateInMemoryWithAlgorithm(randReader io.Reader, keyType KeyType, config *KeyConfig) (retErr error) {
+//
+// The returned *logical.Response is non-nil only for a FIPS-mode rejection,
+// in which case it carries the structured FIPSAlgorithmError data (see that
+// function's doc comment for why the fields live under Data["data"]). Every
+// other error path returns a nil response with a plain error, unchanged
+// from before this function returned a response value at all.
+func (p *Policy) RotateInMemoryWithAlgorithm(randReader io.Reader, keyType KeyType, config *KeyConfig) (resp *logical.Response, retErr error) {
 	if err := p.isCompatibleKeyType(keyType); err != nil {
-		return err
+		return nil, err
 	}
 
 	// This is the single point through which both new-key creation
@@ -2062,10 +2069,21 @@ func (p *Policy) RotateInMemoryWithAlgorithm(randReader io.Reader, keyType KeyTy
 	// versions are never re-validated here, so already-stored non-Approved
 	// keys remain fully readable via Decrypt/VerifySignature.
 	if isFIPSMode() && !keyType.IsFIPSApproved() {
-		return errutil.UserError{Err: fmt.Sprintf(
-			"key type %s is not allowed in FIPS mode; use %s instead",
-			keyType, fipsApprovedAlternative(keyType),
-		)}
+		fipsResp, fipsErr := FIPSAlgorithmError(
+			keyType.String(),
+			fmt.Sprintf("key type %s is not on the FIPS 140-3 Approved algorithm list", keyType),
+			fipsApprovedAlternative(keyType),
+		)
+		// The returned error wraps FIPSAlgorithmError's sentinel
+		// (logical.ErrInvalidRequest) around its human-readable message
+		// rather than returning either alone: Rotate/RotateWithAlgorithm/
+		// RotateInMemory only propagate the error half of this pair to their
+		// own callers, discarding fipsResp, so the plain error string still
+		// needs to carry the descriptive "not allowed in FIPS mode" text
+		// those callers already assert on, while errors.Is(retErr,
+		// logical.ErrInvalidRequest) continues to hold for callers that
+		// check the sentinel instead of the message.
+		return fipsResp, fmt.Errorf("%s: %w", fipsResp.Error(), fipsErr)
 	}
 
 	now := time.Now()
@@ -2077,7 +2095,7 @@ func (p *Policy) RotateInMemoryWithAlgorithm(randReader io.Reader, keyType KeyTy
 	if keyType != KeyType_AES128_CMAC && keyType != KeyType_AES256_CMAC && keyType != KeyType_HMAC && keyType != KeyType_AES192_CMAC {
 		hmacKey, err := uuid.GenerateRandomBytesWithReader(32, randReader)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		entry.HMACKey = hmacKey
 	}
@@ -2093,17 +2111,17 @@ func (p *Policy) RotateInMemoryWithAlgorithm(randReader io.Reader, keyType KeyTy
 			numBytes = 24
 		} else if keyType == KeyType_HMAC {
 			if config == nil {
-				return errors.New("key size is required for key type HMAC")
+				return nil, errors.New("key size is required for key type HMAC")
 			}
 
 			numBytes = config.KeySize
 			if numBytes < HmacMinKeySize || numBytes > HmacMaxKeySize {
-				return fmt.Errorf("invalid key size for HMAC key, must be between %d and %d bytes", HmacMinKeySize, HmacMaxKeySize)
+				return nil, fmt.Errorf("invalid key size for HMAC key, must be between %d and %d bytes", HmacMinKeySize, HmacMaxKeySize)
 			}
 		}
 		newKey, err := uuid.GenerateRandomBytesWithReader(numBytes, randReader)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		entry.Key = newKey
 
@@ -2114,13 +2132,13 @@ func (p *Policy) RotateInMemoryWithAlgorithm(randReader io.Reader, keyType KeyTy
 
 	case KeyType_ECDSA_P256, KeyType_ECDSA_P384, KeyType_ECDSA_P521:
 		if err = generateECDSAKey(keyType, &entry); err != nil {
-			return err
+			return nil, err
 		}
 
 	case KeyType_ED25519:
 		err := generateEd25519Key(randReader, &entry.Key, &entry.FormattedPublicKey)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	case KeyType_RSA2048, KeyType_RSA3072, KeyType_RSA4096:
 		bitSize := 2048
@@ -2133,14 +2151,14 @@ func (p *Policy) RotateInMemoryWithAlgorithm(randReader io.Reader, keyType KeyTy
 
 		entry.RSAKey, err = cryptoutil.GenerateRSAKey(randReader, bitSize)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		entry.RSAPublicKey = entry.RSAKey.Public().(*rsa.PublicKey)
 
 	default:
 		if err := entRotateInMemory(p, keyType, &entry, randReader, config); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -2169,7 +2187,7 @@ func (p *Policy) RotateInMemoryWithAlgorithm(randReader io.Reader, keyType KeyTy
 		p.MinDecryptionVersion = 1
 	}
 
-	return nil
+	return nil, nil
 }
 
 func generateEd25519Key(randReader io.Reader, private *[]byte, public *string) error {

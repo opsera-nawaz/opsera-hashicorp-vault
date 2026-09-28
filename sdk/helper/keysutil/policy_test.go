@@ -1386,8 +1386,9 @@ func TestPolicy_RotateInMemoryWithAlgorithmSetsAlgorithmField(t *testing.T) {
 	}
 
 	rotateType := KeyType(KeyType_AES128_GCM96)
-	err := p.RotateInMemoryWithAlgorithm(rand.Reader, rotateType, nil)
+	resp, err := p.RotateInMemoryWithAlgorithm(rand.Reader, rotateType, nil)
 	require.NoError(t, err)
+	require.Nil(t, resp, "a successful rotation must not return an error response")
 	require.Equal(t, 2, p.LatestVersion)
 
 	entry, ok := p.Keys[strconv.Itoa(p.LatestVersion)]
@@ -1411,8 +1412,9 @@ func TestPolicy_RotateInMemoryWithAlgorithmRejectsUsageChanges(t *testing.T) {
 		MinDecryptionVersion: 1,
 	}
 
-	err := p.RotateInMemoryWithAlgorithm(rand.Reader, KeyType_ECDSA_P256, nil)
+	resp, err := p.RotateInMemoryWithAlgorithm(rand.Reader, KeyType_ECDSA_P256, nil)
 	require.EqualError(t, err, "incompatible algorithm ecdsa-p256 for key type aes256-gcm96")
+	require.Nil(t, resp, "a usage-change rejection is not a FIPS error and carries no structured response")
 	require.Equal(t, 1, p.LatestVersion)
 	_, ok := p.Keys["2"]
 	require.False(t, ok, "new key version should not be created after a rejected algorithm change")
