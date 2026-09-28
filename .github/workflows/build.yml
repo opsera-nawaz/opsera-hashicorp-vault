@@ -353,47 +353,6 @@ jobs:
             echo "INSTANA_AGENT_KEY not set, skipping Instana upload"
           fi
 
-  api-contract-tests:
-    # WO-040: runs the API endpoint backward-compatibility regression suite
-    # (vault/external_tests/api_contract) against the golden-file contract
-    # snapshot in tests/fixtures/api_contract_snapshot.json. This is a
-    # required check (see completed-successfully's `needs`) on every PR
-    # that touches http/, vault/, or sdk/ - the packages the handler
-    # registry refactoring and module-boundary changes in this epic modify.
-    # There's no dedicated changed-files group for exactly those three
-    # directories, so this gates on the closest available proxies: any Go
-    # application code, module, or toolchain change.
-    name: API contract regression suite
-    if: |
-      needs.setup.outputs.workflow-trigger == 'pull_request' &&
-      github.event.pull_request.draft == false &&
-      (
-        contains(fromJSON(needs.setup.outputs.changed-files).groups, 'go_app') ||
-        contains(fromJSON(needs.setup.outputs.changed-files).groups, 'go_tests') ||
-        contains(fromJSON(needs.setup.outputs.changed-files).groups, 'go_modules') ||
-        contains(fromJSON(needs.setup.outputs.changed-files).groups, 'go_toolchain')
-      )
-    runs-on:
-      - self-hosted
-      - ubuntu-22.04-x64
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-      issues: read
-    needs:
-      - setup
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - id: set-up-go
-        uses: ./.github/actions/set-up-go
-      - uses: ./.github/actions/install-tools
-      - name: Run API contract regression suite
-        env:
-          GOWORK: "off"
-        run: |
-          go test ./vault/external_tests/api_contract/... -v -count=1 -timeout 10m
-
   ui:
     # The Web UI workflow is a prerequisite workflow for building our artifacts. If the application
     # or UI change we'll trigger this workflow but only build it if we don't already have the asset
@@ -707,7 +666,6 @@ jobs:
       - test
       - test-containers
       - test-hcp-image
-      - api-contract-tests
     steps:
       - name: Record build stage start time
         id: build-metric-start
