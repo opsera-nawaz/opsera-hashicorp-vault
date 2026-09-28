@@ -16,6 +16,81 @@ import { isEmpty } from '@ember/utils';
 import { presence } from 'vault/utils/forms/validators';
 import { get } from '@ember/object';
 
+interface PossibleValue {
+  subText?: string;
+  helpText?: string;
+  value?: unknown;
+  [key: string]: unknown;
+}
+
+interface KeyValueField {
+  name: string;
+  label: string;
+  type: string;
+  placeholder: string;
+  possibleValues: unknown[];
+  valuePath?: string;
+}
+
+interface AttrOptions {
+  label?: string;
+  defaultValue?: unknown;
+  fieldValue?: string;
+  editType?: string;
+  helpText?: string;
+  readOnly?: boolean;
+  editDisabled?: boolean;
+  possibleValues?: PossibleValue[];
+  isSectionHeader?: boolean;
+  sensitive?: boolean;
+  keyValueFields?: KeyValueField[];
+  keyInputType?: string;
+  keyPlaceholder?: string;
+  keyPossibleValues?: unknown[];
+  valueInputType?: string;
+  valuePlaceholder?: string;
+  valuePossibleValues?: unknown[];
+  allowReset?: boolean;
+  ttlOffValue?: unknown;
+  [key: string]: unknown;
+}
+
+interface Attr {
+  name: string;
+  type?: string;
+  options?: AttrOptions;
+}
+
+interface FormFieldModel {
+  set(key: string, value: unknown): void;
+  isNew?: boolean;
+  [key: string]: unknown;
+}
+
+interface ValidationState {
+  isValid: boolean;
+  errors: string[];
+  warnings?: string[];
+}
+
+type KeyValueRow = Record<string, unknown>;
+
+interface CodemirrorEditorLike {
+  dispatch(transaction: { changes: { from: number; to: number; insert: string }[] }): void;
+  state: { doc: { length: number } };
+}
+
+interface FormFieldArgs {
+  attr: Attr;
+  model: FormFieldModel;
+  disabled?: boolean;
+  showHelpText?: boolean;
+  mode?: string;
+  modelValidations?: Record<string, ValidationState>;
+  onChange?: (...args: unknown[]) => void;
+  onKeyUp?: (valuePath: string, value: unknown) => void;
+}
+
 /**
  * @module FormField
  * FormField components are field elements associated with a particular model.
@@ -53,7 +128,7 @@ import { get } from '@ember/object';
  *
  */
 
-export default class FormFieldComponent extends Component {
+export default class FormFieldComponent extends Component<FormFieldArgs> {
   emptyData = '{\n}';
   shouldHideLabel = [
     'file',
@@ -67,15 +142,15 @@ export default class FormFieldComponent extends Component {
     'ttl',
     'toggleButton',
   ];
-  @tracked codemirrorEditor;
+  @tracked codemirrorEditor?: CodemirrorEditorLike;
   @tracked showToggleTextInput = false;
   @tracked toggleInputEnabled = false;
-  @tracked keyValueRows = [];
+  @tracked keyValueRows: KeyValueRow[] = [];
 
-  radioValue = (item) => (isEmpty(item.value) ? item : item.value);
+  radioValue = (item: PossibleValue): unknown => (isEmpty(item.value) ? item : item.value);
 
-  constructor() {
-    super(...arguments);
+  constructor(owner: unknown, args: FormFieldArgs) {
+    super(owner, args);
     const { attr, model } = this.args;
     const valuePath = attr.options?.fieldValue || attr.name;
     assert(
@@ -100,13 +175,13 @@ export default class FormFieldComponent extends Component {
   // to decide which type of form field to render (Vault or HDS)
   // ---------------------------------------------------------------
   //
-  get isHdsFormField() {
+  get isHdsFormField(): boolean {
     const { type, options } = this.args.attr;
 
     // here we replicate the logic in the `form-field.hbs` template, as it was at the beginning of the migation to HDS
     // to make sure we don't change the order in which the "ifs" are evaluated
     // see: https://github.com/hashicorp/vault/blob/e99c06a0249f1ecde02c5b48990cb0e91e4ec575/ui/lib/core/addon/components/form-field.hbs
-    if (options?.possibleValues?.length > 0) {
+    if ((options?.possibleValues?.length ?? 0) > 0) {
       return true;
     } else {
       if (options?.editType === 'dateTimeLocal' || options?.editType === 'keyValueInputs') {
@@ -143,30 +218,31 @@ export default class FormFieldComponent extends Component {
     }
   }
 
-  get hasRadioSubText() {
+  get hasRadioSubText(): boolean {
     // for 'radio' editType, check to see if any of the possibleValues has a subText
-    return this.args?.attr?.options?.possibleValues?.any((v) => v.subText);
+    // `.any` is not a real Array method; `.some` matches the comment's own intent.
+    return !!this.args?.attr?.options?.possibleValues?.some((v) => v.subText);
   }
 
-  get hasRadioHelpText() {
+  get hasRadioHelpText(): boolean {
     // for 'radio' editType, check to see if any of the possibleValues has a helpText
-    return this.args?.attr?.options?.possibleValues?.any((v) => v.helpText);
+    return !!this.args?.attr?.options?.possibleValues?.some((v) => v.helpText);
   }
 
-  get hideLabel() {
+  get hideLabel(): boolean {
     const { type, options } = this.args.attr;
     if (type === 'object' || options?.isSectionHeader) {
       return true;
     }
     // falsey values render a <FormFieldLabel>
-    return this.shouldHideLabel.includes(options?.editType);
+    return this.shouldHideLabel.includes(options?.editType as string);
   }
 
-  get disabled() {
+  get disabled(): boolean {
     return this.args.disabled || false;
   }
 
-  get helpTextString() {
+  get helpTextString(): string {
     const helpText = this.args.attr?.options?.helpText;
     if (this.args.showHelpText !== false && helpText) {
       return helpText;
@@ -175,77 +251,78 @@ export default class FormFieldComponent extends Component {
   }
 
   // used in the label element next to the form element
-  get labelString() {
+  get labelString(): string {
     const label = this.args.attr.options?.label || '';
     return label ? label : capitalize([humanize([dasherize([this.args.attr.name])])]);
   }
 
   // both the path to mutate on the model, and the path to read the value from
-  get valuePath() {
+  get valuePath(): string {
     return this.args.attr.options?.fieldValue || this.args.attr.name;
   }
 
-  get isReadOnly() {
+  get isReadOnly(): boolean {
     const readonly = this.args.attr.options?.readOnly || this.args.attr.options?.editDisabled || false;
-    return readonly && this.args.mode === 'edit';
+    return !!(readonly && this.args.mode === 'edit');
   }
 
-  get validationError() {
+  get validationError(): string | null {
     const validations = this.args.modelValidations || {};
     const state = validations[this.valuePath];
     return state && !state.isValid ? state.errors.join(' ') : null;
   }
 
-  get validationWarning() {
+  get validationWarning(): string | null {
     const validations = this.args.modelValidations || {};
     const state = validations[this.valuePath];
     return state?.warnings?.length ? state.warnings.join(' ') : null;
   }
 
-  onChange() {
+  onChange(...args: unknown[]): void {
     if (this.args.onChange) {
-      this.args.onChange(...arguments);
+      this.args.onChange(...args);
     }
   }
 
   @action
-  setFile(keyFile) {
+  setFile(keyFile: { value: unknown }): void {
     const path = this.valuePath;
     const { value } = keyFile;
     this.args.model.set(path, value);
     this.onChange(path, value);
   }
   @action
-  setAndBroadcast(value) {
+  setAndBroadcast(value: unknown): void {
     this.args.model.set(this.valuePath, value);
     this.onChange(this.valuePath, value);
   }
   @action
-  setAndBroadcastBool(trueVal, falseVal, event) {
-    const valueToSet = event.target.checked === true ? trueVal : falseVal;
+  setAndBroadcastBool(trueVal: unknown, falseVal: unknown, event: Event): void {
+    const valueToSet = (event.target as HTMLInputElement).checked ? trueVal : falseVal;
     this.setAndBroadcast(valueToSet);
   }
   @action
-  setAndBroadcastChecklist(event) {
-    let updatedValue = this.args.model[this.valuePath];
-    if (event.target.checked) {
-      updatedValue = addToArray(updatedValue, event.target.value);
+  setAndBroadcastChecklist(event: Event): void {
+    let updatedValue = this.args.model[this.valuePath] as unknown[];
+    const target = event.target as HTMLInputElement;
+    if (target.checked) {
+      updatedValue = addToArray(updatedValue, target.value);
     } else {
-      updatedValue = removeFromArray(updatedValue, event.target.value);
+      updatedValue = removeFromArray(updatedValue, target.value);
     }
     this.setAndBroadcast(updatedValue);
   }
   @action
-  setAndBroadcastRadio(item) {
+  setAndBroadcastRadio(item: PossibleValue): void {
     // we want to read the original value instead of `event.target.value` so we have `false` (boolean) and not `"false"` (string)
     const valueToSet = this.radioValue(item);
     this.setAndBroadcast(valueToSet);
   }
   // supports either a flat `{ key: value }` object (see isKeyValueMap) or an array of row objects
-  rowsFromValue(value) {
+  rowsFromValue(value: unknown): KeyValueRow[] {
     if (Array.isArray(value)) {
       // clone each row so editing it doesn't mutate the model's array in place before it's broadcast
-      return value.length ? value.map((row) => ({ ...row })) : [this.emptyKeyValueRow()];
+      return value.length ? value.map((row: KeyValueRow) => ({ ...row })) : [this.emptyKeyValueRow()];
     }
     if (value && typeof value === 'object') {
       const rows = Object.entries(value).map(([key, val]) => ({ key, value: val }));
@@ -254,7 +331,7 @@ export default class FormFieldComponent extends Component {
     return [this.emptyKeyValueRow()];
   }
   // defaults to a simple key/value pair for backwards compatibility; see `KeyValueField` for the shape of `attr.options.keyValueFields`
-  get keyValueFields() {
+  get keyValueFields(): KeyValueField[] {
     const options = this.args.attr.options || {};
     if (Array.isArray(options.keyValueFields) && options.keyValueFields.length) {
       return options.keyValueFields;
@@ -277,46 +354,46 @@ export default class FormFieldComponent extends Component {
     ];
   }
   // a flat `{ key: value }` object is only representable when there are exactly two fields, named `key` and `value`
-  get isKeyValueMap() {
+  get isKeyValueMap(): boolean {
     const [first, second] = this.keyValueFields;
     return (
       this.args.attr.type === 'object' &&
       this.keyValueFields.length === 2 &&
-      first.name === 'key' &&
-      second.name === 'value'
+      first?.name === 'key' &&
+      second?.name === 'value'
     );
   }
   // a flat `{ key: "" }` object (keys only, no meaningful value) is representable when there is a single field named `key`
-  get isKeyOnlyMap() {
+  get isKeyOnlyMap(): boolean {
     const [first] = this.keyValueFields;
-    return this.args.attr.type === 'object' && this.keyValueFields.length === 1 && first.name === 'key';
+    return this.args.attr.type === 'object' && this.keyValueFields.length === 1 && first?.name === 'key';
   }
   // true when a field binds directly to its own model attribute via `valuePath`, e.g. combining a
   // "region" select and a "kms_key_id" text input into one fixed row with no add/delete controls
-  get hasFieldValuePaths() {
+  get hasFieldValuePaths(): boolean {
     return this.keyValueFields.some((field) => field.valuePath);
   }
 
-  get keyValueEditDisabled() {
+  get keyValueEditDisabled(): boolean {
     return !!(this.args.attr.options?.editDisabled && !this.args.model.isNew);
   }
-  rowFromFieldValuePaths() {
+  rowFromFieldValuePaths(): KeyValueRow {
     const { model } = this.args;
-    return this.keyValueFields.reduce((row, field) => {
+    return this.keyValueFields.reduce((row: KeyValueRow, field) => {
       row[field.name] = (field.valuePath && get(model, field.valuePath)) || '';
       return row;
     }, {});
   }
-  emptyKeyValueRow() {
-    return this.keyValueFields.reduce((row, field) => ({ ...row, [field.name]: '' }), {});
+  emptyKeyValueRow(): KeyValueRow {
+    return this.keyValueFields.reduce((row: KeyValueRow, field) => ({ ...row, [field.name]: '' }), {});
   }
-  broadcastKeyValueRows() {
+  broadcastKeyValueRows(): void {
     let value;
     if (this.isKeyValueMap || this.isKeyOnlyMap) {
       // isKeyOnlyMap rows never have a `value` property, so it's always treated as an empty string
-      value = this.keyValueRows.reduce((obj, row) => {
-        if (row.key || row.value) {
-          obj[row.key] = row.value || '';
+      value = this.keyValueRows.reduce((obj: KeyValueRow, row) => {
+        if (row['key'] || row['value']) {
+          obj[row['key'] as string] = row['value'] || '';
         }
         return obj;
       }, {});
@@ -326,11 +403,11 @@ export default class FormFieldComponent extends Component {
     this.setAndBroadcast(value);
   }
   @action
-  addKeyValueRow() {
+  addKeyValueRow(): void {
     this.keyValueRows = [...this.keyValueRows, this.emptyKeyValueRow()];
   }
   @action
-  deleteKeyValueRow(rowData) {
+  deleteKeyValueRow(rowData: KeyValueRow): void {
     this.keyValueRows = this.keyValueRows.filter((row) => row !== rowData);
     if (!this.keyValueRows.length) {
       this.keyValueRows = [this.emptyKeyValueRow()];
@@ -338,21 +415,23 @@ export default class FormFieldComponent extends Component {
     this.broadcastKeyValueRows();
   }
   @action
-  updateKeyValueRow(index, fieldName, event) {
-    const { value } = event.target;
-    this.keyValueRows[index][fieldName] = value;
+  updateKeyValueRow(index: number, fieldName: string, event: Event): void {
+    const { value } = event.target as HTMLInputElement;
+    const row = this.keyValueRows[index];
+    if (row) row[fieldName] = value;
     this.keyValueRows = [...this.keyValueRows];
     this.broadcastOrSetField(fieldName, value);
   }
   @action
-  updateKeyValueRowFile(index, fieldName, event) {
-    const file = event.target.files?.[0] || '';
-    this.keyValueRows[index][fieldName] = file;
+  updateKeyValueRowFile(index: number, fieldName: string, event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0] || '';
+    const row = this.keyValueRows[index];
+    if (row) row[fieldName] = file;
     this.keyValueRows = [...this.keyValueRows];
     this.broadcastOrSetField(fieldName, file);
   }
   // sets the field's own `valuePath` on the model if it has one, otherwise broadcasts the combined row(s)
-  broadcastOrSetField(fieldName, value) {
+  broadcastOrSetField(fieldName: string, value: unknown): void {
     const field = this.keyValueFields.find((f) => f.name === fieldName);
     if (field?.valuePath) {
       this.args.model.set(field.valuePath, value);
@@ -362,10 +441,10 @@ export default class FormFieldComponent extends Component {
     }
   }
   @action
-  setAndBroadcastTtl(value) {
+  setAndBroadcastTtl(value: { enabled?: boolean; seconds: number }): void {
     const alwaysSendValue = this.valuePath === 'expiry' || this.valuePath === 'safetyBuffer';
     const attrOptions = this.args.attr.options || {};
-    let valueToSet = 0;
+    let valueToSet: unknown = 0;
     if (value.enabled || alwaysSendValue) {
       valueToSet = `${value.seconds}s`;
     } else if (Object.keys(attrOptions).includes('ttlOffValue')) {
@@ -374,7 +453,7 @@ export default class FormFieldComponent extends Component {
     this.setAndBroadcast(`${valueToSet}`);
   }
   @action
-  editorUpdated(isString, value) {
+  editorUpdated(isString: boolean, value: string): void {
     try {
       const valToSet = isString ? value : JSON.parse(value);
       this.args.model.set(this.valuePath, valToSet);
@@ -382,8 +461,8 @@ export default class FormFieldComponent extends Component {
 
       // Clicking "Clear" passes an empty string as the value and in that case we must manually reset the editor.
       // At this time `allowReset` is only passed when `isString` is true.
-      if (value === '' && this.args.attr.options.allowReset && isString) {
-        this.codemirrorEditor.dispatch({
+      if (value === '' && this.args.attr.options?.allowReset && isString) {
+        this.codemirrorEditor?.dispatch({
           changes: [{ from: 0, to: this.codemirrorEditor.state.doc.length, insert: '' }],
         });
       }
@@ -393,7 +472,7 @@ export default class FormFieldComponent extends Component {
   }
 
   @action
-  toggleTextShow() {
+  toggleTextShow(): void {
     const value = !this.showToggleTextInput;
     this.showToggleTextInput = value;
     if (!value) {
@@ -401,21 +480,22 @@ export default class FormFieldComponent extends Component {
     }
   }
   @action
-  toggleButton() {
+  toggleButton(): void {
     this.toggleInputEnabled = !this.toggleInputEnabled;
     this.setAndBroadcast(this.toggleInputEnabled);
   }
   @action
-  handleKeyUp(maybeEvent) {
-    const value = typeof maybeEvent === 'object' ? maybeEvent.target.value : maybeEvent;
+  handleKeyUp(maybeEvent: Event | string): void {
+    const value = typeof maybeEvent === 'object' ? (maybeEvent.target as HTMLInputElement).value : maybeEvent;
     if (!this.args.onKeyUp) {
       return;
     }
     this.args.onKeyUp(this.valuePath, value);
   }
   @action
-  onChangeWithEvent(event) {
-    const prop = event.target.type === 'checkbox' ? 'checked' : 'value';
-    this.setAndBroadcast(event.target[prop]);
+  onChangeWithEvent(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    const prop = target.type === 'checkbox' ? 'checked' : 'value';
+    this.setAndBroadcast(target[prop]);
   }
 }
