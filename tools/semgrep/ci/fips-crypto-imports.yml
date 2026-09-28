@@ -1,0 +1,95 @@
+# Copyright IBM Corp. 2016, 2025
+# SPDX-License-Identifier: BUSL-1.1
+#
+# FIPS-CRYPTO-002 quality gate: blocks imports of non-Approved cryptographic
+# algorithms on security-relevant code paths. See fips/crypto_inventory.yaml
+# for the full non-Approved algorithm/import catalog produced in Phase 1.
+#
+# Scope is intentionally limited to vault/, sdk/helper/keysutil/, and
+# builtin/logical/ — the security-relevant paths identified in the crypto
+# inventory. Test files (*_test.go) and non-security test-infrastructure
+# paths (e.g. helper/testhelpers/, vault/testing.go) are out of scope and are
+# excluded via paths.exclude so legitimate test-only usage of these packages
+# is not flagged.
+
+rules:
+  - id: fips-crypto-chacha20poly1305-import
+    patterns:
+      - pattern-either:
+          - pattern: import "golang.org/x/crypto/chacha20poly1305"
+          - pattern: import $ALIAS "golang.org/x/crypto/chacha20poly1305"
+    paths:
+      include:
+        - "**/vault/**"
+        - "**/sdk/helper/keysutil/**"
+        - "**/builtin/logical/**"
+      exclude:
+        - "*_test.go"
+        - "**/vault/testing.go"
+    message: >-
+      FIPS-CRYPTO-002 quality gate violation: golang.org/x/crypto/chacha20poly1305
+      is not an Approved algorithm under FIPS 140-3 and must not be imported on
+      security-relevant code paths. Use AES-GCM (crypto/aes + crypto/cipher) as
+      the Approved alternative to ChaCha20-Poly1305.
+    languages: [go]
+    severity: ERROR
+    metadata:
+      quality_gate: FIPS-CRYPTO-002
+      category: security
+      confidence: HIGH
+      references:
+        - fips/crypto_inventory.yaml
+
+  - id: fips-crypto-ed25519-import
+    patterns:
+      - pattern-either:
+          - pattern: import "golang.org/x/crypto/ed25519"
+          - pattern: import $ALIAS "golang.org/x/crypto/ed25519"
+    paths:
+      include:
+        - "**/vault/**"
+        - "**/sdk/helper/keysutil/**"
+        - "**/builtin/logical/**"
+      exclude:
+        - "*_test.go"
+        - "**/vault/testing.go"
+    message: >-
+      FIPS-CRYPTO-002 quality gate violation: golang.org/x/crypto/ed25519
+      is not an Approved algorithm under FIPS 140-3 and must not be imported on
+      security-relevant code paths. Use ECDSA (crypto/ecdsa, NIST P-256/P-384/P-521)
+      as the Approved alternative to Ed25519.
+    languages: [go]
+    severity: ERROR
+    metadata:
+      quality_gate: FIPS-CRYPTO-002
+      category: security
+      confidence: HIGH
+      references:
+        - fips/crypto_inventory.yaml
+
+  - id: fips-crypto-curve25519-import
+    patterns:
+      - pattern-either:
+          - pattern: import "golang.org/x/crypto/curve25519"
+          - pattern: import $ALIAS "golang.org/x/crypto/curve25519"
+    paths:
+      include:
+        - "**/vault/**"
+        - "**/sdk/helper/keysutil/**"
+        - "**/builtin/logical/**"
+      exclude:
+        - "*_test.go"
+        - "**/vault/testing.go"
+    message: >-
+      FIPS-CRYPTO-002 quality gate violation: golang.org/x/crypto/curve25519
+      is not an Approved algorithm under FIPS 140-3 and must not be imported on
+      security-relevant code paths. Use a NIST-approved curve via crypto/ecdh
+      (P-256/P-384/P-521) as the Approved alternative to Curve25519.
+    languages: [go]
+    severity: ERROR
+    metadata:
+      quality_gate: FIPS-CRYPTO-002
+      category: security
+      confidence: HIGH
+      references:
+        - fips/crypto_inventory.yaml

@@ -19,6 +19,21 @@ linters:
               desc: not allowed, use github.com/hashicorp/go-metrics/compat instead
             - pkg: github.com/armon/go-metrics
               desc: not allowed, use github.com/hashicorp/go-metrics/compat instead
+        fips-crypto-restrictions:
+          list-mode: lax
+          files:
+            - "**/vault/**"
+            - "**/sdk/helper/keysutil/**"
+            - "**/builtin/logical/**"
+            - "!**/*_test.go"
+            - "!**/vault/testing.go"
+          deny:
+            - pkg: golang.org/x/crypto/chacha20poly1305
+              desc: "FIPS-CRYPTO-002: not allowed on FIPS-relevant paths, use crypto/aes + crypto/cipher (AES-GCM) instead of ChaCha20-Poly1305"
+            - pkg: golang.org/x/crypto/ed25519
+              desc: "FIPS-CRYPTO-002: not allowed on FIPS-relevant paths, use crypto/ecdsa (ECDSA) instead of Ed25519"
+            - pkg: golang.org/x/crypto/curve25519
+              desc: "FIPS-CRYPTO-002: not allowed on FIPS-relevant paths, use crypto/ecdh (NIST P-256/P-384/P-521) instead of Curve25519"
   exclusions:
     generated: lax
     presets:
