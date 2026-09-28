@@ -42,6 +42,7 @@ install_external() {
     honnef.co/go/tools/cmd/staticcheck@v0.6.0
     github.com/bufbuild/buf/cmd/buf@v1.45.0
     github.com/favadi/protoc-go-inject-tag@v1.4.0
+    github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
     github.com/golangci/misspell/cmd/misspell@v0.6.0
     github.com/golangci/revgrep/cmd/revgrep@v0.8.0
     github.com/ryancragun/enumer@v0.0.0-20260825172633-bd953a03880e
@@ -72,6 +73,7 @@ check_external() {
     enumer
     gofumpt
     goimports
+    golangci-lint
     gosimports
     gotestsum
     misspell

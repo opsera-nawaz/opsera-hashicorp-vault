@@ -34,6 +34,44 @@ linters:
               desc: "FIPS-CRYPTO-002: not allowed on FIPS-relevant paths, use crypto/ecdsa (ECDSA) instead of Ed25519"
             - pkg: golang.org/x/crypto/curve25519
               desc: "FIPS-CRYPTO-002: not allowed on FIPS-relevant paths, use crypto/ecdh (NIST P-256/P-384/P-521) instead of Curve25519"
+        # EPIC-04 (Circular Dependency Resolution in Crypto/Seal Packages): the
+        # rules below are a CI gate that protects the package boundaries
+        # established by WO-003 (vault/interfaces package), WO-015 (autoSeal
+        # refactored onto the vault/interfaces.CoreAccess interface instead of
+        # a direct *Core reference), WO-016/WO-017 (keysutil and AESGCMBarrier
+        # aligned to vault/interfaces), and WO-025 (unexport of internal-only
+        # symbols once those boundaries were stable). Before this work, vault
+        # (core) and vault/seal/sdk-helper-keysutil could import each other
+        # directly, creating an import cycle; vault/interfaces now exists
+        # specifically so lower-level packages can call back into vault
+        # (core) via a narrow interface without importing it. These rules
+        # fail the build if a forbidden edge is reintroduced, instead of
+        # silently letting the cycle come back.
+        epic04-seal-autoseal-boundary:
+          list-mode: lax
+          files:
+            - "**/vault/seal_autoseal.go"
+          allow:
+            # autoSeal legitimately wraps vault/seal's Access/Config types and
+            # talks back to vault (core) only through the CoreAccess interface
+            # in vault/interfaces -- that is the boundary WO-015 established.
+            - github.com/hashicorp/vault/vault/interfaces
+            - github.com/hashicorp/vault/vault/seal
+          deny:
+            - pkg: github.com/hashicorp/vault/vault
+              desc: "EPIC-04: vault/seal_autoseal.go must not import vault (core) or any other vault/* package directly -- only vault/interfaces is allowed. A direct import here recreates the vault<->seal circular dependency that WO-015 removed by introducing the CoreAccess interface."
+        epic04-keysutil-boundary:
+          list-mode: lax
+          files:
+            - "**/sdk/helper/keysutil/**"
+          allow:
+            # keysutil may depend on the narrow vault/interfaces contracts
+            # (e.g. CryptoBarrier) established by WO-016, but not on vault
+            # (core) or vault/seal directly.
+            - github.com/hashicorp/vault/vault/interfaces
+          deny:
+            - pkg: github.com/hashicorp/vault/vault
+              desc: "EPIC-04: sdk/helper/keysutil must not import vault (core) or vault/seal directly -- only vault/interfaces is allowed. sdk/helper/keysutil is a lower-level SDK package; importing vault or vault/seal here recreates the circular dependency that WO-016 removed by aligning keysutil's factory to the CryptoBarrier interface."
   exclusions:
     generated: lax
     presets:

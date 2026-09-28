@@ -185,6 +185,25 @@ lint: check-tools-external
 ci-lint: check-tools-external
 	@golangci-lint run --deadline 10m --new-from-rev=HEAD~
 
+# ci-lint-cycle-detection is the EPIC-04 CI gate that protects the crypto/seal
+# package boundaries established by WO-003/015/016/017/025 (vault/interfaces,
+# autoSeal's CoreAccess interface, keysutil/CryptoBarrier alignment, and the
+# unexport cleanup). It runs only the depguard linter (see the
+# epic04-seal-autoseal-boundary and epic04-keysutil-boundary rules in
+# .golangci.yml) against files changed relative to origin/main, and -- unlike
+# ci-vet-codechecker above -- is not piped through revgrep or marked
+# continue-on-error, so any forbidden import fails the build.
+#
+# Scoped to ./vault/... and ./sdk/helper/keysutil/... (the packages the
+# guarded rules apply to) rather than ./..., because a genuinely reintroduced
+# import cycle breaks type-checking for every package that transitively
+# depends on it; scanning the whole module in that state was observed to make
+# golangci-lint silently drop packages from analysis instead of reporting the
+# violation. Scoping to the guarded trees keeps detection reliable and keeps
+# this step fast.
+ci-lint-cycle-detection: check-tools-external
+	@golangci-lint run --enable-only depguard --new-from-rev=origin/main ./vault/... ./sdk/helper/keysutil/...
+
 # Lint protobuf files
 protolint: prep check-tools-external
 	@echo "==> Linting protobufs..."
