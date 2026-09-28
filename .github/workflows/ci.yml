@@ -298,6 +298,45 @@ jobs:
       total-runners: 16
     secrets: inherit
 
+  test-go-fips-ce:
+    name: Run Go tests with FIPS configuration (CE)
+    # Run the CE-scoped FIPS regression tests (WO-062) if a security-relevant path changed.
+    # Unlike test-go-fips above (Enterprise-only: gated on is-ent-branch and only fires on a
+    # push or the 'fips' PR label), this job is intentionally NOT gated by is-ent-branch and
+    # runs on every CE pull request/push that touches a crypto-relevant path, so a non-Approved
+    # algorithm or FIPS regression is caught before merge instead of only on a push to
+    # main/release. It never runs on Enterprise branches, so it can't interfere with the
+    # existing Enterprise FIPS CI flow (constraints: "create new CE-specific FIPS jobs rather
+    # than ungating existing Enterprise ones").
+    if: |
+      needs.setup.outputs.is-ent-branch != 'true' &&
+      (
+        contains(fromJSON(needs.setup.outputs.changed-files).groups, 'fips_ce') ||
+        contains(fromJSON(needs.setup.outputs.changed-files).groups, 'go_modules')
+      )
+    needs: setup
+    uses: ./.github/workflows/test-go-fips-ce.yml
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      issues: read
+      pull-requests: write
+    with:
+      changed-files: ${{ needs.setup.outputs.changed-files }}
+      checkout-ref: ${{ needs.setup.outputs.checkout-ref }}
+      go-arch: amd64
+      # cgo is required here, not optional: helper/constants/fips_cgo_check.go intentionally
+      # fails the build if a fips/fips_140_2/fips_140_3 tag is set without cgo (and BoringCrypto
+      # itself requires cgo to link). Matches the Enterprise test-go-fips job's tag list.
+      go-tags: '${{ needs.setup.outputs.go-tags }},deadlock,cgo'
+      name: fips-ce
+      runs-on: ${{ needs.setup.outputs.compute-test-go }}
+      runs-on-small: ${{ needs.setup.outputs.compute-small }}
+      test-timing-cache-key: go-test-timing-fips-ce
+      total-runners: 8
+    secrets: inherit
+
   test-ui:
     name: Test UI
     needs: setup
@@ -329,6 +368,7 @@ jobs:
       - test-go-testonly
       - test-go-race
       - test-go-fips
+      - test-go-fips-ce
       - test-ui
     if: always()
     runs-on: ${{ github.repository == 'hashicorp/vault' && 'ubuntu-latest' || fromJSON('["self-hosted","ubuntu-22.04-x64"]') }}
@@ -343,8 +383,10 @@ jobs:
       - name: Determine status
         id: status
         run: |
-          # Determine the overall status of the job. We allow fips and race tests to fail so we
-          # don't consider their result here.
+          # Determine the overall status of the job. We allow the Enterprise-only fips and race
+          # tests to fail so we don't consider their result here. test-go-fips-ce (WO-062, CE)
+          # is NOT excluded -- it is a required check so a FIPS regression on a CE crypto-relevant
+          # path blocks merge.
           #
           # Encode the needs context into JSON, filter out unrequired workflows, shape the result
           # into a more useful schema. Determine the overall status by comparing the total number of
@@ -399,6 +441,7 @@ jobs:
             needs.test-go-race.result == 'failure' ||
             needs.test-go-race.outputs.data-race-result == 'failure' ||
             needs.test-go-testonly.result == 'failure' ||
+            needs.test-go-fips-ce.result == 'failure' ||
             needs.test-ui.result == 'failure'
           )
         name: Notify build failures in Slack
@@ -426,6 +469,7 @@ jobs:
                     ${{ needs.test-go.result                == 'failure' && ':x: Go tests'          || '' }}
                     ${{ needs.test-go-testonly.result       == 'failure' && ':x: Go testonly tests' || '' }}
                     ${{ needs.test-go-fips.result           == 'failure' && ':x: Go FIPS tests'     || '' }}
+                    ${{ needs.test-go-fips-ce.result        == 'failure' && ':x: Go FIPS tests (CE)' || '' }}
                     ${{ needs.test-ui.result                == 'failure' && ':x: UI tests'          || '' }}
                     ${{ needs.test-go-race.result != 'skipped' &&
                       (

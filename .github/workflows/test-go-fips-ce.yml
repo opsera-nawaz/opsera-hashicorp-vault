@@ -1,0 +1,127 @@
+name: FIPS-path Go tests (CE)
+
+# test-go-fips-ce.yml is the CE-scoped counterpart to the Enterprise-only test-go-fips job in
+# ci.yml. Unlike that job -- gated on is-ent-branch=='true' and only triggered by a push or the
+# 'fips' PR label -- ci.yml's test-go-fips-ce job (WO-062) calls this reusable workflow for every
+# CE pull request/push that touches a security-relevant path (vault/, sdk/, builtin/,
+# helper/constants/, go.mod/go.sum; see the "fips_ce" changed-files group in
+# .release/pipeline.hcl), so a non-Approved algorithm or FIPS regression on CE is caught before
+# merge instead of only on a push to main/release.
+#
+# It delegates the actual matrix build/test execution to test-go.yml (left unmodified) with the
+# BoringCrypto env var and fips,fips_140_3 build tags -- the same mechanism the Enterprise
+# test-go-fips job in ci.yml already uses -- rather than duplicating that ~750 line workflow. The
+# packages test-go.yml runs (via `make all-packages`) already include builtin/logical/transit,
+# builtin/logical/ssh, and sdk/helper/keysutil, so the existing FIPS algorithm-restriction tests
+# in those packages (e.g. TestPolicy_FIPS_RejectsNewChaCha20KeyCreation,
+# TestPolicy_FIPS_RejectsEd25519Sign, TestSSHBackend_CA_FIPS) run as part of this workflow once
+# IsFIPS() is true under these build tags.
+#
+# It also does one thing test-go.yml doesn't: generating and uploading a CMVP-reference evidence
+# manifest (WO-062 AC4) describing the Go toolchain/build-tag configuration under test.
+
+on:
+  workflow_call:
+    inputs:
+      checkout-ref:
+        description: The ref to use for checkout.
+        required: false
+        default: ${{ github.ref }}
+        type: string
+      changed-files:
+        description: JSON payload containing changed file paths from the setup workflow.
+        required: false
+        default: '{}'
+        type: string
+      go-arch:
+        description: The execution architecture (arm, amd64, etc.)
+        required: false
+        default: amd64
+        type: string
+      go-tags:
+        description: A comma-separated list of additional build tags to combine with fips,fips_140_3.
+        required: false
+        default: ''
+        type: string
+      name:
+        description: A unique identifier to use for labeling artifacts and workflows.
+        required: false
+        default: fips-ce
+        type: string
+      runs-on:
+        description: An expression indicating which kind of runners to use for the Go test jobs.
+        required: false
+        type: string
+        default: '"ubuntu-latest"'
+      runs-on-small:
+        description: An expression indicating which kind of runners to use for small computing jobs.
+        required: false
+        type: string
+        default: '"ubuntu-latest"'
+      test-timing-cache-key:
+        description: The cache key to use for gotestsum test timing data.
+        required: false
+        type: string
+        default: go-test-timing-fips-ce
+      total-runners:
+        description: Number of runners to use for executing the FIPS Go test matrix.
+        required: false
+        type: number
+        default: 8
+
+jobs:
+  test-go-fips-ce:
+    name: ${{ inputs.name }}
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      issues: read
+      pull-requests: write
+    uses: ./.github/workflows/test-go.yml
+    with:
+      changed-files: ${{ inputs.changed-files }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      env-vars: |
+        {
+          "GOEXPERIMENT": "boringcrypto"
+        }
+      go-arch: ${{ inputs.go-arch }}
+      go-tags: '${{ inputs.go-tags }},fips,fips_140_3'
+      name: ${{ inputs.name }}
+      runs-on: ${{ inputs.runs-on }}
+      runs-on-small: ${{ inputs.runs-on-small }}
+      test-timing-cache-key: ${{ inputs.test-timing-cache-key }}
+      total-runners: ${{ inputs.total-runners }}
+    secrets: inherit
+
+  evidence-manifest:
+    name: Generate FIPS evidence manifest
+    # Always attempt to record what was actually run (build tags, toolchain, GOEXPERIMENT) even
+    # if the test stage failed, so a failed FIPS run still leaves an audit trail of what
+    # configuration was under test.
+    if: always()
+    needs: test-go-fips-ce
+    runs-on: ${{ fromJSON(inputs.runs-on-small) }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.checkout-ref }}
+      - uses: ./.github/actions/set-up-go
+        with:
+          no-save: true
+      - name: Generate FIPS evidence manifest
+        env:
+          GOEXPERIMENT: boringcrypto
+          GOTAGS: '${{ inputs.go-tags }},fips,fips_140_3'
+        run: |
+          chmod +x .github/scripts/generate-fips-evidence.sh
+          .github/scripts/generate-fips-evidence.sh --output "fips-evidence-manifest-${GITHUB_SHA}.json"
+      - name: Upload FIPS evidence manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fips-evidence-manifest-${{ github.sha }}.json
+          path: fips-evidence-manifest-${{ github.sha }}.json
+          if-no-files-found: error

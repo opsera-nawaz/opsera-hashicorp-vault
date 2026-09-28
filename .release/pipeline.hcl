@@ -453,6 +453,24 @@ changed_files {
     }
   }
 
+  // The "fips_ce" group scopes the CE-only FIPS regression CI stage (WO-062) to the
+  // security-relevant paths identified in the Phase 1 crypto inventory
+  // (fips/crypto_inventory.yaml) and already used to scope the WO-033 semgrep/depguard
+  // rules and the WO-056 fips-crypto-check/fips-container-check Go analysis tools: vault/,
+  // sdk/, builtin/, and helper/constants/ (the IsFIPS() boundary). go.mod/go.sum changes are
+  // covered separately by the existing "go_modules" group below -- a dependency bump could
+  // introduce a non-Approved crypto library just as easily as a direct code change.
+  group "fips_ce" {
+    match {
+      base_dir = [
+        "vault",
+        "sdk",
+        "builtin",
+        joinpath("helper", "constants"),
+      ]
+    }
+  }
+
   // ----------------------------------------------------------------------------
   // Helpers
   // ----------------------------------------------------------------------------

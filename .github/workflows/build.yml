@@ -606,6 +606,76 @@ jobs:
       vault-version: ${{ needs.setup.outputs.vault-version-metadata }}
     secrets: inherit
 
+  fips-path-image-verify:
+    name: Verify FIPS-path container image (CE UBI)
+    # WO-062 AC3/AC4: verify the CE FIPS-path candidate container image (the `ubi` Dockerfile
+    # stage built by build-artifacts-ce.yml's containerize step for the linux/amd64 artifact,
+    # tracked as fips/inventory/container_kms_inventory.yaml id ce-ubi10-minimal) is glibc-based,
+    # not Alpine/musl -- musl-libc does not reliably support the OpenSSL FIPS provider self-test
+    # (see the Dockerfile's `ubi` stage comment and the container scan pattern in
+    # .release/security-scan.hcl). Also produces a CMVP-reference evidence manifest with the real
+    # container base OS/crypto library observed on the built image. Runs only for CE -- it never
+    # depends on or modifies the Enterprise-only ubi-fips/ubi-hsm-fips image targets (constraints:
+    # "create new CE-specific FIPS jobs rather than ungating existing Enterprise ones") -- and only
+    # after artifacts-ce has actually produced an image.
+    if: |
+      always() &&
+      needs.setup.outputs.is-ent-branch != 'true' &&
+      needs.artifacts-ce.result == 'success'
+    needs:
+      - setup
+      - artifacts-ce
+    runs-on: ${{ fromJSON(needs.setup.outputs.compute-small) }}
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.setup.outputs.checkout-ref }}
+      - name: Download CE UBI FIPS-path image artifact
+        id: download
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: vault_ubi_linux_amd64_${{ needs.setup.outputs.vault-version }}_${{ needs.setup.outputs.vault-revision }}.docker.redhat.tar
+      - name: Load and verify the FIPS-path image uses a glibc-based base
+        id: verify
+        run: |
+          set -euo pipefail
+          tarball="vault_ubi_linux_amd64_${{ needs.setup.outputs.vault-version }}_${{ needs.setup.outputs.vault-revision }}.docker.redhat.tar"
+          loaded="$(docker load -i "${{ steps.download.outputs.download-path }}/${tarball}")"
+          echo "$loaded"
+          image_ref="$(sed -n 's/^Loaded image: //p' <<< "$loaded" | tail -n1)"
+          if [ -z "$image_ref" ]; then
+            echo "::error::could not determine the loaded image reference from 'docker load' output"
+            exit 1
+          fi
+          echo "image-ref=${image_ref}" | tee -a "$GITHUB_OUTPUT"
+
+          os_release="$(docker run --rm --entrypoint sh "$image_ref" -c 'cat /etc/os-release' 2>/dev/null || true)"
+          base_os_id="$(sed -n 's/^ID="\{0,1\}\([a-z0-9_.-]*\)"\{0,1\}$/\1/p' <<< "$os_release" | head -n1)"
+          musl_check="$(docker run --rm --entrypoint sh "$image_ref" -c 'ldd --version 2>&1 || true' 2>/dev/null || true)"
+
+          if [ "$base_os_id" = "alpine" ] || grep -qi musl <<< "$musl_check"; then
+            echo "::error::FIPS-path image ${image_ref} uses a disallowed musl/Alpine base (os-release ID=${base_os_id:-unknown}); use a glibc-based image (UBI or Debian-slim) instead, see the Dockerfile 'ubi' stage and .release/security-scan.hcl"
+            exit 1
+          fi
+          echo "OK: ${image_ref} uses a glibc-based container base (os-release ID=${base_os_id:-unknown})"
+      - name: Generate FIPS evidence manifest for the container image
+        if: always() && steps.verify.outcome == 'success'
+        run: |
+          chmod +x .github/scripts/generate-fips-evidence.sh
+          .github/scripts/generate-fips-evidence.sh \
+            --container-image "${{ steps.verify.outputs.image-ref }}" \
+            --output "fips-container-evidence-manifest-${{ github.sha }}.json"
+      - name: Upload FIPS evidence manifest
+        if: always() && steps.verify.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fips-container-evidence-manifest-${{ github.sha }}.json
+          path: fips-container-evidence-manifest-${{ github.sha }}.json
+          if-no-files-found: error
+
   test-hcp-image:
     # Test our custom HCP image if our image build was successful and we've
     # been configured with the correct label.
@@ -666,6 +736,7 @@ jobs:
       - test
       - test-containers
       - test-hcp-image
+      - fips-path-image-verify
     steps:
       - name: Record build stage start time
         id: build-metric-start
@@ -842,6 +913,7 @@ jobs:
                     ${{ needs.test.result            == 'failure' && ':x: Enos package test scenarios'   || '' }}
                     ${{ needs.test-containers.result == 'failure' && ':x: Enos container test scenarios' || '' }}
                     ${{ (needs.artifacts-ent.result == 'failure' || needs.artifacts-ce.result == 'failure') && ':x: Build Vault Artifacts' || '' }}
+                    ${{ needs.fips-path-image-verify.result == 'failure' && ':x: FIPS-path container image verification (CE)' || '' }}
                 accessory:
                   type: button
                   text:
