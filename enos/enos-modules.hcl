@@ -193,6 +193,16 @@ module "stop_vault" {
   source = "./modules/stop_vault"
 }
 
+// create FIPS-mode (fips=1) RHEL 9 target instances using ec2:RunInstances
+module "target_ec2_fips" {
+  source = "./modules/target_ec2_fips"
+
+  common_tags   = var.tags
+  ports_ingress = values(global.ports)
+  project_name  = var.project_name
+  ssh_keypair   = var.aws_ssh_keypair_name
+}
+
 // create target instances using ec2:CreateFleet
 module "target_ec2_fleet" {
   source = "./modules/target_ec2_fleet"
@@ -464,6 +474,10 @@ module "vault_wait_for_seal_rewrap" {
   source = "./modules/vault_wait_for_seal_rewrap"
 
   vault_install_dir = var.vault_install_dir
+}
+
+module "verify_fips_runtime" {
+  source = "./modules/verify_fips_runtime"
 }
 
 module "verify_fips_startup" {

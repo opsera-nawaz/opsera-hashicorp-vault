@@ -62,6 +62,14 @@ scenario "upgrade" {
       artifact_type   = ["package"]
     }
 
+    // ce.fips (WO-060) is only exercised by enos-scenario-fips.hcl, which
+    // provisions the FIPS-enabled infrastructure and locally-built
+    // BoringCrypto image it requires; it isn't a valid variant of this
+    // scenario's artifactory/package-based matrix.
+    exclude {
+      edition = ["ce.fips"]
+    }
+
     // There are no published versions of these artifacts yet. We'll update this to exclude older
     // versions after our initial publication of these editions for arm64.
     exclude {

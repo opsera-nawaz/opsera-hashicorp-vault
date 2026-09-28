@@ -10,10 +10,24 @@ globals {
   backend_tag_key      = "VaultStorage"
   build_tags = {
     "ce"               = ["ui"]
+    "ce.fips"          = ["ui", "cgo", "fips", "fips_140_3"]
     "ent"              = ["ui", "enterprise", "ent"]
     "ent.fips1403"     = ["ui", "enterprise", "cgo", "hsm", "fips", "fips_140_3", "ent.fips1403"]
     "ent.hsm"          = ["ui", "enterprise", "cgo", "hsm", "venthsm"]
     "ent.hsm.fips1403" = ["ui", "enterprise", "cgo", "hsm", "fips", "fips_140_3", "ent.hsm.fips1403"]
+  }
+  # GOEXPERIMENT to set when building each edition. Only the FIPS editions
+  # need the boringcrypto GOEXPERIMENT -- it swaps Go's stdlib crypto/*
+  # implementations for cgo-linked BoringCrypto ones. See WO-060 and
+  # docs/fips/risk-register.md's "CE-FIPS edition/build-target gap" residual
+  # gap, which this "ce.fips" entry (and its build_tags entry above) closes.
+  goexperiment = {
+    "ce"               = ""
+    "ce.fips"          = "boringcrypto"
+    "ent"              = ""
+    "ent.fips1403"     = "boringcrypto"
+    "ent.hsm"          = ""
+    "ent.hsm.fips1403" = "boringcrypto"
   }
   config_modes    = ["env", "file"]
   consul_editions = ["ce", "ent"]
@@ -123,12 +137,20 @@ globals {
       ubuntu = global.distro_versions_fyre["s390x"]["ubuntu"][0]
     }
   }
-  # NOTE(FIPS): "ce" has no FIPS-tagged counterpart here -- only
-  # ent.fips1403/ent.hsm.fips1403 define a FIPS build target. This CE-FIPS
-  # edition/build-target gap is tracked as a blocking dependency risk in
-  # docs/fips/risk-register.md (Residual Gaps #1, WO-067).
-  editions            = ["ce", "ent", "ent.fips1403", "ent.hsm", "ent.hsm.fips1403"]
-  enterprise_editions = [for e in global.editions : e if e != "ce"]
+  # NOTE(FIPS): "ce.fips" (added by WO-060) is the CE/OSS counterpart to
+  # ent.fips1403/ent.hsm.fips1403 -- see docs/fips/risk-register.md
+  # (Residual Gaps #1) for the history of this gap and its remaining
+  # caveats (no published container image yet; see
+  # enos/modules/cloud_docker_vault_cluster/main.tf).
+  editions = ["ce", "ce.fips", "ent", "ent.fips1403", "ent.hsm", "ent.hsm.fips1403"]
+  # NOTE(WO-060): this used to be `e != "ce"`, which was equivalent while
+  # "ce" was the only non-"ent"-prefixed edition. Adding "ce.fips" (also
+  # non-enterprise) means that equality check would now incorrectly treat
+  # "ce.fips" as an enterprise edition wherever global.enterprise_editions
+  # is consumed (e.g. enos-scenario-seal-ha.hcl, -autopilot.hcl,
+  # -dr-replication.hcl, -pr-replication.hcl), so this now matches on the
+  # "ent" substring shared by every enterprise edition instead.
+  enterprise_editions = [for e in global.editions : e if strcontains(e, "ent")]
   ip_versions         = ["4", "6"]
   package_manager = {
     "amzn"   = "yum"

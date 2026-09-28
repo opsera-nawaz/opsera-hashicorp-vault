@@ -32,6 +32,18 @@ variable "aws_ssh_keypair_name" {
   default     = "enos-ci-ssh-key"
 }
 
+variable "kms_fips_endpoint" {
+  description = "The AWS KMS FIPS endpoint hostname used by the fips scenario's auto-unseal key, e.g. kms-fips.us-east-1.amazonaws.com. Must be region-specific and match var.aws_region -- FIPS endpoints are per-region (see https://aws.amazon.com/compliance/fips/)."
+  type        = string
+  default     = null
+}
+
+variable "distro_version_rhel_fips" {
+  description = "The version of RHEL 9 to use for the fips scenario's target_ec2_fips hosts"
+  type        = string
+  default     = "9.7"
+}
+
 variable "aws_ssh_private_key_path" {
   description = "The path to the AWS keypair private key"
   type        = string

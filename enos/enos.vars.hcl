@@ -40,6 +40,14 @@
 // distro_version_rhel is the version of RHEL to use for "distro:rhel" variants.
 // distro_version_rhel = "10.1" // or "8.10" or "9.7"
 
+// distro_version_rhel_fips is the version of RHEL 9 to use for the fips scenario's
+// target_ec2_fips hosts.
+// distro_version_rhel_fips = "9.7"
+
+// kms_fips_endpoint is the AWS KMS FIPS endpoint used by the fips scenario's auto-unseal
+// key. Must be region-specific and match aws_region.
+// kms_fips_endpoint = "kms-fips.us-east-1.amazonaws.com"
+
 // distro_version_sles is the version of SUSE SLES to use for "distro:sles" variants.
 // distro_version_sles = "16.0" // or "15.7"
 
