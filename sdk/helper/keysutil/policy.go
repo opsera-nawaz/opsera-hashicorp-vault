@@ -357,6 +357,43 @@ func (kt KeyType) IsEnterpriseOnly() bool {
 	}
 }
 
+// IsFIPSApproved reports whether this key type's algorithm is Approved for
+// use under FIPS 140-3. It does not by itself gate any behavior: callers
+// must combine it with isFIPSMode() to decide whether to enforce it, since
+// non-Approved key types remain fully usable in non-FIPS builds/deployments.
+//
+// KeyType_ChaCha20_Poly1305 and KeyType_ED25519 are not on the FIPS 186-5 /
+// SP 800-38D Approved lists and are therefore not FIPS-Approved. Every other
+// key type is Approved: AES-GCM/CBC (SP 800-38A/D), ECDSA P-256/P-384/P-521
+// (FIPS 186-5), RSA (FIPS 186-5), HMAC (FIPS 198-1), AES-CMAC (SP 800-38B),
+// ML-DSA/SLH-DSA (FIPS 204/205). KeyType_MANAGED_KEY delegates algorithm
+// selection to an external, independently-validated KMS, so it is treated
+// as Approved here. KeyType_HYBRID's approval status depends on its
+// constituent algorithms; it is marked Approved for now pending future
+// refinement once hybrid algorithm composition is finalized.
+func (kt KeyType) IsFIPSApproved() bool {
+	switch kt {
+	case KeyType_ChaCha20_Poly1305, KeyType_ED25519:
+		return false
+	default:
+		return true
+	}
+}
+
+// fipsApprovedAlternative returns a human-readable suggestion of an
+// Approved replacement algorithm for a non-Approved key type, used to make
+// FIPS-mode rejection errors actionable.
+func fipsApprovedAlternative(kt KeyType) string {
+	switch kt {
+	case KeyType_ChaCha20_Poly1305:
+		return "aes256-gcm96"
+	case KeyType_ED25519:
+		return "ecdsa-p256, ecdsa-p384, or ecdsa-p521"
+	default:
+		return "a FIPS 140-3 Approved algorithm"
+	}
+}
+
 func (kt KeyType) ImportPublicKeySupported() bool {
 	switch kt {
 	case KeyType_RSA2048, KeyType_RSA3072, KeyType_RSA4096, KeyType_ECDSA_P256, KeyType_ECDSA_P384, KeyType_ECDSA_P521, KeyType_ED25519:
@@ -1995,6 +2032,20 @@ func (p *Policy) RotateInMemory(randReader io.Reader) (retErr error) {
 func (p *Policy) RotateInMemoryWithAlgorithm(randReader io.Reader, keyType KeyType, config *KeyConfig) (retErr error) {
 	if err := p.isCompatibleKeyType(keyType); err != nil {
 		return err
+	}
+
+	// This is the single point through which both new-key creation
+	// (LockManager.GetPolicy's upsert path, via Rotate/RotateWithAlgorithm)
+	// and explicit key rotation (e.g. transit's rotate-key endpoint) flow
+	// before any key material is generated, so gating here enforces FIPS
+	// mode for both without duplicating the check elsewhere. Existing key
+	// versions are never re-validated here, so already-stored non-Approved
+	// keys remain fully readable via Decrypt/VerifySignature.
+	if isFIPSMode() && !keyType.IsFIPSApproved() {
+		return errutil.UserError{Err: fmt.Sprintf(
+			"key type %s is not allowed in FIPS mode; use %s instead",
+			keyType, fipsApprovedAlternative(keyType),
+		)}
 	}
 
 	now := time.Now()
