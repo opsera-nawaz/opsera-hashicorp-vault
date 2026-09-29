@@ -6,9 +6,19 @@
 import { get } from '@ember/object';
 import ApplicationSerializer from './application';
 
-export default ApplicationSerializer.extend({
-  secretDataPath: 'data',
-  normalizeItems(payload, requestType) {
+import type { AdapterSnapshot } from 'vault/adapters/-types';
+
+interface SecretPayload {
+  id?: string;
+  backend?: string;
+  data?: { keys?: string[]; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+export default class SecretSerializer extends ApplicationSerializer {
+  secretDataPath = 'data';
+
+  normalizeItems(payload: SecretPayload, requestType?: string): unknown {
     if (
       requestType !== 'queryRecord' &&
       payload.data &&
@@ -27,7 +37,7 @@ export default ApplicationSerializer.extend({
         // a unicode space for the id
         // https://github.com/hashicorp/vault/issues/3348
         if (!fullSecretPath) {
-          fullSecretPath = '\u0020';
+          fullSecretPath = ' ';
         }
         return { id: fullSecretPath, backend: payload.backend };
       });
@@ -35,13 +45,15 @@ export default ApplicationSerializer.extend({
     const path = this.secretDataPath;
     // move response that is the contents of the secret from the dataPath
     // to `secret_data` so it will be `secretData` in the model
-    payload.secret_data = get(payload, path);
+    payload['secret_data'] = get(payload, path);
     delete payload[path];
 
     return payload;
-  },
+  }
 
-  serialize(snapshot) {
+  // @ts-expect-error - concrete override of JSONSerializer's generic serialize<K>; the loose
+  // AdapterSnapshot stand-in (see app/adapters/-types.ts) isn't assignable to Snapshot<K>.
+  serialize(snapshot: AdapterSnapshot) {
     return snapshot.attr('secretData');
-  },
-});
+  }
+}

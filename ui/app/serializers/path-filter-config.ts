@@ -6,15 +6,24 @@
 import RESTSerializer from '@ember-data/serializer/rest';
 import { decamelize } from '@ember/string';
 
-export default RESTSerializer.extend({
-  keyForAttribute: function (attr) {
-    return decamelize(attr);
-  },
+import type Store from '@ember-data/store';
+import type { ModelSchema } from 'ember-data'; // eslint-disable-line ember/use-ember-data-rfc-395-imports
 
-  normalizeResponse(store, primaryModelClass, payload, id, requestType) {
+export default class PathFilterConfigSerializer extends RESTSerializer {
+  keyForAttribute(attr: string): string {
+    return decamelize(attr);
+  }
+
+  normalizeResponse(
+    store: Store,
+    primaryModelClass: ModelSchema,
+    payload: { data: Record<string, unknown> },
+    id: string | number,
+    requestType: string
+  ) {
     const { modelName } = primaryModelClass;
-    payload.data.id = id;
+    payload.data['id'] = id;
     const transformedPayload = { [modelName]: payload.data };
-    return this._super(store, primaryModelClass, transformedPayload, id, requestType);
-  },
-});
+    return super.normalizeResponse(store, primaryModelClass, transformedPayload, id, requestType);
+  }
+}

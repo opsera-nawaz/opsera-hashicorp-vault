@@ -5,11 +5,23 @@
 
 import ApplicationSerializer from '../application';
 
-export default ApplicationSerializer.extend({
-  primaryKey: 'name',
-  extractLazyPaginatedData(payload) {
+interface KeysPayload {
+  data: { keys: string[]; [key: string]: unknown };
+  backend?: string;
+}
+
+interface RoleItem {
+  id: string;
+  name: string;
+  backend?: string;
+}
+
+export default class TransformRoleSerializer extends ApplicationSerializer {
+  primaryKey = 'name';
+
+  extractLazyPaginatedData(payload: KeysPayload): RoleItem[] {
     return payload.data.keys.map((key) => {
-      const model = {
+      const model: RoleItem = {
         id: key,
         name: key,
       };
@@ -18,5 +30,5 @@ export default ApplicationSerializer.extend({
       }
       return model;
     });
-  },
-});
+  }
+}

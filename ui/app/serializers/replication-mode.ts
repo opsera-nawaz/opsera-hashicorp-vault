@@ -5,13 +5,24 @@
 
 import ApplicationSerializer from './application';
 
-export default ApplicationSerializer.extend({
-  normalizeResponse(store, primaryModelClass, payload, id, requestType) {
+import type Store from '@ember-data/store';
+import type { ModelSchema } from 'ember-data'; // eslint-disable-line ember/use-ember-data-rfc-395-imports
+
+export default class ReplicationModeSerializer extends ApplicationSerializer {
+  // @ts-expect-error - concrete override of ApplicationSerializer's normalizeResponse;
+  // `normalizedPayload` below is a normalized shape specific to this serializer.
+  normalizeResponse(
+    store: Store,
+    primaryModelClass: ModelSchema,
+    payload: { id: string | number; data: unknown },
+    id: string | number,
+    requestType: string
+  ) {
     const normalizedPayload = {
       id: payload.id,
       status: payload.data,
     };
 
-    return this._super(store, primaryModelClass, normalizedPayload, id, requestType);
-  },
-});
+    return super.normalizeResponse(store, primaryModelClass, normalizedPayload, id, requestType);
+  }
+}

@@ -5,19 +5,34 @@
 
 import ApplicationSerializer from './application';
 
-export default ApplicationSerializer.extend({
-  primaryKey: 'name',
+import type Store from '@ember-data/store';
+import type { ModelSchema } from 'ember-data'; // eslint-disable-line ember/use-ember-data-rfc-395-imports
 
-  normalizePolicies(payload) {
+interface PolicyPayload {
+  data: { keys?: string[]; [key: string]: unknown };
+}
+
+export default class PolicySerializer extends ApplicationSerializer {
+  primaryKey = 'name';
+
+  normalizePolicies(payload: PolicyPayload) {
     const data = payload.data.keys ? payload.data.keys.map((name) => ({ name })) : payload.data;
     return data;
-  },
+  }
 
-  normalizeResponse(store, primaryModelClass, payload, id, requestType) {
+  // @ts-expect-error - concrete override of ApplicationSerializer's normalizeResponse;
+  // `normalizedPayload` below is a normalized shape specific to this serializer.
+  normalizeResponse(
+    store: Store,
+    primaryModelClass: ModelSchema,
+    payload: PolicyPayload,
+    id: string | number,
+    requestType: string
+  ) {
     const nullResponses = ['deleteRecord'];
     const normalizedPayload = nullResponses.includes(requestType)
       ? { name: id }
       : this.normalizePolicies(payload);
-    return this._super(store, primaryModelClass, normalizedPayload, id, requestType);
-  },
-});
+    return super.normalizeResponse(store, primaryModelClass, normalizedPayload as never, id, requestType);
+  }
+}

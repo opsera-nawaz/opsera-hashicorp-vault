@@ -3,16 +3,7 @@
  * SPDX-License-Identifier: BUSL-1.1
  */
 
-import ApplicationSerializerImpl from '../application';
-
-import type JSONSerializerBase from '@ember-data/serializer/json';
-
-// `../application` is still a classic-pattern JS file (`JSONSerializer.extend({...})`),
-// so TS can't infer a proper class shape — including the inherited static `extend` that
-// `entity.ts`/`group.ts` need to mix in `EmbeddedRecordsMixin`. Assert the real runtime
-// value against the equivalent typed `JSONSerializer` base rather than changing the
-// underlying JS file, which is out of scope for this story.
-const ApplicationSerializer = ApplicationSerializerImpl as unknown as typeof JSONSerializerBase;
+import ApplicationSerializer from '../application';
 
 /**
  * Raw alias entry as returned nested inside entity/group key_info (and as the

@@ -5,13 +5,30 @@
 
 import ApplicationSerializer from './application';
 
-export default ApplicationSerializer.extend({
-  primaryKey: 'path',
+import type Store from '@ember-data/store';
+import type { ModelSchema } from 'ember-data'; // eslint-disable-line ember/use-ember-data-rfc-395-imports
 
-  normalizeResponse(store, primaryModelClass, payload, id, requestType) {
+interface CapabilitiesPayload {
+  path?: string;
+  pathMap?: Record<string, string>;
+  data: Record<string, unknown>;
+}
+
+export default class CapabilitiesSerializer extends ApplicationSerializer {
+  primaryKey = 'path';
+
+  // @ts-expect-error - concrete override of ApplicationSerializer's normalizeResponse; `response`
+  // below is a normalized shape specific to this serializer, not the raw NormalizeItemsPayload.
+  normalizeResponse(
+    store: Store,
+    primaryModelClass: ModelSchema,
+    payload: CapabilitiesPayload,
+    id: string | number,
+    requestType: string
+  ) {
     let response;
     // queryRecord will already have set path, and we won't have an id here
-    if (id) payload.path = id;
+    if (id) payload.path = id as string;
 
     if (requestType === 'query') {
       // each key on the response is a path with an array of capabilities as its value
@@ -24,10 +41,10 @@ export default ApplicationSerializer.extend({
     } else {
       response = { ...payload.data, path: payload.path };
     }
-    return this._super(store, primaryModelClass, response, id, requestType);
-  },
+    return super.normalizeResponse(store, primaryModelClass, response as never, id, requestType);
+  }
 
-  modelNameFromPayloadKey() {
+  modelNameFromPayloadKey(): string {
     return 'capabilities';
-  },
-});
+  }
+}

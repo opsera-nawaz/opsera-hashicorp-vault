@@ -5,10 +5,28 @@
 
 import RESTSerializer from '@ember-data/serializer/rest';
 
-export default RESTSerializer.extend({
-  primaryKey: 'username',
+import type Store from '@ember-data/store';
+import type { ModelSchema } from 'ember-data'; // eslint-disable-line ember/use-ember-data-rfc-395-imports
 
-  normalizePayload(payload) {
+interface CredentialPayload {
+  data?: {
+    username?: string;
+    password?: string;
+    rsa_private_key?: string;
+    last_vault_rotation?: string;
+    rotation_period?: number;
+    ttl?: number;
+    [key: string]: unknown;
+  };
+  lease_id?: string;
+  lease_duration?: number;
+  roleType?: string;
+}
+
+export default class DatabaseCredentialSerializer extends RESTSerializer {
+  primaryKey = 'username';
+
+  normalizePayload(payload: CredentialPayload) {
     if (payload.data) {
       return {
         username: payload.data.username,
@@ -23,13 +41,20 @@ export default RESTSerializer.extend({
         roleType: payload.roleType,
       };
     }
-  },
+    return undefined;
+  }
 
-  normalizeResponse(store, primaryModelClass, payload, id, requestType) {
+  normalizeResponse(
+    store: Store,
+    primaryModelClass: ModelSchema,
+    payload: CredentialPayload,
+    id: string | number,
+    requestType: string
+  ) {
     const credentials = this.normalizePayload(payload);
     const { modelName } = primaryModelClass;
     const transformedPayload = { [modelName]: credentials };
 
-    return this._super(store, primaryModelClass, transformedPayload, id, requestType);
-  },
-});
+    return super.normalizeResponse(store, primaryModelClass, transformedPayload, id, requestType);
+  }
+}

@@ -5,4 +5,4 @@
 
 import PolicySerializer from '../policy';
 
-export default PolicySerializer.extend();
+export default class RgpSerializer extends PolicySerializer {}

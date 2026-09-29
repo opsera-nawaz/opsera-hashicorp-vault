@@ -5,12 +5,28 @@
 
 import ApplicationSerializer from './application';
 
-export default ApplicationSerializer.extend({
-  primaryKey: 'name',
+interface KeysPayload {
+  data: { keys: string[]; [key: string]: unknown };
+  backend?: string;
+}
 
-  extractLazyPaginatedData(payload) {
+interface RoleAwsItem {
+  name: string;
+  backend?: string;
+}
+
+interface NormalizedRoleAwsItems {
+  credential_types?: string[];
+  credential_type?: string;
+  [key: string]: unknown;
+}
+
+export default class RoleAwsSerializer extends ApplicationSerializer {
+  primaryKey = 'name';
+
+  extractLazyPaginatedData(payload: KeysPayload): RoleAwsItem[] {
     return payload.data.keys.map((key) => {
-      const model = {
+      const model: RoleAwsItem = {
         name: key,
       };
       if (payload.backend) {
@@ -18,10 +34,10 @@ export default ApplicationSerializer.extend({
       }
       return model;
     });
-  },
+  }
 
-  normalizeItems() {
-    const normalized = this._super(...arguments);
+  normalizeItems(payload: Parameters<ApplicationSerializer['normalizeItems']>[0]) {
+    const normalized = super.normalizeItems(payload) as NormalizedRoleAwsItems;
     // most roles will only have one in this array,
     // we'll default to the first, and keep the array on the
     // model and show a warning if there's more than one so that
@@ -30,5 +46,5 @@ export default ApplicationSerializer.extend({
       normalized.credential_type = normalized.credential_types[0];
     }
     return normalized;
-  },
-});
+  }
+}

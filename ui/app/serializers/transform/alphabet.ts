@@ -5,12 +5,23 @@
 
 import ApplicationSerializer from '../application';
 
-export default ApplicationSerializer.extend({
-  primaryKey: 'name',
+interface KeysPayload {
+  data: { keys: string[]; [key: string]: unknown };
+  backend?: string;
+}
 
-  extractLazyPaginatedData(payload) {
+interface AlphabetItem {
+  id: string;
+  name: string;
+  backend?: string;
+}
+
+export default class AlphabetSerializer extends ApplicationSerializer {
+  primaryKey = 'name';
+
+  extractLazyPaginatedData(payload: KeysPayload): AlphabetItem[] {
     return payload.data.keys.map((key) => {
-      const model = {
+      const model: AlphabetItem = {
         id: key,
         name: key,
       };
@@ -19,5 +30,5 @@ export default ApplicationSerializer.extend({
       }
       return model;
     });
-  },
-});
+  }
+}
