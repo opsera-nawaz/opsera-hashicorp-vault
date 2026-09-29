@@ -5,4 +5,4 @@
 
 import IdentityAdapter from './base';
 
-export default IdentityAdapter.extend();
+export default class GroupAliasAdapter extends IdentityAdapter {}

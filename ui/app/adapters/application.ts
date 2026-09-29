@@ -10,33 +10,57 @@ import { set } from '@ember/object';
 import RSVP from 'rsvp';
 import config from '../config/environment';
 
+import type Service from '@ember/service';
+import type AuthService from 'vault/services/auth';
+import type NamespaceService from 'vault/services/namespace';
+import type ControlGroupService from 'vault/services/control-group';
+import type { ApiResponse } from 'vault/api';
+
 const { APP } = config;
 const { POLLING_URLS, NAMESPACE_ROOT_URLS } = APP;
 
-export default RESTAdapter.extend({
-  auth: service(),
-  namespaceService: service('namespace'),
-  controlGroup: service(),
+interface AjaxOptions {
+  clientToken?: string;
+  unauthenticated?: boolean;
+  wrapTTL?: string;
+  namespace?: string;
+  skipWarnings?: boolean;
+  headers?: Record<string, string>;
+  timeout?: number;
+  body?: BodyInit | null;
+  signal?: AbortSignal | null;
+  [key: string]: unknown;
+}
 
-  flashMessages: service(),
+interface AjaxResponse {
+  warnings?: string[];
+  [key: string]: unknown;
+}
 
-  namespace: 'v1/sys',
+export default class ApplicationAdapter extends RESTAdapter {
+  @service declare auth: AuthService;
+  @service('namespace') declare namespaceService: NamespaceService;
+  @service declare controlGroup: ControlGroupService;
 
-  shouldReloadAll() {
+  @service declare flashMessages: Service & { info: (message: string) => void };
+
+  namespace = 'v1/sys';
+
+  shouldReloadAll(): boolean {
     return true;
-  },
+  }
 
-  shouldReloadRecord() {
+  shouldReloadRecord(): boolean {
     return true;
-  },
+  }
 
-  shouldBackgroundReloadRecord() {
+  shouldBackgroundReloadRecord(): boolean {
     return false;
-  },
+  }
 
-  addHeaders(url, options, method) {
+  addHeaders(url: string, options: AjaxOptions, method: string): void {
     const token = options.clientToken || this.auth.currentToken;
-    const headers = {};
+    const headers: Record<string, string> = {};
     if (token && !options.unauthenticated) {
       headers['X-Vault-Token'] = token;
     }
@@ -48,23 +72,27 @@ export default RESTAdapter.extend({
     }
     const namespace =
       typeof options.namespace === 'undefined' ? this.namespaceService.path : options.namespace;
-    if (namespace && !NAMESPACE_ROOT_URLS.some((str) => url.includes(str))) {
+    if (namespace && !NAMESPACE_ROOT_URLS.some((str: string) => url.includes(str))) {
       headers['X-Vault-Namespace'] = namespace;
     }
     options.headers = Object.assign(options.headers || {}, headers);
-  },
+  }
 
-  _preRequest(url, options, method) {
-    this.addHeaders(url, options, method);
-    const isPolling = POLLING_URLS.some((str) => url.includes(str));
+  _preRequest(url: string, options: AjaxOptions, method?: string): AjaxOptions {
+    this.addHeaders(url, options, method ?? '');
+    const isPolling = POLLING_URLS.some((str: string) => url.includes(str));
     if (!isPolling) {
       this.auth.setLastFetch(Date.now());
     }
     options.timeout = 60000;
     return options;
-  },
+  }
 
-  ajax(intendedUrl, method, passedOptions = {}) {
+  // Return type matches the upstream `RESTAdapter#ajax` signature (`RSVP.Promise<any>`) verbatim:
+  // every adapter in this codebase calls `this.ajax(...).then((resp: SpecificShape) => ...)` with its
+  // own response shape, which is only possible if the resolved value here stays as permissive as the
+  // base class declares it (narrowing to `unknown` would break every one of those call sites).
+  ajax(intendedUrl: string, method: string, passedOptions: AjaxOptions = {}): RSVP.Promise<any> {
     let url = intendedUrl;
     let type = method;
     let options = passedOptions;
@@ -86,23 +114,23 @@ export default RESTAdapter.extend({
     }
     const opts = this._preRequest(url, options, method);
 
-    return this._super(url, type, opts).then((...args) => {
+    return super.ajax(url, type, opts).then((...args: [AjaxResponse, ...unknown[]]) => {
       if (controlGroupToken) {
         controlGroup.deleteControlGroupToken(controlGroupToken.accessor);
       }
       const [resp] = args;
       if (resp && resp.warnings && !options.skipWarnings) {
         const flash = this.flashMessages;
-        resp.warnings.forEach((message) => {
+        resp.warnings.forEach((message: string) => {
           flash.info(message);
         });
       }
-      return controlGroup.checkForControlGroup(args, resp, options.wrapTTL);
+      return controlGroup.checkForControlGroup(args, resp as unknown as ApiResponse, options.wrapTTL);
     });
-  },
+  }
 
   // for use on endpoints that don't return JSON responses
-  rawRequest(url, type, options = {}) {
+  rawRequest(url: string, type?: string, options: AjaxOptions = {}): Promise<Response> {
     const opts = this._preRequest(url, options);
     return fetch(url, {
       method: type || 'GET',
@@ -116,10 +144,15 @@ export default RESTAdapter.extend({
         return RSVP.reject(response);
       }
     });
-  },
+  }
 
-  handleResponse(status, headers, payload, requestData) {
-    const returnVal = this._super(...arguments);
+  handleResponse(
+    status: number,
+    headers: Record<string, unknown>,
+    payload: { data?: { error?: string }; errors?: unknown[] } | undefined,
+    requestData: { url: string }
+  ) {
+    const returnVal = super.handleResponse(status, headers, payload ?? {}, requestData);
     if (returnVal instanceof AdapterError) {
       // ember data errors don't have the status code, so we add it here
       set(returnVal, 'httpStatus', status);
@@ -134,5 +167,5 @@ export default RESTAdapter.extend({
       }
     }
     return returnVal;
-  },
-});
+  }
+}

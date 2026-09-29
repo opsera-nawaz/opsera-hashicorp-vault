@@ -28,7 +28,7 @@ const CREDENTIAL_TYPES = {
         assumed_role: ['credentialType', 'ttl', 'roleArn'],
         federation_token: ['credentialType', 'ttl'],
         session_token: ['credentialType', 'ttl'],
-      }[model.credentialType as string];
+      }[model.credentialType];
     },
   },
 };
@@ -46,7 +46,7 @@ export default class GenerateCredentials extends Component<Args> {
   @service declare readonly store: Store;
   @service declare readonly router: RouterService;
 
-  @tracked model;
+  @tracked model?: AwsCredential;
   @tracked loading = false;
   @tracked hasGenerated = false;
 
@@ -67,7 +67,7 @@ export default class GenerateCredentials extends Component<Args> {
   willDestroy() {
     // components are torn down after store is unloaded and will cause an error if attempt to unload record
     const noTeardown = this.store && !this.store.isDestroying;
-    if (noTeardown && !this.model.isDestroyed && !this.model.isDestroying) {
+    if (noTeardown && this.model && !this.model.isDestroyed && !this.model.isDestroying) {
       this.model.unloadRecord();
     }
     super.willDestroy();
@@ -102,7 +102,7 @@ export default class GenerateCredentials extends Component<Args> {
       message =
         'You do not have permissions to read this role so Vault cannot infer the credential type. Select the credential type you want to generate. ';
     }
-    if (this.options?.model === 'aws-credential' && this.model.credentialType === 'iam_user')
+    if (this.options?.model === 'aws-credential' && this.model?.credentialType === 'iam_user')
       message += 'For Vault roles of credential type iam_user, there are no inputs, just submit the form.';
     return message;
   }
@@ -118,7 +118,7 @@ export default class GenerateCredentials extends Component<Args> {
       // without read access to the role, awsRoleType will be undefined and will default to iam_user
       // so we will need to show credentialType input for user selection
       // otherwise, we can omit that input
-      const fields = typeOpts.formFields(this.model) ?? [];
+      const fields = (this.model && typeOpts.formFields(this.model)) ?? [];
 
       if (!this.cannotReadAwsRole) {
         return fields.filter((f) => f !== 'credentialType');
@@ -148,7 +148,7 @@ export default class GenerateCredentials extends Component<Args> {
       ...(awsRoleType ? { credentialType: awsRoleType } : {}),
     };
 
-    return this.store.createRecord(modelType, attrs);
+    return this.store.createRecord(modelType as never, attrs);
   }
 
   replaceModel() {
@@ -166,8 +166,7 @@ export default class GenerateCredentials extends Component<Args> {
   create(evt: Event) {
     evt.preventDefault();
     this.loading = true;
-    this.model
-      .save()
+    this.model!.save()
       .then(() => {
         this.hasGenerated = true;
       })
@@ -190,7 +189,9 @@ export default class GenerateCredentials extends Component<Args> {
   editorUpdated(attr: string, val: string) {
     // wont set invalid JSON to the model
     try {
-      this.model[attr] = JSON.parse(val);
+      if (this.model) {
+        (this.model as unknown as Record<string, unknown>)[attr] = JSON.parse(val);
+      }
     } catch {
       // linting is handled by the component
     }

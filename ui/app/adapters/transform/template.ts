@@ -5,8 +5,8 @@
 
 import BaseAdapter from './base';
 
-export default BaseAdapter.extend({
-  pathForType() {
+export default class TransformTemplateAdapter extends BaseAdapter {
+  pathForType(): string {
     return 'template';
-  },
-});
+  }
+}

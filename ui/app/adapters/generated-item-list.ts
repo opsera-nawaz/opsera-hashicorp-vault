@@ -10,42 +10,52 @@ import { encodePath } from 'vault/utils/path-encoding-helpers';
 import { tracked } from '@glimmer/tracking';
 import { getOwner } from '@ember/owner';
 
+import type StoreService from '@ember-data/store';
+import type { AdapterModelSchema, AdapterSnapshot } from './-types';
+
+interface AdapterPaths {
+  getPath?: string;
+  createPath?: string;
+  deletePath?: string;
+}
+
 export default class GeneratedItemListAdapter extends ApplicationAdapter {
-  @service store;
+  @service declare store: StoreService;
   namespace = 'v1';
 
   // these items are set by calling getNewAdapter in the path-help service.
   @tracked apiPath = '';
-  paths = {};
+  paths: AdapterPaths = {};
 
   // These are the paths used for the adapter actions
-  get getPath() {
+  get getPath(): string {
     return this.paths.getPath || '';
   }
-  get createPath() {
+  get createPath(): string {
     return this.paths.createPath || '';
   }
-  get deletePath() {
+  get deletePath(): string {
     return this.paths.deletePath || '';
   }
 
-  getDynamicApiPath() {
-    const result = getOwner(this)
-      .lookup('route:vault.cluster.access.method')
-      .modelFor('vault.cluster.access.method');
+  getDynamicApiPath(): string {
+    const route = getOwner(this)?.lookup('route:vault.cluster.access.method') as {
+      modelFor: (name: string) => { apiPath: string };
+    };
+    const result = route.modelFor('vault.cluster.access.method');
     this.apiPath = result.apiPath;
     return result.apiPath;
   }
 
-  async fetchByQuery(store, query, isList) {
+  async fetchByQuery(_store: StoreService, query: { id: string }, isList?: boolean) {
     const { id } = query;
-    const payload = {};
+    const payload: { list?: boolean } = {};
     if (isList) {
       payload.list = true;
     }
-    const path = isList ? this.getDynamicApiPath(id) : '';
+    const path = isList ? this.getDynamicApiPath() : '';
 
-    const resp = await this.ajax(this.urlForItem(id, isList, path), 'GET', { data: payload });
+    const resp = (await this.ajax(this.urlForItem(id, isList, path), 'GET', { data: payload })) as object;
     const data = {
       id,
       method: id,
@@ -53,18 +63,21 @@ export default class GeneratedItemListAdapter extends ApplicationAdapter {
     return { ...resp, ...data };
   }
 
-  query(store, type, query) {
+  // @ts-expect-error - concrete override of RESTAdapter's generic query<K>; this codebase's
+  // adapters consistently override with concrete (non-generic) params, see app/adapters/-types.ts.
+  query(store: StoreService, _type: AdapterModelSchema, query: { id: string }) {
     return this.fetchByQuery(store, query, true);
   }
 
-  queryRecord(store, type, query) {
+  // @ts-expect-error - see query above
+  queryRecord(store: StoreService, _type: AdapterModelSchema, query: { id: string }) {
     return this.fetchByQuery(store, query);
   }
 
-  urlForItem(id, isList, dynamicApiPath) {
+  urlForItem(id: string, isList?: boolean, dynamicApiPath?: string): string {
     const itemType = sanitizePath(this.getPath);
     let url;
-    id = encodePath(id);
+    const encodedId = encodePath(id);
     // the apiPath changes when you switch between routes but the apiPath variable does not unless the model is reloaded
     // overwrite apiPath if dynamicApiPath exist.
     // dynamicApiPath comes from the model->adapter
@@ -79,40 +92,47 @@ export default class GeneratedItemListAdapter extends ApplicationAdapter {
     } else {
       // build the URL for the show page of a nested item
       // such as a userpass group
-      url = `${this.buildURL()}/${apiPath}${itemType}/${id}`;
+      url = `${this.buildURL()}/${apiPath}${itemType}/${encodedId}`;
     }
 
     return url;
   }
 
-  urlForQueryRecord(id, modelName) {
-    return this.urlForItem(id, modelName);
+  urlForQueryRecord(id: string, modelName: string): string {
+    // preserves the original (likely accidental) call shape: `modelName` lands in the `isList`
+    // position, not `dynamicApiPath` — kept as-is since this is a type-only conversion.
+    return this.urlForItem(id, modelName as unknown as boolean);
   }
 
-  urlForUpdateRecord(id) {
+  urlForUpdateRecord(id: string): string {
     const itemType = this.createPath.slice(1, this.createPath.indexOf('{') - 1);
     return `${this.buildURL()}/${this.apiPath}${itemType}/${id}`;
   }
 
-  urlForCreateRecord(modelType, snapshot) {
-    const id = snapshot.record.mutableId; // computed property that returns either id or private settable _id value
+  // @ts-expect-error - see urlForQueryRecord above
+  urlForCreateRecord(modelType: string, snapshot: AdapterSnapshot): string {
+    const id = (snapshot.record as unknown as { mutableId: string }).mutableId; // computed property that returns either id or private settable _id value
     const path = this.createPath.slice(1, this.createPath.indexOf('{') - 1);
     return `${this.buildURL()}/${this.apiPath}${path}/${id}`;
   }
 
-  urlForDeleteRecord(id) {
+  urlForDeleteRecord(id: string): string {
     const path = this.deletePath.slice(1, this.deletePath.indexOf('{') - 1);
     return `${this.buildURL()}/${this.apiPath}${path}/${id}`;
   }
 
-  createRecord(store, type, snapshot) {
-    return super.createRecord(...arguments).then((response) => {
-      // if the server does not return an id and one has not been set on the model we need to set it manually from the mutableId value
-      if (!response?.id && !snapshot.record.id) {
-        snapshot.record.id = snapshot.record.mutableId;
-        snapshot.id = snapshot.record.id;
-      }
-      return response;
-    });
+  // @ts-expect-error - see urlForQueryRecord above
+  createRecord(store: StoreService, type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    return super
+      .createRecord(store, type as never, snapshot as never)
+      .then((response: { id?: string } | undefined) => {
+        // if the server does not return an id and one has not been set on the model we need to set it manually from the mutableId value
+        const record = snapshot.record as unknown as { id?: string; mutableId: string };
+        if (!response?.id && !record.id) {
+          record.id = record.mutableId;
+          snapshot.id = record.id;
+        }
+        return response;
+      });
   }
 }

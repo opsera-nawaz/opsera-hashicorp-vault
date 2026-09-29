@@ -280,7 +280,7 @@ export default class PathHelpService extends Service {
     const owner = getOwner(this) as Owner;
     const helpUrl = getHelpUrlForModel(modelType, backend);
     const store = owner.lookup('service:store') as Store;
-    const Klass = store.modelFor(modelType) as unknown as ModelClassWithMergedFlag;
+    const Klass = store.modelFor(modelType as never) as unknown as ModelClassWithMergedFlag;
 
     if (Klass?.merged || !helpUrl) {
       // if the model is already merged, we don't need to do anything

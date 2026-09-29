@@ -11,6 +11,10 @@ import { pluralize } from 'ember-inflector';
 
 import ApplicationAdapter from './application';
 
+import type Service from '@ember/service';
+import type Store from '@ember-data/store';
+import type { AdapterModelSchema, AdapterSnapshot } from './-types';
+
 const ENDPOINTS = [
   'health',
   'seal-status',
@@ -23,7 +27,7 @@ const ENDPOINTS = [
   'license',
 ];
 
-const REPLICATION_ENDPOINTS = {
+const REPLICATION_ENDPOINTS: Record<string, string | string[]> = {
   reindex: 'reindex',
   recover: 'recover',
   status: 'status',
@@ -34,46 +38,61 @@ const REPLICATION_ENDPOINTS = {
 };
 
 const REPLICATION_MODES = ['dr', 'performance'];
-export default ApplicationAdapter.extend({
-  version: service(),
-  namespaceService: service('namespace'),
-  shouldBackgroundReloadRecord() {
-    return true;
-  },
 
-  findRecord(store, type, id, snapshot) {
-    const fetches = {
+interface MfaConstraint {
+  selectedMethod: { id: string; type: string };
+  passcode?: string;
+}
+
+interface GenerateDrOperationTokenOptions {
+  cancel?: boolean;
+  checkStatus?: boolean;
+  token?: string;
+}
+
+export default class ClusterAdapter extends ApplicationAdapter {
+  @service declare version: Service & { isEnterprise?: boolean };
+
+  shouldBackgroundReloadRecord(): boolean {
+    return true;
+  }
+
+  // @ts-expect-error - concrete override of RESTAdapter's generic findRecord<K>; this codebase's
+  // adapters consistently override with concrete (non-generic) params, see app/adapters/-types.ts.
+  findRecord(_store: Store, _type: AdapterModelSchema, id: string, snapshot: AdapterSnapshot) {
+    const fetches: Record<string, Promise<unknown>> = {
       health: this.health(),
-      sealStatus: this.sealStatus().catch((e) => e),
+      sealStatus: this.sealStatus().catch((e: unknown) => e),
     };
     if (this.version.isEnterprise && this.namespaceService.inRootNamespace) {
-      fetches.replicationStatus = this.replicationStatus().catch((e) => e);
+      fetches['replicationStatus'] = this.replicationStatus().catch((e: unknown) => e);
     }
     return hash(fetches).then(({ health, sealStatus, replicationStatus }) => {
-      let ret = {
+      let ret: Record<string, unknown> = {
         id,
         name: snapshot.attr('name'),
       };
       ret = Object.assign(ret, health);
-      if (sealStatus instanceof AdapterError === false) {
+      if (!(sealStatus instanceof AdapterError)) {
         ret = Object.assign(ret, { nodes: [sealStatus] });
       }
-      if (replicationStatus && replicationStatus instanceof AdapterError === false) {
-        ret = Object.assign(ret, replicationStatus.data);
+      const replicationError = replicationStatus as AdapterError | undefined;
+      if (replicationStatus && !(replicationError instanceof AdapterError)) {
+        ret = Object.assign(ret, (replicationStatus as { data: unknown }).data);
       } else if (
-        replicationStatus instanceof AdapterError &&
-        replicationStatus?.errors.find((err) => err === 'disabled path')
+        replicationError instanceof AdapterError &&
+        replicationError?.errors.find((err) => err === 'disabled path')
       ) {
         // set redacted if result is an error which only happens when redacted
         ret = Object.assign(ret, { replication_redacted: true });
       }
       return resolve(ret);
     });
-  },
+  }
 
-  pathForType(type) {
+  pathForType(type: string): string {
     return type === 'cluster' ? 'clusters' : pluralize(type);
-  },
+  }
 
   health() {
     return this.ajax(this.urlFor('health'), 'GET', {
@@ -91,42 +110,48 @@ export default ApplicationAdapter.extend({
       // configured to return a 200 response in other fail scenarios
       return { has_chroot_namespace: true };
     });
-  },
+  }
 
   features() {
     return this.ajax(`${this.urlFor('license')}/features`, 'GET', {
       unauthenticated: true,
     });
-  },
+  }
 
   sealStatus(unauthenticated = true) {
     return this.ajax(this.urlFor('seal-status'), 'GET', { unauthenticated });
-  },
+  }
 
   seal() {
     return this.ajax(this.urlFor('seal'), 'PUT');
-  },
+  }
 
-  unseal(data) {
+  unseal(data: Record<string, unknown>) {
     return this.ajax(this.urlFor('unseal'), 'PUT', {
       data,
       unauthenticated: true,
     });
-  },
+  }
 
-  initCluster(data) {
+  initCluster(data: Record<string, unknown>) {
     return this.ajax(this.urlFor('init'), 'PUT', {
       data,
       unauthenticated: true,
     });
-  },
+  }
 
-  mfaValidate({ mfa_request_id, mfa_constraints }) {
+  mfaValidate({
+    mfa_request_id,
+    mfa_constraints,
+  }: {
+    mfa_request_id: string;
+    mfa_constraints: MfaConstraint[];
+  }) {
     const options = {
       data: {
         mfa_request_id,
-        mfa_payload: mfa_constraints.reduce((obj, { selectedMethod, passcode }) => {
-          let payload = [];
+        mfa_payload: mfa_constraints.reduce((obj: Record<string, string[]>, { selectedMethod, passcode }) => {
+          let payload: string[] = [];
           if (passcode) {
             // duo requires passcode= prepended to the actual passcode
             // this isn't a great UX so we add it behind the scenes to fulfill the requirement
@@ -142,43 +167,47 @@ export default ApplicationAdapter.extend({
       },
     };
     return this.ajax('/v1/sys/mfa/validate', 'POST', options);
-  },
+  }
 
-  urlFor(endpoint) {
+  urlFor(endpoint: string): string {
     if (!ENDPOINTS.includes(endpoint)) {
       throw new Error(
         `Calls to a ${endpoint} endpoint are not currently allowed in the vault cluster adapter`
       );
     }
     return `${this.buildURL()}/${endpoint}`;
-  },
+  }
 
-  urlForReplication(replicationMode, clusterMode, endpoint) {
+  urlForReplication(replicationMode: string, clusterMode: string | null, endpoint: string): string {
     let suffix;
     const errString = `Calls to replication ${endpoint} endpoint are not currently allowed in the vault cluster adapater`;
     if (clusterMode) {
-      assert(errString, REPLICATION_ENDPOINTS[clusterMode].includes(endpoint));
+      const modeEndpoints = REPLICATION_ENDPOINTS[clusterMode];
+      assert(errString, Array.isArray(modeEndpoints) && modeEndpoints.includes(endpoint));
       suffix = `${replicationMode}/${clusterMode}/${endpoint}`;
     } else {
-      assert(errString, REPLICATION_ENDPOINTS[endpoint]);
-      suffix = `${endpoint}`;
+      assert(errString, !!REPLICATION_ENDPOINTS[endpoint]);
+      suffix = endpoint;
     }
     return `${this.buildURL()}/replication/${suffix}`;
-  },
+  }
 
   replicationStatus() {
     return this.ajax(`${this.buildURL()}/replication/status`, 'GET', { unauthenticated: true });
-  },
+  }
 
-  replicationDrPromote(data, options) {
+  replicationDrPromote(data: Record<string, unknown>, options?: { checkStatus?: boolean }) {
     const verb = options && options.checkStatus ? 'GET' : 'PUT';
     return this.ajax(`${this.buildURL()}/replication/dr/secondary/promote`, verb, {
       data,
       unauthenticated: true,
     });
-  },
+  }
 
-  generateDrOperationToken(data, options) {
+  generateDrOperationToken(
+    data: { pgp_key?: string; attempt?: boolean; [key: string]: unknown },
+    options?: GenerateDrOperationTokenOptions
+  ) {
     let verb = 'POST';
     let url = `${this.buildURL()}/replication/dr/secondary/generate-operation-token/`;
     if (options?.cancel) {
@@ -194,7 +223,7 @@ export default ApplicationAdapter.extend({
       url += 'update';
     }
 
-    const ajaxOptions = {
+    const ajaxOptions: { data: unknown; unauthenticated: boolean; headers?: Record<string, string> } = {
       data,
       unauthenticated: true,
     };
@@ -207,9 +236,14 @@ export default ApplicationAdapter.extend({
     }
 
     return this.ajax(url, verb, ajaxOptions);
-  },
+  }
 
-  replicationAction(action, replicationMode, clusterMode, data) {
+  replicationAction(
+    action: string,
+    replicationMode: string,
+    clusterMode: string | null,
+    data: Record<string, unknown>
+  ) {
     assert(
       `${replicationMode} is an unsupported replication mode.`,
       replicationMode && REPLICATION_MODES.includes(replicationMode)
@@ -221,5 +255,5 @@ export default ApplicationAdapter.extend({
         : this.urlForReplication(replicationMode, clusterMode, action);
 
     return this.ajax(url, 'POST', { data });
-  },
-});
+  }
+}

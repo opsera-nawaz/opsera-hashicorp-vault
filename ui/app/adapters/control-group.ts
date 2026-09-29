@@ -5,25 +5,30 @@
 
 import ApplicationAdapter from './application';
 
-export default ApplicationAdapter.extend({
-  pathForType() {
-    return 'control-group';
-  },
+import type Store from '@ember-data/store';
+import type { AdapterModelSchema } from './-types';
 
-  async findRecord(store, type, id) {
-    const baseUrl = this.buildURL(type.modelName);
+export default class ControlGroupAdapter extends ApplicationAdapter {
+  pathForType(): string {
+    return 'control-group';
+  }
+
+  findRecord(_store: Store, type: AdapterModelSchema, id: string) {
+    const baseUrl = this.buildURL(type.modelName as never);
     return this.ajax(`${baseUrl}/request`, 'POST', {
       data: {
         accessor: id,
       },
-    }).then((response) => {
-      response.id = id;
+    }).then((response: Record<string, unknown>) => {
+      response['id'] = id;
       return response;
     });
-  },
+  }
 
-  urlForUpdateRecord(id, modelName) {
-    const base = this.buildURL(modelName);
+  // @ts-expect-error - concrete override of RESTAdapter's generic urlForUpdateRecord<K>; this
+  // codebase's adapters consistently override with concrete (non-generic) params.
+  urlForUpdateRecord(id: string, modelName: string): string {
+    const base = this.buildURL(modelName as never);
     return `${base}/authorize`;
-  },
-});
+  }
+}

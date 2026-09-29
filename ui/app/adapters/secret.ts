@@ -7,76 +7,89 @@ import { isEmpty } from '@ember/utils';
 import ApplicationAdapter from './application';
 import { encodePath } from 'vault/utils/path-encoding-helpers';
 
-export default ApplicationAdapter.extend({
-  namespace: 'v1',
+import type Store from '@ember-data/store';
+import type { AdapterModelSchema, AdapterSnapshot, AdapterSerializer } from './-types';
 
-  createOrUpdate(store, type, snapshot) {
-    const serializer = store.serializerFor(type.modelName);
-    const data = serializer.serialize(snapshot);
+export default class SecretAdapter extends ApplicationAdapter {
+  namespace = 'v1';
+
+  createOrUpdate(store: Store, type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    const serializer = store.serializerFor(type.modelName as never) as AdapterSerializer;
+    const data = serializer.serialize(snapshot) as Record<string, unknown>;
     const { id } = snapshot;
-    const path = snapshot.record.path;
-    return this.ajax(this.urlForSecret(snapshot.attr('backend'), path || id), 'POST', { data }).then(() => {
-      data.id = path || id;
+    const path = (snapshot.record as unknown as { path?: string }).path;
+    return this.ajax(this.urlForSecret(snapshot.attr('backend') as string, path || id), 'POST', {
+      data,
+    }).then(() => {
+      data['id'] = path || id;
       return data;
     });
-  },
+  }
 
-  createRecord() {
-    return this.createOrUpdate(...arguments);
-  },
+  // @ts-expect-error - concrete override of RESTAdapter's generic createRecord<K>; this codebase's
+  // adapters consistently override with concrete (non-generic) params, see app/adapters/-types.ts.
+  createRecord(store: Store, type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    return this.createOrUpdate(store, type, snapshot);
+  }
 
-  updateRecord() {
-    return this.createOrUpdate(...arguments);
-  },
+  // @ts-expect-error - see createRecord above
+  updateRecord(store: Store, type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    return this.createOrUpdate(store, type, snapshot);
+  }
 
-  deleteRecord(store, type, snapshot) {
+  // @ts-expect-error - see createRecord above
+  deleteRecord(_store: Store, _type: AdapterModelSchema, snapshot: AdapterSnapshot) {
     const { id } = snapshot;
-    return this.ajax(this.urlForSecret(snapshot.attr('backend'), id), 'DELETE');
-  },
+    return this.ajax(this.urlForSecret(snapshot.attr('backend') as string, id), 'DELETE');
+  }
 
-  urlForSecret(backend, id) {
+  urlForSecret(backend: string, id?: string): string {
     let url = `${this.buildURL()}/${encodePath(backend)}/`;
     if (!isEmpty(id)) {
       url = url + encodePath(id);
     }
 
     return url;
-  },
+  }
 
-  pathForType() {
+  pathForType(): string {
     return 'mounts';
-  },
+  }
 
-  optionsForQuery(id, action, wrapTTL) {
-    const data = {};
+  optionsForQuery(_id: string | undefined, action?: string, wrapTTL?: string) {
+    const data: Record<string, unknown> = {};
     if (action === 'query') {
-      data.list = true;
+      data['list'] = true;
     }
     if (wrapTTL) {
       return { data, wrapTTL };
     }
     return { data };
-  },
+  }
 
-  fetchByQuery(query, action) {
+  fetchByQuery(query: { id?: string; backend: string; wrapTTL?: string }, action?: string) {
     const { id, backend, wrapTTL } = query;
     return this.ajax(this.urlForSecret(backend, id), 'GET', this.optionsForQuery(id, action, wrapTTL)).then(
-      (resp) => {
+      (resp: Record<string, unknown>) => {
         if (wrapTTL) {
           return resp;
         }
-        resp.id = id;
-        resp.backend = backend;
+        resp['id'] = id;
+        resp['backend'] = backend;
         return resp;
       }
     );
-  },
+  }
 
-  query(store, type, query) {
+  query(_store: Store, _type: AdapterModelSchema, query: { id?: string; backend: string; wrapTTL?: string }) {
     return this.fetchByQuery(query, 'query');
-  },
+  }
 
-  queryRecord(store, type, query) {
+  queryRecord(
+    _store: Store,
+    _type: AdapterModelSchema,
+    query: { id?: string; backend: string; wrapTTL?: string }
+  ) {
     return this.fetchByQuery(query, 'queryRecord');
-  },
-});
+  }
+}

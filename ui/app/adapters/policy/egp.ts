@@ -5,4 +5,4 @@
 
 import PolicyAdapter from '../policy';
 
-export default PolicyAdapter.extend();
+export default class EgpAdapter extends PolicyAdapter {}

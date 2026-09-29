@@ -12,38 +12,52 @@
 import ApplicationAdapter from 'vault/adapters/application';
 import { encodePath } from 'vault/utils/path-encoding-helpers';
 
+import type Store from '@ember-data/store';
+import type { AdapterModelSchema, AdapterSnapshot, AdapterSerializer } from './-types';
+
 export default class SecretsEnginePathAdapter extends ApplicationAdapter {
   namespace = 'v1';
+  // define path value in extending class or pass into method directly
+  path: string | undefined;
 
   // define path value in extending class or pass into method directly
-  _getURL(backend, path) {
+  _getURL(backend: string, path?: string): string {
     return `${this.buildURL()}/${encodePath(backend)}/${path || this.path}`;
   }
-  urlForUpdateRecord(name, modelName, snapshot) {
-    return this._getURL(snapshot.attr('backend'));
+  // @ts-expect-error - concrete override of RESTAdapter's generic urlForUpdateRecord<K>; this
+  // codebase's adapters consistently override with concrete (non-generic) params, see
+  // app/adapters/-types.ts.
+  urlForUpdateRecord(_name: string, _modelName: string, snapshot: AdapterSnapshot): string {
+    return this._getURL(snapshot.attr('backend') as string);
   }
   // primaryKey must be set to backend in serializer
-  urlForDeleteRecord(backend) {
+  urlForDeleteRecord(backend: string): string {
     return this._getURL(backend);
   }
 
-  queryRecord(store, type, query) {
+  queryRecord(_store: Store, _type: AdapterModelSchema, query: { backend: string }) {
     const { backend } = query;
-    return this.ajax(this._getURL(backend), 'GET').then((resp) => {
-      resp.backend = backend;
+    return this.ajax(this._getURL(backend), 'GET').then((resp: Record<string, unknown>) => {
+      resp['backend'] = backend;
       return resp;
     });
   }
-  createRecord() {
-    return this._saveRecord(...arguments);
+  // @ts-expect-error - see urlForUpdateRecord above
+  createRecord(store: Store, type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    return this._saveRecord(store, type, snapshot);
   }
-  updateRecord() {
-    return this._saveRecord(...arguments);
+  // @ts-expect-error - see urlForUpdateRecord above
+  updateRecord(store: Store, type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    return this._saveRecord(store, type, snapshot);
   }
-  _saveRecord(store, { modelName }, snapshot) {
-    const data = store.serializerFor(modelName).serialize(snapshot);
-    const primaryKey = store.serializerFor(modelName).primaryKey;
-    const url = this._getURL(snapshot.attr('backend'));
+  _saveRecord(store: Store, type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    const { modelName } = type;
+    const data = (store.serializerFor(modelName as never) as AdapterSerializer).serialize(snapshot) as Record<
+      string,
+      unknown
+    >;
+    const primaryKey = (store.serializerFor(modelName as never) as AdapterSerializer).primaryKey;
+    const url = this._getURL(snapshot.attr('backend') as string);
     return this.ajax(url, 'POST', { data }).then(() => {
       data[primaryKey] = snapshot.attr(primaryKey);
       return data;

@@ -6,7 +6,7 @@
 import NamedPathAdapter from '../named-path';
 
 export default class OidcAssignmentAdapter extends NamedPathAdapter {
-  pathForType() {
+  pathForType(): string {
     return 'identity/oidc/assignment';
   }
 }

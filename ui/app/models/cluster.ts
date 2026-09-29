@@ -20,7 +20,9 @@ interface ClusterLicense {
 export default class ClusterModel extends Model {
   @service declare version: Service;
 
-  @hasMany('nodes', { async: false, inverse: null }) declare nodes: NodeModel[];
+  // 'nodes' (plural) is the actual registered relationship name here, not the 'node' model name —
+  // preserved as-is from the original JS; cast needed now that ModelRegistry has explicit keys.
+  @hasMany('nodes' as never, { async: false, inverse: null }) declare nodes: NodeModel[];
   @attr('string') declare name: string | undefined;
   @attr('string') declare status: string | undefined;
   @attr('boolean') declare standby: boolean | undefined;

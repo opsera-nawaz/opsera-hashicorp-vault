@@ -6,11 +6,14 @@
 import NamedPathAdapter from '../named-path';
 
 export default class OidcKeyAdapter extends NamedPathAdapter {
-  pathForType() {
+  pathForType(): string {
     return 'identity/oidc/key';
   }
-  rotate(name, verification_ttl) {
+  rotate(name: string, verification_ttl?: string) {
     const data = verification_ttl ? { verification_ttl } : {};
-    return this.ajax(`${this.urlForUpdateRecord(name, 'oidc/key')}/rotate`, 'POST', { data });
+    // `snapshot` is unused by this adapter's urlForUpdateRecord chain (identity adapters build purely
+    // from id/modelName), so it's safe to omit despite the base RESTAdapter signature requiring it.
+    const urlForUpdateRecord = this.urlForUpdateRecord as (id: string, modelName: string) => string;
+    return this.ajax(`${urlForUpdateRecord(name, 'oidc/key')}/rotate`, 'POST', { data });
   }
 }

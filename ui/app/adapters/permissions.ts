@@ -5,13 +5,13 @@
 
 import ApplicationAdapter from './application';
 
-export default ApplicationAdapter.extend({
+export default class PermissionsAdapter extends ApplicationAdapter {
   query() {
     const namespace = this.namespaceService.userRootNamespace ?? this.namespaceService.path;
     return this.ajax(this.urlForQuery(), 'GET', { namespace });
-  },
+  }
 
-  urlForQuery() {
+  urlForQuery(): string {
     return this.buildURL() + '/internal/ui/resultant-acl';
-  },
-});
+  }
+}

@@ -5,29 +5,37 @@
 
 import ApplicationAdapter from './application';
 
-export default ApplicationAdapter.extend({
-  url(id) {
-    return `${this.buildURL()}/replication/performance/primary/paths-filter/${id}`;
-  },
+import type Store from '@ember-data/store';
+import type { AdapterModelSchema, AdapterSnapshot } from './-types';
 
-  findRecord(store, type, id) {
-    return this.ajax(this.url(id), 'GET').then((resp) => {
-      resp.id = id;
+export default class PathFilterConfigAdapter extends ApplicationAdapter {
+  url(id: string): string {
+    return `${this.buildURL()}/replication/performance/primary/paths-filter/${id}`;
+  }
+
+  findRecord(_store: Store, _type: AdapterModelSchema, id: string) {
+    return this.ajax(this.url(id), 'GET').then((resp: Record<string, unknown>) => {
+      resp['id'] = id;
       return resp;
     });
-  },
+  }
 
-  createRecord(store, type, snapshot) {
+  // @ts-expect-error - see findRecord above
+  createRecord(_store: Store, _type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    const serializeSnapshot = (this as unknown as { serialize: (snapshot: AdapterSnapshot) => object })
+      .serialize;
     return this.ajax(this.url(snapshot.id), 'PUT', {
-      data: this.serialize(snapshot),
+      data: serializeSnapshot(snapshot),
     });
-  },
+  }
 
-  updateRecord() {
-    return this.createRecord(...arguments);
-  },
+  // @ts-expect-error - see findRecord above
+  updateRecord(store: Store, type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    return this.createRecord(store, type, snapshot);
+  }
 
-  deleteRecord(store, type, snapshot) {
+  // @ts-expect-error - see findRecord above
+  deleteRecord(_store: Store, _type: AdapterModelSchema, snapshot: AdapterSnapshot) {
     return this.ajax(this.url(snapshot.id), 'DELETE');
-  },
-});
+  }
+}

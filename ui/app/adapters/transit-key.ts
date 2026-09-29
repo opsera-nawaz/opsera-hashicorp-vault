@@ -7,39 +7,54 @@ import ApplicationAdapter from './application';
 import { pluralize } from 'ember-inflector';
 import { encodePath } from 'vault/utils/path-encoding-helpers';
 
-export default ApplicationAdapter.extend({
-  namespace: 'v1',
+import type Store from '@ember-data/store';
+import type { AdapterModelSchema, AdapterSnapshot, AdapterSerializer } from './-types';
 
-  createOrUpdate(store, type, snapshot, requestType) {
-    const serializer = store.serializerFor(type.modelName);
+interface KeyActionPayload {
+  param?: unknown;
+  [key: string]: unknown;
+}
+
+export default class TransitKeyAdapter extends ApplicationAdapter {
+  namespace = 'v1';
+
+  createOrUpdate(store: Store, type: AdapterModelSchema, snapshot: AdapterSnapshot, requestType?: string) {
+    const serializer = store.serializerFor(type.modelName as never) as AdapterSerializer;
     const data = serializer.serialize(snapshot, requestType);
-    const name = snapshot.attr('name');
-    let url = this.urlForSecret(snapshot.record.backend, name);
+    const name = snapshot.attr('name') as string;
+    let url = this.urlForSecret((snapshot.record as unknown as { backend: string }).backend, name);
     if (requestType === 'update') {
       url = url + '/config';
     }
 
-    return this.ajax(url, 'POST', { data }).then((resp) => {
-      const response = resp || {};
-      response.id = name;
+    return this.ajax(url, 'POST', { data }).then((resp: Record<string, unknown> | undefined) => {
+      const response: Record<string, unknown> = resp || {};
+      response['id'] = name;
       return response;
     });
-  },
+  }
 
-  createRecord() {
-    return this.createOrUpdate(...arguments);
-  },
+  // @ts-expect-error - concrete override of RESTAdapter's generic createRecord<K>; this codebase's
+  // adapters consistently override with concrete (non-generic) params, see app/adapters/-types.ts.
+  createRecord(store: Store, type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    return this.createOrUpdate(store, type, snapshot);
+  }
 
-  updateRecord() {
-    return this.createOrUpdate(...arguments, 'update');
-  },
+  // @ts-expect-error - see createRecord above
+  updateRecord(store: Store, type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    return this.createOrUpdate(store, type, snapshot, 'update');
+  }
 
-  deleteRecord(store, type, snapshot) {
+  // @ts-expect-error - see createRecord above
+  deleteRecord(_store: Store, _type: AdapterModelSchema, snapshot: AdapterSnapshot) {
     const { id } = snapshot;
-    return this.ajax(this.urlForSecret(snapshot.record.backend, id), 'DELETE');
-  },
+    return this.ajax(
+      this.urlForSecret((snapshot.record as unknown as { backend: string }).backend, id),
+      'DELETE'
+    );
+  }
 
-  pathForType(type) {
+  pathForType(type: string): string {
     let path;
     switch (type) {
       case 'cluster':
@@ -53,17 +68,17 @@ export default ApplicationAdapter.extend({
         break;
     }
     return path;
-  },
+  }
 
-  urlForSecret(backend, id) {
+  urlForSecret(backend: string, id?: string): string {
     let url = `${this.buildURL()}/${encodePath(backend)}/keys/`;
     if (id) {
       url += encodePath(id);
     }
     return url;
-  },
+  }
 
-  urlForAction(action, backend, id, param) {
+  urlForAction(action: string, backend: string, id: string, param?: unknown): string {
     const urlBase = `${this.buildURL()}/${encodePath(backend)}/${action}`;
     // these aren't key-specific
     if (action === 'hash' || action === 'random') {
@@ -74,40 +89,46 @@ export default ApplicationAdapter.extend({
       return `${urlBase}/${param}/${encodePath(id)}`;
     }
     if (action === 'export' && param) {
-      const [type, version] = param;
+      const [type, version] = param as [string, string | undefined];
       const exportBase = `${urlBase}/${type}-key/${encodePath(id)}`;
       return version ? `${exportBase}/${version}` : exportBase;
     }
     return `${urlBase}/${encodePath(id)}`;
-  },
+  }
 
-  optionsForQuery(id) {
-    const data = {};
+  optionsForQuery(id?: string) {
+    const data: Record<string, unknown> = {};
     if (!id) {
       data['list'] = true;
     }
     return { data };
-  },
+  }
 
-  fetchByQuery(query) {
+  fetchByQuery(query: { id?: string; backend: string }) {
     const { id, backend } = query;
-    return this.ajax(this.urlForSecret(backend, id), 'GET', this.optionsForQuery(id)).then((resp) => {
-      resp.id = id;
-      resp.backend = backend;
-      return resp;
-    });
-  },
+    return this.ajax(this.urlForSecret(backend, id), 'GET', this.optionsForQuery(id)).then(
+      (resp: Record<string, unknown>) => {
+        resp['id'] = id;
+        resp['backend'] = backend;
+        return resp;
+      }
+    );
+  }
 
-  query(store, type, query) {
+  query(_store: Store, _type: AdapterModelSchema, query: { id?: string; backend: string }) {
     return this.fetchByQuery(query);
-  },
+  }
 
-  queryRecord(store, type, query) {
+  queryRecord(_store: Store, _type: AdapterModelSchema, query: { id?: string; backend: string }) {
     return this.fetchByQuery(query);
-  },
+  }
 
   // rotate, encrypt, decrypt, sign, verify, hmac, rewrap, datakey
-  keyAction(action, { backend, id, payload }, options = {}) {
+  keyAction(
+    action: string,
+    { backend, id, payload }: { backend: string; id: string; payload: KeyActionPayload },
+    options: { wrapTTL?: string } = {}
+  ) {
     const verb = action === 'export' ? 'GET' : 'POST';
     const { wrapTTL } = options;
     if (action === 'rotate') {
@@ -120,5 +141,5 @@ export default ApplicationAdapter.extend({
       data: payload,
       wrapTTL,
     });
-  },
-});
+  }
+}

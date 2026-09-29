@@ -5,6 +5,6 @@
 
 import BaseAdapter from './base';
 
-export default BaseAdapter.extend({
+export default class TransformationAdapter extends BaseAdapter {
   // custom stuff for transformation
-});
+}

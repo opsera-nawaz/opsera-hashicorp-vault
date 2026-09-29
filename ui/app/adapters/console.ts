@@ -5,9 +5,9 @@
 
 import ApplicationAdapter from './application';
 
-export default ApplicationAdapter.extend({
-  namespace: 'v1',
-  pathForType(modelName) {
+export default class ConsoleAdapter extends ApplicationAdapter {
+  namespace = 'v1';
+  pathForType(modelName: string): string {
     return modelName;
-  },
-});
+  }
+}

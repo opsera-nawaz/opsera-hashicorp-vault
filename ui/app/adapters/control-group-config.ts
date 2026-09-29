@@ -5,20 +5,20 @@
 
 import ApplicationAdapter from './application';
 
-export default ApplicationAdapter.extend({
-  pathForType() {
+export default class ControlGroupConfigAdapter extends ApplicationAdapter {
+  pathForType(): string {
     return 'config/control-group';
-  },
+  }
 
-  urlForDeleteRecord(id, modelName) {
-    return this.buildURL(modelName);
-  },
+  urlForDeleteRecord(_id: string, modelName: string): string {
+    return this.buildURL(modelName as never);
+  }
 
-  urlForFindRecord(id, modelName) {
-    return this.buildURL(modelName);
-  },
+  urlForFindRecord(_id: string, modelName: string): string {
+    return this.buildURL(modelName as never);
+  }
 
-  urlForUpdateRecord(id, modelName) {
-    return this.buildURL(modelName);
-  },
-});
+  urlForUpdateRecord(_id: string, modelName: string): string {
+    return this.buildURL(modelName as never);
+  }
+}

@@ -7,34 +7,50 @@ import ApplicationAdapter from './application';
 import { encodePath } from 'vault/utils/path-encoding-helpers';
 import { splitObject } from 'vault/helpers/split-object';
 
-export default ApplicationAdapter.extend({
-  url(path) {
+import type Store from '@ember-data/store';
+import type { AdapterModelSchema, AdapterSnapshot, AdapterSerializer } from './-types';
+
+interface MountResponse {
+  data?: {
+    type?: string;
+    options?: { version?: string };
+    [key: string]: unknown;
+  };
+}
+
+export default class SecretEngineAdapter extends ApplicationAdapter {
+  url(path?: string): string {
     const url = `${this.buildURL()}/mounts`;
     return path ? url + '/' + encodePath(path) : url;
-  },
+  }
 
-  urlForConfig(path) {
+  urlForConfig(path: string): string {
     return `/v1/${path}/config`;
-  },
+  }
 
-  internalURL(path) {
-    let url = `/${this.urlPrefix()}/internal/ui/mounts`;
+  internalURL(path?: string): string {
+    const urlPrefix = (this as unknown as { urlPrefix: () => string }).urlPrefix();
+    let url = `/${urlPrefix}/internal/ui/mounts`;
     if (path) {
       url = `${url}/${encodePath(path)}`;
     }
     return url;
-  },
+  }
 
-  pathForType() {
+  pathForType(): string {
     return 'mounts';
-  },
+  }
 
-  async query(store, type, query) {
-    let mountModel, configModel;
+  // @ts-expect-error - concrete override of RESTAdapter's generic query<K>; this codebase's
+  // adapters consistently override with concrete (non-generic) params, and this one is `async`
+  // (native Promise) while the base declares `RSVP.Promise` — see app/adapters/-types.ts.
+  async query(_store: Store, _type: AdapterModelSchema, query: { path?: string }) {
+    let mountModel: MountResponse | undefined;
+    let configModel: MountResponse | undefined;
     try {
-      mountModel = await this.ajax(this.internalURL(query.path), 'GET');
+      mountModel = (await this.ajax(this.internalURL(query.path), 'GET')) as MountResponse;
       if (mountModel?.data?.type === 'kv' && mountModel?.data?.options?.version === '2') {
-        configModel = await this.ajax(this.urlForConfig(query.path), 'GET');
+        configModel = (await this.ajax(this.urlForConfig(query.path as string), 'GET')) as MountResponse;
         mountModel.data = { ...mountModel.data, ...configModel.data };
       }
     } catch (error) {
@@ -46,17 +62,27 @@ export default ApplicationAdapter.extend({
       // error is handled on routing
     }
     return mountModel;
-  },
+  }
 
-  async createRecord(store, type, snapshot) {
-    const serializer = store.serializerFor(type.modelName);
-    let data = serializer.serialize(snapshot);
-    const path = snapshot.attr('path');
+  // @ts-expect-error - see query above
+  async createRecord(store: Store, type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    const serializer = store.serializerFor(type.modelName as never) as AdapterSerializer;
+    let data = serializer.serialize(snapshot) as {
+      config: Record<string, unknown>;
+      type?: string;
+      options?: { version?: number };
+      id?: string;
+      [key: string]: unknown;
+    };
+    const path = snapshot.attr('path') as string;
     // for kv2 we make two network requests
-    data.config.id = path; // config relationship needs an id so use path for now
-    if (data.type === 'kv' && data.options.version === 2) {
+    data.config['id'] = path; // config relationship needs an id so use path for now
+    if (data.type === 'kv' && data.options?.version === 2) {
       // data has both data for sys mount and the config, we need to separate them
-      const splitObjects = splitObject(data, ['max_versions', 'delete_version_after', 'cas_required']);
+      const splitObjects = splitObject(data, ['max_versions', 'delete_version_after', 'cas_required']) as [
+        Record<string, unknown>,
+        typeof data,
+      ];
       let configData;
       [configData, data] = splitObjects;
 
@@ -85,18 +111,28 @@ export default ApplicationAdapter.extend({
         };
       });
     }
-  },
+  }
 
-  updateRecord(store, type, snapshot) {
-    const { apiPath, options, adapterMethod } = snapshot.adapterOptions;
+  // @ts-expect-error - see query above
+  updateRecord(store: Store, type: AdapterModelSchema, snapshot: AdapterSnapshot) {
+    const { apiPath, options, adapterMethod } = snapshot.adapterOptions as {
+      apiPath?: string;
+      options?: { isDelete?: boolean };
+      adapterMethod?: string;
+    };
     if (adapterMethod) {
-      return this[adapterMethod](...arguments);
+      return (this as unknown as Record<string, (...args: unknown[]) => unknown>)[adapterMethod]!(
+        store,
+        type,
+        snapshot
+      );
     }
     if (apiPath) {
-      const serializer = store.serializerFor(type.modelName);
+      const serializer = store.serializerFor(type.modelName as never) as AdapterSerializer;
       const data = serializer.serialize(snapshot);
       const path = encodePath(snapshot.id);
-      return this.ajax(`/v1/${path}/${apiPath}`, options.isDelete ? 'DELETE' : 'POST', { data });
+      return this.ajax(`/v1/${path}/${apiPath}`, options?.isDelete ? 'DELETE' : 'POST', { data });
     }
-  },
-});
+    return undefined;
+  }
+}
